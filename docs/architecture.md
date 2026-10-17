@@ -1,0 +1,63 @@
+# Architecture
+
+## Dependency direction
+
+```text
+Dart / Go / Python --> mlsr-ffi --> mlsr
+Rust applications -------------> mlsr
+```
+
+The Cargo workspace shares version metadata, a lockfile, and build outputs.
+`mlsr` and `mlsr-ffi` are the default members; `tools/codegen` is a development
+tool and is not a runtime dependency. Neither production crate currently has
+third-party runtime dependencies.
+
+## Rust modules
+
+| Module | Responsibility |
+| --- | --- |
+| `engine` | Model lifetime, synthesis orchestration, jobs, and cancellation |
+| `config` | Model paths, runtime selection, and validated synthesis options |
+| `error` | Errors independent of language-specific exceptions/status codes |
+| `audio` | PCM buffers and chunks with explicit format and ownership |
+| `text` | Text processing shared across supported models |
+| `models` | Model-specific tokenization, tensor preparation, inference sequence, and voice formats |
+| `runtime` | Executing networks and integrating optional platform backends |
+
+Only version information is implemented. These module files establish ownership
+of future functionality without freezing speculative engine or runtime APIs.
+Select the first model and runtime before introducing their interfaces.
+
+Keep model architecture separate from the inference backend: a model pipeline
+specifies what to execute, while a runtime supplies execution. Split modules into
+separate crates when dependencies, compilation cost, or reuse justify it.
+
+## Language adapters
+
+`mlsr-ffi` owns C-compatible layouts, handle conversions, and error translation.
+Generate its header with [cbindgen](https://github.com/mozilla/cbindgen).
+
+Dart uses [dart:ffi](https://dart.dev/interop/c-interop), generated declarations,
+and a [build hook](https://dart.dev/tools/hooks) to bundle the native library.
+Go uses [cgo](https://pkg.go.dev/cmd/cgo) and an externally available native
+header/library. Python uses [ctypes](https://docs.python.org/3/library/ctypes.html)
+with lazy loading of the native library. Package APIs provide idiomatic cleanup,
+exceptions, and concurrency integration as those capabilities are implemented.
+
+Text normalization, model policy, inference scheduling, and synthesis stay in
+Rust. Host-language integrations should not reimplement them. Audio playback is
+a separate concern from producing PCM and is not a dependency of the core.
+
+## Assets and distribution
+
+Large model weights are external assets. Track their revisions, URLs, checksums,
+licenses, and runtime compatibility in `model-manifests/` when models are added.
+Keep test fixtures small and redistributable.
+
+Native releases will need an explicit OS/architecture/backend matrix, compatible
+library dependencies, and tests of installed packages. The present scaffold only
+has local builds, a Python wrapper wheel, and configurable external native
+libraries. It does not publish packages or ship prebuilt runtime bundles.
+
+An optional `mlsr-cli` crate can be added when a synthesis command has useful
+behavior. Until then, `cargo run -p mlsr --example version` exercises the Rust API.

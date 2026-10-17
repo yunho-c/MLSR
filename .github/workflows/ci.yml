@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native bindings (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.11.1'
+      - name: Check Rust, C, and all language bindings
+        run: python tools/dev.py check
+      - name: Test standalone Dart and Go packages with relocated native assets
+        run: python tools/dev.py test-standalone
+      - name: Install Python packaging tools
+        run: python -m pip install "setuptools>=77" wheel
+      - name: Test the installed Python wrapper
+        run: python tools/dev.py package-python
+
+  generated:
+    name: Generated bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.11.1'
+      - name: Install libclang
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev
+      - name: Verify the generated C and Dart files
+        run: python tools/dev.py check-generated
+
+  rust-minimum:
+    name: Minimum supported Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - run: cargo +1.85.0 check --locked -p mlsr -p mlsr-ffi

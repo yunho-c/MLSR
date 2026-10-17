@@ -1,0 +1,18 @@
+[package]
+name = "mlsr-ffi"
+description = "The C ABI for MLSR."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+mlsr.workspace = true
+
+[lints]
+workspace = true
