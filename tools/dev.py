@@ -243,6 +243,20 @@ def check():
     test_dart()
 
 
+def test_model_tools():
+    """Validate model metadata and portable tooling, without weights or Core ML."""
+    run(sys.executable, "-m", "tools.supertonic3", "validate-manifest")
+    run(
+        sys.executable,
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        ROOT / "tools/supertonic3/tests",
+        "-v",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -258,6 +272,7 @@ def main():
             "test-dart",
             "test-standalone",
             "package-python",
+            "test-model-tools",
         ],
     )
     command = parser.parse_args().command
@@ -267,6 +282,8 @@ def main():
         generate(check=True)
     elif command == "check":
         check()
+    elif command == "test-model-tools":
+        test_model_tools()
     else:
         build()
         tasks = {

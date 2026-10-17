@@ -26,7 +26,9 @@ third-party runtime dependencies.
 
 Only version information is implemented. These module files establish ownership
 of future functionality without freezing speculative engine or runtime APIs.
-Select the first model and runtime before introducing their interfaces.
+Supertonic 3 with Core ML is selected for the first slice. Its pinned reference
+bundle and development-only fixture tools are available; the Rust model/runtime
+interfaces are still to be implemented.
 
 Keep model architecture separate from the inference backend: a model pipeline
 specifies what to execute, while a runtime supplies execution. Split modules into
@@ -50,9 +52,17 @@ a separate concern from producing PCM and is not a dependency of the core.
 
 ## Assets and distribution
 
-Large model weights are external assets. Track their revisions, URLs, checksums,
-licenses, and runtime compatibility in `model-manifests/` when models are added.
-Keep test fixtures small and redistributable.
+Large model weights are external assets. YAML manifests in `model-manifests/`
+track their revisions, URLs, checksums, licenses, tensor contracts, and runtime
+compatibility. The first manifest pins the published Supertonic 3 v2 Core ML
+models, with bucketed INT4 VectorEstimators and FP16 shared stages.
+
+`tools/supertonic3/` verifies local assets and captures/replays real reference
+tensors using Python/Core ML. Its dependencies are development-only and do not
+enter the Rust crate, FFI library, or language packages. Small text/token fixtures
+and capture summaries live in Git; model bundles, complete tensor captures, and
+WAVs live in a user-selected external cache. These references establish porting
+correctness, not broad speech-quality or performance qualification.
 
 Native releases will need an explicit OS/architecture/backend matrix, compatible
 library dependencies, and tests of installed packages. The present scaffold only

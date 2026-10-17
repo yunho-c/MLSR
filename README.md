@@ -8,6 +8,10 @@ bindings expose native version/ABI queries. Model loading, inference, speech
 synthesis, streaming, and playback are not implemented yet. No model weights
 are downloaded by the build.
 
+A pinned Supertonic 3 Core ML reference bundle and development-only
+[capture/replay tools](tools/supertonic3/README.md) establish the baseline for
+the first Rust synthesis implementation. The model manifest uses YAML.
+
 ## Layout
 
 ```text
@@ -21,6 +25,7 @@ model-manifests/     Model download metadata, checksums, and licenses
 tests/fixtures/      Small, shared test inputs
 tests/integration/   Tests of the actual C ABI
 tools/codegen/       Pinned cbindgen header generator
+tools/supertonic3/   Model verification and real reference-fixture capture/replay
 tools/dev.py         Portable development commands
 docs/                Architecture, FFI contract, and platform status
 ```

@@ -18,3 +18,9 @@ interpreter used to invoke the tool. It installs the built wrapper into a
 temporary directory, runs its native integration tests there, and removes that
 temporary installation when finished. Native libraries are still supplied
 separately; nothing is published.
+
+`supertonic3/` contains development-only YAML manifest validation, verified asset
+preparation, and real Core ML reference capture/replay. See its
+[README](supertonic3/README.md). `test-model-tools` runs the portable checks
+without building Rust, loading weights, or requiring Core ML; it additionally
+needs the packages in `supertonic3/requirements.txt`.

@@ -9,6 +9,19 @@ permissions:
   contents: read
 
 jobs:
+  model-tools:
+    name: Model manifest and reference tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Install development-only model tool dependencies
+        run: python -m pip install -r tools/supertonic3/requirements.txt
+      - name: Check pinned YAML manifest and portable reference contracts
+        run: python tools/dev.py test-model-tools
+
   native:
     name: Native bindings (${{ matrix.os }})
     strategy:
