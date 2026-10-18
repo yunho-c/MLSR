@@ -15,6 +15,8 @@ use std::{
 
 mod model;
 pub use model::*;
+mod sdk;
+pub use sdk::*;
 
 // All pointer entry points share the header's pointer validity, alignment and
 // non-aliasing preconditions. Handles themselves can be stale/arbitrary safely.
@@ -65,6 +67,7 @@ unsafe fn guard(
                 _ => ApiError {
                     code: "panic".into(),
                     message: "panic contained at the C ABI boundary".into(),
+                    details: None,
                 },
             };
             if !error.is_null() {
@@ -88,15 +91,23 @@ fn release(handle: MlsrHandle, kind: Kind) -> MlsrStatus {
 }
 
 /// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
-/// 4 = model ownership and transactional store API.
+/// 4 = model ownership and transactional store API, 8 = developer SDK metadata
+/// schema v1, 16 = Apple native output built for this target. ABI 1's old structs
+/// and meanings are unchanged; bindings must check feature bits before new calls.
 #[unsafe(no_mangle)]
 pub extern "C" fn mlsr_features() -> u32 {
     1 | 4
+        | 8
         | if cfg!(all(
             feature = "coreml",
             any(target_os = "macos", target_os = "ios")
         )) {
             2
+        } else {
+            0
+        }
+        | if cfg!(all(feature = "apple-output", target_os = "macos")) {
+            16
         } else {
             0
         }

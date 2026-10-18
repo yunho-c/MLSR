@@ -412,6 +412,10 @@ impl SpeechController {
     pub fn capabilities(&self) -> OutputCapabilities {
         self.owner.factory.capabilities()
     }
+    /// Loaded voice metadata from the shared engine, independent of audio output.
+    pub fn voices(&self) -> Result<crate::voice::VoiceCatalog> {
+        self.owner.queue.voices()
+    }
     /// Cancel this controller's owned speech and join its output worker.
     pub fn close(&self) -> Result<()> {
         self.owner.close()
@@ -746,6 +750,26 @@ impl Speech {
         drop(retained);
         self.snapshot();
         Ok(())
+    }
+    pub(crate) fn recording(&self, queue: &Arc<Queue>) -> Result<Arc<Store>> {
+        if !self.control.job.belongs_to(queue) {
+            return Err(Error::InvalidOptions(
+                "speech belongs to another Tts owner".into(),
+            ));
+        }
+        if !matches!(
+            self.completion().map(|c| c.outcome),
+            Some(Outcome::Completed)
+        ) {
+            return Err(Error::InvalidOptions(
+                "recording export requires completed speech".into(),
+            ));
+        }
+        lock(&self.control.retained)
+            .clone()
+            .ok_or(Error::UnsupportedCapability(
+                "retained recording is unavailable",
+            ))
     }
     fn command(
         &self,

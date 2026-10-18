@@ -746,6 +746,39 @@ fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
     assert_eq!(speech.snapshot().position_frame, 84000);
     let bytes = tts.retention_stats().used_bytes;
     assert_eq!(bytes, 84000 * 4);
+    // Retained export uses the original PCM and serializer, without inference.
+    let directory = tempfile::tempdir().unwrap();
+    let exported = directory.path().join("retained.wav");
+    let file = tts
+        .write_speech(&speech, &exported, Default::default())
+        .unwrap();
+    assert_eq!(file.frames(), 84000);
+    let samples: Vec<f32> = hound::WavReader::open(&exported)
+        .unwrap()
+        .samples::<f32>()
+        .map(|sample| sample.unwrap())
+        .collect();
+    assert!(samples[..42000].iter().all(|sample| *sample == 0.0));
+    assert!(samples[42000..].iter().all(|sample| *sample == 1.0));
+    let first_bytes = std::fs::read(&exported).unwrap();
+    assert!(
+        tts.write_speech(&speech, &exported, Default::default())
+            .is_err()
+    );
+    assert_eq!(std::fs::read(&exported).unwrap(), first_bytes);
+    let foreign = owner(Factory::new(true, true));
+    assert!(
+        foreign
+            .write_speech(
+                &speech,
+                directory.path().join("foreign.wav"),
+                Default::default()
+            )
+            .is_err()
+    );
+    assert!(!directory.path().join("foreign.wav").exists());
+    assert_eq!(speech.completion(), Some(original.clone()));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
     let replay = speech
         .replay_from(
             42001,
@@ -786,6 +819,8 @@ fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
     replay.dispose().unwrap();
     assert_eq!(tts.retention_stats().used_bytes, 0);
     assert_eq!(tts.retention_stats().live_stores, 0);
+    tts.close().unwrap();
+    assert_eq!(std::fs::read(exported).unwrap(), first_bytes);
 }
 
 #[test]

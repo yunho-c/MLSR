@@ -39,7 +39,8 @@ impl Default for QueueOptions {
     }
 }
 impl QueueOptions {
-    pub(crate) fn validate(self) -> Result<()> {
+    /// Validate finite request limits without creating a worker or loading models.
+    pub fn validate(self) -> Result<()> {
         if !(1..=128).contains(&self.max_requests)
             || !(1..=16 * 1024 * 1024).contains(&self.max_text_bytes)
         {
@@ -343,7 +344,9 @@ impl SynthesisJob {
     pub fn cancel(&self) {
         self.cancel_with(CancelReason::Requested);
     }
-    pub(crate) fn cancel_with(&self, reason: CancelReason) {
+    /// Cancel with a lifecycle reason for adapters managing consumer/owner
+    /// lifetime. The first reason wins; ordinary explicit cancellation uses cancel.
+    pub fn cancel_with(&self, reason: CancelReason) {
         if let Some(queue) = self.lease.queue.upgrade() {
             queue.cancel(&self.lease.control, reason);
         }

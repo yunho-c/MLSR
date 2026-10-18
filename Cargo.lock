@@ -395,6 +395,8 @@ name = "mlsr-ffi"
 version = "0.1.0"
 dependencies = [
  "mlsr",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

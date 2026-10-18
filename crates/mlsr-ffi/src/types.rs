@@ -1,5 +1,8 @@
 //! Fixed-layout C values. Handles are registry IDs, never Rust addresses.
 
+mod sdk;
+pub use sdk::*;
+
 /// Opaque library-owned handle. Zero is null; IDs are never reused.
 pub type MlsrHandle = u64;
 /// Success, timeout/end, or failure. On failure read/release the error handle.

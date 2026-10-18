@@ -12,7 +12,7 @@ must not be marked complete merely because a subset of tests passes.
 | 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
 | 5 | Reusable native Apple playback and host policy adapter | Complete | [Native adapter and qualification](apple-output.md); language wiring in step 7 |
 | 6 | Retention, seeking, reader timeline and navigation | Complete | [Reader API, storage limits and native qualification](reader-api.md); SDK translation pending |
-| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | Pending | |
+| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | In progress | Additive C ownership/metadata surface, then idiomatic language adapters and Flutter migration |
 | 8 | Three examples, installed-package and full acceptance qualification | Pending | |
 
 ## Requirement checklist

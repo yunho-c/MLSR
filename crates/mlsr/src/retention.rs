@@ -33,7 +33,8 @@ impl Default for RetentionOptions {
     }
 }
 impl RetentionOptions {
-    fn validate(self) -> Result<()> {
+    /// Check limits without creating storage or loading an engine.
+    pub fn validate(self) -> Result<()> {
         if !(1..=16 * 1024 * 1024 * 1024).contains(&self.max_total_bytes)
             || !(1..=4096).contains(&self.max_stores)
         {
@@ -161,6 +162,9 @@ pub(crate) struct Store {
     state: Mutex<StoreState>,
 }
 impl Store {
+    pub(crate) fn format(&self) -> AudioFormat {
+        self.format
+    }
     pub(crate) fn frames(&self) -> u64 {
         let state = lock(&self.state);
         if self.closed.load(Ordering::Acquire) {

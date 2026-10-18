@@ -153,6 +153,7 @@ pub unsafe extern "C" fn mlsr_model_install_commit(
                 .ok_or_else(|| ApiError {
                     code: "model_store_invalid_state".into(),
                     message: "installation has already finished".into(),
+                    details: None,
                 })?;
             output.write(handles::insert(Entry::Model(transaction.commit()?))?);
             Ok(MLSR_OK)

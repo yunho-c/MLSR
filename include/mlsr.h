@@ -204,6 +204,159 @@ typedef struct {
 } MlsrModelSpec;
 
 /**
+ * Shared facade limits. Initialize with mlsr_tts_options_default. All reserved
+ * fields must be zero. Headless operation performs no output-device I/O.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrTtsOptions).
+   */
+  uint32_t struct_size;
+  /**
+   * 0: compiled default output (lazy), 1: headless, 2: host-managed native output.
+   */
+  uint32_t output_mode;
+  /**
+   * Pending synthesis/replay count limit, 1..=128; default 16.
+   */
+  uint32_t max_requests;
+  /**
+   * Pending UTF-8 text budget, 1..=16 MiB; default 256 KiB.
+   */
+  uint32_t max_text_bytes;
+  /**
+   * Each native/consumer PCM queue's frame limit; default 44,100.
+   */
+  uint32_t queue_frames;
+  /**
+   * One complete PCM chunk limit; default 4,096.
+   */
+  uint32_t chunk_frames;
+  /**
+   * Model-segment allocation limit; default 1,572,864 frames.
+   */
+  uint32_t max_segment_frames;
+  /**
+   * Owned retained recording-count limit; default 128.
+   */
+  uint32_t max_retained_stores;
+  /**
+   * Shared retained PCM disk quota; default 128 MiB, max 16 GiB.
+   */
+  uint64_t max_retained_bytes;
+  /**
+   * Must be zero.
+   */
+  uint64_t reserved;
+} MlsrTtsOptions;
+
+/**
+ * Copied immutable developer request. This normalizes speaking_rate=1.0 to
+ * the model's normal setting; old MlsrJobOptions.speed remains the raw speed.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrRequest).
+   */
+  uint32_t struct_size;
+  /**
+   * 0: exact supported locale, 1: explicit same-language fallback.
+   */
+  uint32_t locale_fallback;
+  /**
+   * Finite positive multiplier; default 1.0 maps to Supertonic raw speed 1.05.
+   */
+  float speaking_rate;
+  /**
+   * Supertonic denoising steps, 1..=64; default 8.
+   */
+  uint32_t supertonic_steps;
+  /**
+   * Original segment n uses seed.wrapping_add(n).
+   */
+  uint64_t seed;
+  /**
+   * Original UTF-8, at most 64 KiB. Copied before submission returns.
+   */
+  MlsrString text;
+  /**
+   * Locale, at most 64 UTF-8 bytes; empty selects en.
+   */
+  MlsrString locale;
+  /**
+   * Stable model-scoped voice ID, at most 128 bytes; empty selects default.
+   */
+  MlsrString voice;
+} MlsrRequest;
+
+/**
+ * Initial speech controls. Mutating caller storage after admission never changes
+ * a request. Playback rate is independent of generated PCM and source coordinates.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrSpeechOptions).
+   */
+  uint32_t struct_size;
+  /**
+   * 0: replace this controller's speech; 1: enqueue.
+   */
+  uint32_t mode;
+  /**
+   * Pitch-preserving playback multiplier; default 1.0.
+   */
+  float playback_rate;
+  /**
+   * Linear output volume in 0..=1; default 1.0.
+   */
+  float volume;
+  /**
+   * 0: begin playing when ready, 1: begin paused.
+   */
+  uint32_t paused;
+  /**
+   * 0: no retention, 1: retain under the shared disk quota (default).
+   */
+  uint32_t retain_audio;
+  /**
+   * New generated frames ahead of presentation; default 88,200.
+   */
+  uint32_t lookahead_frames;
+  /**
+   * Must be zero.
+   */
+  uint32_t reserved;
+} MlsrSpeechOptions;
+
+/**
+ * Borrowed PCM view. Output samples live until the audio handle is released;
+ * copying them gives the caller independent ownership. Input PCM is borrowed
+ * only for the duration of a write call. Samples never travel through JSON.
+ */
+typedef struct {
+  /**
+   * Source frames per second.
+   */
+  uint32_t sample_rate;
+  /**
+   * Interleaved Float32 samples per frame.
+   */
+  uint32_t channels;
+  /**
+   * Number of source frames; must equal sample_count/channels for input.
+   */
+  uint64_t frames;
+  /**
+   * Valid aligned Float32 samples, or null only when sample_count is zero.
+   */
+  const float *samples;
+  /**
+   * Scalar sample count, not bytes or frames.
+   */
+  uintptr_t sample_count;
+} MlsrPcmView;
+
+/**
  * Operation succeeded; a pull returned an event.
  */
 #define MLSR_OK 0
@@ -244,7 +397,9 @@ const char *mlsr_version(void);
 
 /**
  * Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
- * 4 = model ownership and transactional store API.
+ * 4 = model ownership and transactional store API, 8 = developer SDK metadata
+ * schema v1, 16 = Apple native output built for this target. ABI 1's old structs
+ * and meanings are unchanged; bindings must check feature bits before new calls.
  */
 uint32_t mlsr_features(void);
 
@@ -466,6 +621,365 @@ MlsrStatus mlsr_model_release(MlsrHandle model);
  * Zero succeeds; stale or wrong-kind handles fail. May perform filesystem I/O.
  */
 MlsrStatus mlsr_model_install_release(MlsrHandle installation);
+
+/**
+ * Initialize facade settings. Null returns MLSR_ERROR.
+ * # Safety
+ * Non-null output points to writable aligned MlsrTtsOptions storage.
+ */
+MlsrStatus mlsr_tts_options_default(MlsrTtsOptions *output);
+
+/**
+ * Initialize immutable request defaults, with empty text/locale/voice ranges.
+ * # Safety
+ * Non-null output points to writable aligned MlsrRequest storage.
+ */
+MlsrStatus mlsr_request_default(MlsrRequest *output);
+
+/**
+ * Initialize speech settings (replace, normal rate/volume, retained audio).
+ * # Safety
+ * Non-null output points to writable aligned MlsrSpeechOptions storage.
+ */
+MlsrStatus mlsr_speech_options_default(MlsrSpeechOptions *output);
+
+/**
+ * Verify/load local paths into the shared facade. Blocking, no download, lazy
+ * output. Settings pointers may be null for defaults. Owns the returned SDK handle.
+ * # Safety
+ * Strings/settings are readable; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_open(MlsrString manifest,
+                         MlsrString bundle,
+                         const MlsrEngineOptions *engine,
+                         const MlsrTtsOptions *settings,
+                         MlsrHandle *output,
+                         MlsrHandle *error);
+
+/**
+ * Load a facade from an existing verified model, retaining its lease. The model
+ * handle remains caller-owned. Blocking; output remains lazy.
+ * # Safety
+ * Settings are readable; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_from_model(MlsrHandle model,
+                               const MlsrEngineOptions *engine,
+                               const MlsrTtsOptions *settings,
+                               MlsrHandle *output,
+                               MlsrHandle *error);
+
+/**
+ * Return a versioned voice-catalog JSON handle. source=0 gives catalog-only
+ * metadata; a model handle gives verified assets, and a Tts handle engine readiness.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_voice_catalog(MlsrHandle source, MlsrHandle *output, MlsrHandle *error);
+
+/**
+ * Resolve a stable voice and locale in Rust. source has the voice-catalog meaning;
+ * fallback is 0 strict or 1 same-language. Empty voice chooses the catalog default.
+ * # Safety
+ * Strings are readable UTF-8; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_voice_resolve(MlsrHandle source,
+                              MlsrString locale,
+                              MlsrString voice,
+                              uint32_t fallback_policy,
+                              MlsrHandle *output,
+                              MlsrHandle *error);
+
+/**
+ * Borrow the UTF-8 JSON envelope until its SDK handle is released. Every envelope
+ * has schema_version=1, type, and data. Copy before releasing; no PCM is in JSON.
+ * # Safety
+ * Output/error are aligned, writable and disjoint. Do not release during view use.
+ */
+MlsrStatus mlsr_json_read(MlsrHandle handle, MlsrString *output, MlsrHandle *error);
+
+/**
+ * Copy an old/new error's code, message and optional structured failure into a
+ * versioned JSON handle. The original error handle remains caller-owned.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_error_details(MlsrHandle handle, MlsrHandle *output, MlsrHandle *error);
+
+/**
+ * Release an SDK Tts/controller/speech/synthesis/stream/watch/audio/JSON handle.
+ * Owners cancel/join work; speech also releases its recording. Zero is a no-op.
+ * In-flight calls retain safe ownership. Blocking: use off UI/event-loop threads.
+ */
+MlsrStatus mlsr_sdk_release(MlsrHandle handle);
+
+/**
+ * Forget a speech handle without cancelling fire-and-forget playback, or drop a
+ * synthesis handle using Rust's last-owner/consumer-drop semantics. A live audio
+ * consumer still owns its synthesis job. Suitable for language cleanup fallbacks.
+ */
+MlsrStatus mlsr_sdk_forget(MlsrHandle handle);
+
+/**
+ * Collect an advanced job into an owned AudioClip under max_bytes (zero selects
+ * 32 MiB). Claims its sole consumer. Blocking; the job remains independently
+ * cancellable. It must belong to this Tts. Release the audio after copying it.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_collect(MlsrHandle tts,
+                            MlsrHandle job,
+                            uint64_t max_bytes,
+                            MlsrHandle *output,
+                            MlsrHandle *error);
+
+/**
+ * Convenient bounded render. Blocking; for independent cancellation create a
+ * lazy synthesis job and call collect. Zero max_bytes selects the 32 MiB default.
+ * # Safety
+ * Request/strings are readable; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_render(MlsrHandle tts,
+                           const MlsrRequest *settings,
+                           uint64_t max_bytes,
+                           MlsrHandle *output,
+                           MlsrHandle *error);
+
+/**
+ * Borrow PCM until this audio handle's release. The view covers a completed
+ * clip or one bounded streaming chunk. Copy before releasing; never free samples.
+ * # Safety
+ * Output is writable/aligned for output_size bytes and disjoint from error.
+ * Do not release the audio handle while the returned view is in use.
+ */
+MlsrStatus mlsr_audio_read(MlsrHandle audio,
+                           MlsrPcmView *output,
+                           uintptr_t output_size,
+                           MlsrHandle *error);
+
+/**
+ * Incrementally write a lazy/started synthesis job belonging to this Tts. Zero
+ * max_frames selects the 30-minute default. The job remains independently
+ * cancellable. Returns WAV metadata only after successful no-clobber publication.
+ * # Safety
+ * Path is readable UTF-8; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_write_job(MlsrHandle tts,
+                              MlsrHandle job,
+                              MlsrString path,
+                              uint64_t max_frames,
+                              MlsrHandle *output,
+                              MlsrHandle *error);
+
+/**
+ * Convenient incremental file render; zero max_frames selects the 30-minute
+ * default. For per-request cancellation create a synthesis handle and write_job.
+ * # Safety
+ * Request/path/strings are readable; output/error are writable and disjoint.
+ */
+MlsrStatus mlsr_tts_render_to_file(MlsrHandle tts,
+                                   const MlsrRequest *settings,
+                                   MlsrString path,
+                                   uint64_t max_frames,
+                                   MlsrHandle *output,
+                                   MlsrHandle *error);
+
+/**
+ * Export completed retained speech without inference or a full PCM memory copy.
+ * It must belong to this Tts. Returns finalized WAV metadata; preserves existing
+ * destinations. The speech outcome is unchanged, including when export fails.
+ * # Safety
+ * Path is readable UTF-8; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_write_speech(MlsrHandle tts,
+                                 MlsrHandle speech,
+                                 MlsrString path,
+                                 uint64_t max_frames,
+                                 MlsrHandle *output,
+                                 MlsrHandle *error);
+
+/**
+ * Write caller-owned PCM with the shared Rust WAV serializer. Input is borrowed
+ * only for this blocking call, so language AudioClips need no native allocation
+ * after copying a render. Finite complete PCM is required; at most 1 GiB of
+ * samples. No-clobber publication and owned partial cleanup match render_to_file.
+ * # Safety
+ * View is aligned/readable and its samples are aligned/readable for sample_count
+ * Float32 values. Path is readable UTF-8; output/error are writable and disjoint.
+ */
+MlsrStatus mlsr_pcm_write_wav(const MlsrPcmView *view,
+                              MlsrString path,
+                              MlsrHandle *output,
+                              MlsrHandle *error);
+
+/**
+ * Obtain a reusable controller: independent=0 returns the Tts default, 1 creates
+ * another scoped queue sharing inference. No output device is opened yet.
+ * Releasing a controller closes it; disposing the default does not resurrect it.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_controller(MlsrHandle tts,
+                               uint32_t independent,
+                               MlsrHandle *output,
+                               MlsrHandle *error);
+
+/**
+ * Copy input/options and return a Speech immediately, using a Tts default or
+ * explicit controller handle. Admission failure preserves existing speech.
+ * PCM stays inside Rust/native output; no host-language audio loop is required.
+ * # Safety
+ * Request/settings/strings are readable; output/error are writable and disjoint.
+ */
+MlsrStatus mlsr_speak(MlsrHandle owner,
+                      const MlsrRequest *input_request,
+                      const MlsrSpeechOptions *playback,
+                      MlsrHandle *output,
+                      MlsrHandle *error);
+
+/**
+ * Speech command: 0 cancel, 1 pause, 2 resume, 3 volume(value), 4 playback rate(value).
+ * Cancellation requests prompt flush; wait for completion for native quiescence.
+ * Other commands return after admission; state confirms native application.
+ * # Safety
+ * A non-null error output is aligned/writable.
+ */
+MlsrStatus mlsr_speech_command(MlsrHandle speech, uint32_t command, float value, MlsrHandle *error);
+
+/**
+ * Seek an active/paused speech in exact source frames. Invalid ranges do not
+ * move output. Paused seeks stay paused; retained PCM is never synthesized again.
+ * # Safety
+ * A non-null error output is aligned/writable.
+ */
+MlsrStatus mlsr_speech_seek(MlsrHandle speech, uint64_t frame, MlsrHandle *error);
+
+/**
+ * Replay completed retained audio with a new Speech identity/outcome. Storage
+ * is shared, with no inference or second PCM disk copy. The old outcome remains.
+ * # Safety
+ * Settings are readable; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_speech_replay(MlsrHandle speech,
+                              uint64_t frame,
+                              const MlsrSpeechOptions *settings,
+                              MlsrHandle *output,
+                              MlsrHandle *error);
+
+/**
+ * Navigate original spoken sentences. target=-1 is previous, -2 next, otherwise
+ * a nonnegative original sentence ID. Returns navigation JSON (seeked/started/
+ * boundary) plus a new owned Speech only for started. The prior outcome remains
+ * immutable. An old handle cannot override a different current request.
+ * # Safety
+ * New-speech/JSON/error outputs are aligned, writable and mutually disjoint.
+ */
+MlsrStatus mlsr_speech_navigate(MlsrHandle speech,
+                                int64_t target,
+                                MlsrHandle *new_speech,
+                                MlsrHandle *output,
+                                MlsrHandle *error);
+
+/**
+ * Create a lazy advanced synthesis handle. Reading state/done never starts it;
+ * explicitly start or claim its single audio consumer. Input is copied now.
+ * # Safety
+ * Request/strings are readable; output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_tts_synthesize(MlsrHandle tts,
+                               const MlsrRequest *settings,
+                               MlsrHandle *output,
+                               MlsrHandle *error);
+
+/**
+ * Explicitly start a lazy synthesis job; no audio consumer is created.
+ * # Safety
+ * A non-null error output is writable/aligned.
+ */
+MlsrStatus mlsr_synthesis_start(MlsrHandle job, MlsrHandle *error);
+
+/**
+ * Request cancellation without waiting for inference. reason=0 means requested;
+ * reason=1 means an adapter dropped the sole audio consumer. First cause wins.
+ * # Safety
+ * A non-null error output is writable/aligned.
+ */
+MlsrStatus mlsr_synthesis_cancel(MlsrHandle job, uint32_t reason, MlsrHandle *error);
+
+/**
+ * Claim the sole PCM consumer and start a lazy job. A second consumer fails
+ * without cancelling the first. Releasing an unfinished stream cancels and joins.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_synthesis_audio(MlsrHandle job, MlsrHandle *output, MlsrHandle *error);
+
+/**
+ * Pull one PCM chunk or one terminal completion, then END. On OK exactly one
+ * of audio/completion is nonzero; both are owned SDK handles. TIMEOUT is temporary
+ * starvation, never EOF. timeout_ms is capped at 30 seconds. Concurrent pulls fail.
+ * # Safety
+ * Audio/completion/error are aligned, writable and mutually disjoint.
+ */
+MlsrStatus mlsr_audio_stream_poll(MlsrHandle stream,
+                                  uint32_t timeout_ms,
+                                  MlsrHandle *audio,
+                                  MlsrHandle *completion,
+                                  MlsrHandle *error);
+
+/**
+ * Immediate versioned snapshot for SDK Tts, controller, speech, synthesis or
+ * audio handles. State reads never consume PCM or start a lazy job.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_sdk_snapshot(MlsrHandle handle, MlsrHandle *output, MlsrHandle *error);
+
+/**
+ * Request identity for a speech or advanced synthesis handle; invalid/wrong-kind
+ * handles return zero. Registry IDs and request IDs are different namespaces.
+ */
+uint64_t mlsr_sdk_id(MlsrHandle handle);
+
+/**
+ * Wait for immutable speech/synthesis completion without consuming audio/state.
+ * A failed request still returns OK with a structured failed outcome. TIMEOUT
+ * returns no handle. Waiting alone never starts a lazy synthesis job.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_sdk_wait(MlsrHandle handle,
+                         uint32_t timeout_ms,
+                         MlsrHandle *output,
+                         MlsrHandle *error);
+
+/**
+ * Create an independent, bounded state observer for speech or synthesis. It
+ * stores only a revision and shared latest state, never an event/audio queue.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_sdk_states(MlsrHandle handle, MlsrHandle *output, MlsrHandle *error);
+
+/**
+ * Current state first, then coalesced revisions and one terminal snapshot, then
+ * END. A paused/slow poller cannot accumulate native snapshots. Concurrent polls
+ * on one observer fail; separate observers remain independent of audio and done.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_state_poll(MlsrHandle handle,
+                           uint32_t timeout_ms,
+                           MlsrHandle *output,
+                           MlsrHandle *error);
+
+/**
+ * Obtain the frozen original plan for a speech/synthesis handle, including both
+ * UTF-8 byte and UTF-16 code-unit ranges. TIMEOUT means planning is not ready;
+ * this read never starts a lazy job. Owns the returned versioned JSON handle.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_text_plan(MlsrHandle handle, MlsrHandle *output, MlsrHandle *error);
 
 #ifdef __cplusplus
 }  // extern "C"

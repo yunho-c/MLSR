@@ -195,6 +195,12 @@ impl Tts {
     pub fn retention_stats(&self) -> RetentionStats {
         self.retention.stats()
     }
+    /// Advertised output capabilities without creating a controller/device.
+    pub fn output_capabilities(&self) -> Option<crate::output::OutputCapabilities> {
+        self.output
+            .as_ref()
+            .map(|(factory, _)| factory.capabilities())
+    }
     /// Resolve a stable voice ID and locale with an explicit fallback rule.
     pub fn resolve_voice(
         &self,
@@ -334,6 +340,44 @@ impl Tts {
             }
         })();
         finalize_consumer(job, result, FailureStage::Writing)
+    }
+    /// Export a completed retained recording without inference or a full PCM
+    /// memory copy. Uses the shared WAV serializer and no-clobber publication.
+    /// Close cancels/joins this writer; the speech's outcome remains immutable.
+    pub fn write_speech(
+        &self,
+        speech: &Speech,
+        path: impl AsRef<Path>,
+        options: FileRenderOptions,
+    ) -> Result<WavFile> {
+        let _operation = self.operation()?;
+        let result = (|| {
+            let source = speech.recording(&self.queue)?;
+            let mut writer = WavWriter::create(path, source.format(), options.max_frames)?;
+            let mut frame = 0;
+            loop {
+                if lock(&self.operations.state).0 {
+                    return Err(Error::Cancelled);
+                }
+                let Some(audio) = source.read(frame, 4096)? else {
+                    break;
+                };
+                writer.write_audio(&audio)?;
+                frame += audio.frames() as u64;
+            }
+            let state = lock(&self.operations.state);
+            if state.0 {
+                return Err(Error::Cancelled);
+            }
+            writer.finish()
+        })();
+        result.map_err(|error| {
+            if matches!(error, Error::Cancelled) || lock(&self.operations.state).0 {
+                Error::Cancelled
+            } else {
+                Error::OperationFailed(Failure::new(speech.id(), FailureStage::Writing, &error))
+            }
+        })
     }
     /// Idempotent cancel/join. Slow state subscribers never block close. Caller
     /// output files and completed AudioClips are not deleted or invalidated.
