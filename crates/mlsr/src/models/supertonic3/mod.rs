@@ -5,7 +5,7 @@ mod pipeline;
 mod planning;
 mod segmentation;
 
-pub use bundle::{Bundle, Voice};
+pub use bundle::{BUNDLE_MANIFEST_NAME, Bundle, BundleManifest, LockedFile, Voice};
 pub use frontend::{EncodedText, normalize_text};
 pub(crate) use pipeline::SynthesisObserver;
 pub use pipeline::{Diagnostics, Pipeline, SynthesisOutput};

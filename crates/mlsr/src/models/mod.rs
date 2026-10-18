@@ -3,4 +3,5 @@
 //! Keep model pipelines separate from the execution runtime. Large model
 //! weights are external assets described by the root `model-manifests/` folder.
 
+pub mod catalog;
 pub mod supertonic3;

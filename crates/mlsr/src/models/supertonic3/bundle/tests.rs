@@ -2,6 +2,49 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn discovers_bundles_and_pins_original_manifest_bytes() {
+    let fixture = Fixture::new();
+    let root = fixture.directory.path();
+    assert!(Bundle::open(root).is_err());
+    let expected = fixture.load().unwrap();
+    let opened = Bundle::open(root).unwrap();
+    assert_eq!(opened.id(), expected.id());
+    assert_eq!(opened.manifest_sha256(), expected.manifest_sha256());
+    Bundle::open_pinned(root, expected.manifest_sha256()).unwrap();
+    assert!(Bundle::open_pinned(root, &"0".repeat(64)).is_err());
+    let path = root.join(BUNDLE_MANIFEST_NAME);
+    let original = fs::read(&path).unwrap();
+    fs::write(
+        &path,
+        [
+            b"# semantically equal, different file\n".as_slice(),
+            &original,
+        ]
+        .concat(),
+    )
+    .unwrap();
+    assert!(Bundle::open_pinned(root, expected.manifest_sha256()).is_err());
+    Bundle::open(root).unwrap();
+    fs::write(root.join("tts.json"), b"corrupt").unwrap();
+    assert!(Bundle::open(root).is_err());
+}
+
+#[test]
+fn manifest_inventory_preserves_identity_and_rejects_oversized_input() {
+    let baseline = BundleManifest::baseline();
+    assert_eq!(baseline.bytes(), BASELINE.as_bytes());
+    assert_eq!(baseline.files().count(), 28);
+    assert_eq!(
+        baseline.files().map(|f| f.size_bytes).sum::<u64>(),
+        169_328_070
+    );
+    baseline
+        .require_sha256("958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5")
+        .unwrap();
+    assert!(BundleManifest::parse(&vec![b' '; MANIFEST_LIMIT as usize + 1]).is_err());
+}
+
+#[test]
 fn variants_pin_baseline_weights_interfaces_and_safe_paths() {
     let manifest: VariantManifest = serde_yaml_ng::from_str(VARIANTS).unwrap();
     let baseline: Manifest = serde_yaml_ng::from_str(BASELINE).unwrap();
@@ -246,7 +289,10 @@ fn loads_pinned_external_bundle() {
     let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
     let manifest =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../model-manifests/supertonic3-coreml.yaml");
-    let bundle = Bundle::load(manifest, root).unwrap();
+    let bundle = Bundle::load(manifest, &root).unwrap();
     assert_eq!(bundle.id(), "supertonic3-coreml-int4-v1");
     assert_eq!(bundle.voice("F1").unwrap().style_dp().shape(), [1, 8, 16]);
+    let discovered = Bundle::open(root).unwrap();
+    assert_eq!(discovered.id(), bundle.id());
+    assert_eq!(discovered.unicode_indexer(), bundle.unicode_indexer());
 }
