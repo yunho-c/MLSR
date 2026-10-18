@@ -9,10 +9,10 @@ Rust applications -------------> mlsr
 
 The Cargo workspace shares version metadata, a lockfile, and build outputs.
 `mlsr` and `mlsr-ffi` are the default members; `tools/codegen` is a development
-tool and is not a runtime dependency. Default builds have no third-party runtime
-dependencies. The optional Apple-only `coreml` feature adds pinned cidre bindings.
-The JSON development transport dependency is confined to examples/tests; model
-manifests and qualification reports use YAML.
+tool and is not a runtime dependency. Portable model loading uses Serde, YAML/JSON
+parsers, and SHA-256. JSON reads the upstream tokenizer/configuration/voice assets;
+model manifests and qualification reports remain YAML. The optional Apple-only
+`coreml` feature adds pinned cidre bindings.
 
 ## Rust modules
 
@@ -26,7 +26,8 @@ manifests and qualification reports use YAML.
 | `models` | Model-specific tokenization, tensor preparation, inference sequence, and voice formats |
 | `runtime` | Executing networks and integrating optional platform backends |
 
-Version queries and the [Core ML tensor runtime](coreml-runtime.md) are implemented.
+Version queries, [verified Supertonic bundles](supertonic3.md), and the
+[Core ML tensor runtime](coreml-runtime.md) are implemented.
 Its sessions own native models/tensors on one worker and expose portable owned
 data and opaque handles. Native bindings stay private; a separate system-binding
 crate is unnecessary. Model/tokenization orchestration remains a subsequent
