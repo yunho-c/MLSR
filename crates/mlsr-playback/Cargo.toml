@@ -1,0 +1,27 @@
+[package]
+name = "mlsr-playback"
+description = "Optional native audio output adapters for MLSR."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# The initial dependency set is development-only for the required playback
+# feasibility probe. Production adapters will opt into their platform bindings.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+objc2 = "=0.6.4"
+block2 = "=0.6.2"
+objc2-avf-audio = { version = "=0.3.2", default-features = false, features = [
+    "std", "block2", "objc2-core-audio-types", "AVAudioEngine", "AVAudioNode",
+    "AVAudioPlayerNode", "AVAudioBuffer", "AVAudioFormat", "AVAudioTime",
+    "AVAudioTypes", "AVAudioMixerNode", "AVAudioMixing", "AVAudioUnit",
+    "AVAudioUnitTimeEffect", "AVAudioUnitTimePitch",
+] }
+
+[dev-dependencies]
+serde_json = "=1.0.154"
+
+[lints]
+workspace = true
