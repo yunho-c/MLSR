@@ -4,7 +4,7 @@ All eight steps in the [acceptance checklist](developer-api-progress.md) are
 complete for **macOS Apple Silicon, English/Korean and voices M1/F1**. Rust owns
 the scheduler, synthesis, playback policy, retention, timeline and WAV writer.
 C, Dart, Go and Python expose that behavior, and the Flutter example uses the
-public SDK for both its speak and reader flows. See the [SDK guide](developer-sdk.md)
+public SDK for both its speak and reader flows. See the [SDK guide](../developer-sdk.md)
 for entry points, ownership and examples.
 
 The final installed and release runs used source commit
@@ -22,7 +22,7 @@ or acoustic-onset measurements.
 
 ## Installed public consumers
 
-[`check_synthesis_bindings.py`](../tools/check_synthesis_bindings.py) builds or
+[`check_synthesis_bindings.py`](../../tools/check_synthesis_bindings.py) builds or
 accepts a prebuilt native library, then runs consumers outside the checkout.
 The final run is `step8-installed-v2` under the external evidence root below.
 
@@ -35,9 +35,9 @@ The final run is `step8-installed-v2` under the external evidence root below.
 | Supplemental legacy Dart model lease | The opt-in installed-copy test skipped by the main matrix was explicitly enabled and passed in `step8-dart-lease-v1`; engine creation races caller model disposal, holds the lease, then permits removal after shutdown |
 
 The tests for the language-specific ownership rules live in
-[Python](../bindings/python/tests/test_sdk.py),
-[Go](../bindings/go/sdk_test.go), [Dart](../bindings/dart/test/sdk_test.dart)
-and the [C consumer](../tests/integration/developer_smoke.c). The package runs
+[Python](../../bindings/python/tests/test_sdk.py),
+[Go](../../bindings/go/sdk_test.go), [Dart](../../bindings/dart/test/sdk_test.dart)
+and the [C consumer](../../tests/integration/developer_smoke.c). The package runs
 use actual Core ML inference and native output as well as portable error tests.
 Python is installed into a local target directory, with no virtual environment.
 
@@ -56,11 +56,11 @@ Korean text is `안녕하세요. 반갑습니다.`.
 
 The three new public export examples also produce identical shared-writer WAV
 bytes. Their PCM matches the existing English/M1 result. Full hashes are in the
-[tracked summary](../tests/fixtures/developer-api/qualification.json).
+[tracked summary](../../tests/fixtures/developer-api/qualification.json).
 
 ## Flutter and offline release
 
-The [Flutter integration](../examples/flutter_speak/integration_test/speak_test.dart)
+The [Flutter integration](../../examples/flutter_speak/integration_test/speak_test.dart)
 exercises rapid replacement/enqueue/stop, paused clocks, rate/volume, retained
 seeking, completed replay with a new request ID, previous/next sentence, original
 UTF-16 highlights, typed unsupported-character errors, exclusive WAV export and
@@ -70,7 +70,7 @@ The UI's `DemoController` presents and owns SDK handles; the former app-local
 PCM channel, Swift player, scheduling state machine and WAV serializer are gone.
 
 The debug UI evidence is recorded in
-[`flutter.json`](../tests/fixtures/developer-api/flutter.json). Its observations
+[`flutter.json`](../../tests/fixtures/developer-api/flutter.json). Its observations
 use a 20 ms UI pump interval and are separate from the release timing probe.
 
 `step8-release-v4` builds a separate consumer, relocates the release app and runs
@@ -100,7 +100,7 @@ runs and their limitations remain in the
 
 ## Timing and memory boundaries
 
-[`benchmark_developer_api.py`](../tools/benchmark_developer_api.py) ran against
+[`benchmark_developer_api.py`](../../tools/benchmark_developer_api.py) ran against
 the installed Python wheel and the same release native library after the package
 and release suites finished. It used battery power (89% at start), existing
 system/model caches, one inference warmup and one native output warmup. These are
@@ -164,7 +164,7 @@ The final installed and relocated release checks include both repairs.
 
 ## Evidence and reproduction
 
-The compact [qualification summary](../tests/fixtures/developer-api/qualification.json)
+The compact [qualification summary](../../tests/fixtures/developer-api/qualification.json)
 records source/library/manifest hashes, report hashes, PCM cases, copy counts and
 measurements. Full reports, logs, copied packages, model assets, relocated apps
 and WAVs remain outside Git under

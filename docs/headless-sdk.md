@@ -6,7 +6,7 @@ The Rust `Tts` facade owns a loaded engine and one FIFO inference scheduler.
 downloads assets. The original eager/busy-on-conflict `Engine` API is unchanged.
 
 `Request` copies source text, resolved voice and options. `RequestOptions` keeps
-`speaking_rate` separate from future playback rate. Public rate 1.0 maps once to
+`speaking_rate` separate from playback rate. Public rate 1.0 maps once to
 Supertonic's raw speed 1.05; steps and seed use typed `BackendOptions`. Effective
 low-level options are available for reproducing results.
 
@@ -69,4 +69,4 @@ The retained native test log is under
 `~/.cache/mlsr/qualification/developer-api-v0/step3-headless-v1/native-test.log`.
 This establishes the shared headless layer. The [developer SDK guide](developer-sdk.md)
 covers the implemented speech/output and language surfaces; the
-[acceptance checklist](developer-api-progress.md) tracks their combined qualification.
+[acceptance checklist](internal/developer-api-progress.md) tracks their combined qualification.

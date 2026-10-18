@@ -3,7 +3,7 @@
 The macOS arm64 slice packages the pinned Supertonic3 baseline through Flutter
 assets and loads it without application users entering model paths. The delivery
 path passed its original POC qualification and a new qualification after the
-[developer SDK migration](developer-sdk.md). Both use M4 Pro / macOS 27.0.1,
+[developer SDK migration](../developer-sdk.md). Both use M4 Pro / macOS 27.0.1,
 Flutter 3.41.4 and the `cpu_and_neural_engine` policy. Mobile adapters and other
 backends follow.
 
@@ -30,7 +30,7 @@ The new release app is 193,492,361 logical bytes. This excludes Core ML caches
 and is not a private APFS allocation measurement. Full source and artifact hashes,
 all four reports and the separate performance/ownership boundaries are indexed
 in the [developer API qualification](developer-api-qualification.md) and its
-[compact summary](../tests/fixtures/developer-api/qualification.json).
+[compact summary](../../tests/fixtures/developer-api/qualification.json).
 
 ## Original POC release qualification
 
@@ -87,7 +87,7 @@ tolerance or automatic retry is used to turn a mismatching run into a pass.
 ## Original evidence and limits
 
 Compact hashes and observations are recorded in
-[`model-delivery/qualification-summary.yaml`](../tests/fixtures/model-delivery/qualification-summary.yaml).
+[`model-delivery/qualification-summary.yaml`](../../tests/fixtures/model-delivery/qualification-summary.yaml).
 Full reports, logs, consumers, relocated apps and WAVs are retained locally under
 `~/.cache/mlsr/qualification/model-delivery-v1/`. Reports record the runtime source
 commit and file hashes, qualification-script/probe hashes, native input hash,

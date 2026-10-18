@@ -145,7 +145,7 @@ qualifies a relocated module with real synthesis, `go test -race` and this examp
 `sdk_test.go` covers portable catalog/file ownership. Set `MLSR_TEST_MANIFEST`
 and `MLSR_TEST_BUNDLE` for shared-facade tests, and explicitly set
 `MLSR_TEST_NATIVE_OUTPUT=1` for muted native reader/GC/context tests. The
-[installed SDK qualification](../../docs/developer-api-qualification.md) passes
+[installed SDK qualification](../../docs/internal/developer-api-qualification.md) passes
 with `go test -race`, including exact PCM/WAV, state coalescing, verified model
 ownership and context-controlled fire-and-forget. The
 [developer API example](examples/developer_api/main.go) uses bounded file rendering

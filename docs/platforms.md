@@ -4,7 +4,7 @@ Cross-platform support requires both a portable API and a working inference
 runtime on each target. Supertonic text-to-PCM synthesis is implemented through
 Core ML and qualified on macOS arm64, including the public C ABI and installed
 Dart/Go/Python synthesis packages and a Flutter playback example. The
-[POC qualification](poc-qualification.md) records the exact host, artifacts,
+[POC qualification](internal/poc-qualification.md) records the exact host, artifacts,
 timing boundaries, and remaining device/release gates.
 
 | Target | Scaffold configuration | Validation |

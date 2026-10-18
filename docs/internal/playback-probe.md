@@ -7,7 +7,7 @@ the developer API, not a finished speech controller. Run it with a new report:
 cargo run --locked -p mlsr-playback --example apple_probe -- /absolute/new-report.json
 ```
 
-The [recorded result](../tests/fixtures/developer-api/playback-probe.json) contains
+The [recorded result](../../tests/fixtures/developer-api/playback-probe.json) contains
 source/lock hashes, host/toolchain and individual observations. It passed on the
 local Apple Silicon macOS 27.0.1 host. MSRV 1.88, strict clippy and Windows target
 compilation passed; no Windows playback or iOS device execution is implied.

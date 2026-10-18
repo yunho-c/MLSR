@@ -4,7 +4,7 @@ Model data and executable libraries have separate packaging paths. Flutter asset
 carry manifests, serialized graphs, weights, tokenizer data and voices. The native
 build hook carries the Rust library. A Flutter adapter resolves model resources;
 Rust validates their identity and manages their lifetime. Implementation status
-is tracked in [model-delivery-progress.md](model-delivery-progress.md).
+is tracked in [model-delivery-progress.md](internal/model-delivery-progress.md).
 
 ## Self-contained bundle
 

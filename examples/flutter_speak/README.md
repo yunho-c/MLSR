@@ -75,7 +75,7 @@ pause/rate/volume/seek/replay, original Unicode spans and sentence navigation,
 English/Korean WAV export, and native handle cleanup. UI observations of first
 retained PCM, first presented position and cancellation completion are reported
 separately; they do not measure acoustic onset or native flush latency. Those
-output-driver boundaries have separate [native tests](../../docs/apple-output.md).
+output-driver boundaries have separate [native tests](../../docs/internal/apple-output.md).
 It saves screenshots, paired audio, and a report into a **new** directory. These
 checks establish behavior on the tested machine, not audible listening quality
 or compatibility with every supported minimum OS. The root
@@ -87,7 +87,7 @@ streaming path into Application Support. This is an integration-test option;
 the ordinary app loads immutable bundled resources directly. Small portable
 delivery tests live in `bindings/flutter`. The separate downstream release check
 tests a relocated app with fresh data and denied access to developer files and
-the network; see [release qualification](../../docs/model-delivery-qualification.md)
+the network; see [release qualification](../../docs/internal/model-delivery-qualification.md)
 for evidence and reproduction commands.
 
 The example is Apache-2.0. Fraunces and Manrope are bundled under the SIL Open

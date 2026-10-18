@@ -17,16 +17,17 @@ unsupported locales have distinct error categories. Discovery never downloads.
 
 `Bundle::plan_text()` and `Engine::plan_text()` freeze token-validated text into
 `TextPlan`. The engine method executes on its worker and uses its existing single
-operation lane; the future SDK scheduler serializes this for callers. Plans keep
-the complete original string, model-normalized segment input, spoken sentence
-identity, and paired original UTF-8/UTF-16 spans. One long sentence can contain
+operation lane; the `Tts` scheduler serializes synthesis requests for callers.
+Plans keep the complete original string, model-normalized segment input, spoken
+sentence identity, and paired original UTF-8/UTF-16 spans. One long sentence can contain
 multiple model segments. Removed-only text is not assigned fabricated audio.
 
 `Engine::start_plan(plan, start_segment, ...)` accepts a frozen plan or suffix
 without re-segmenting or renumbering it. The plan's manifest must match the
 engine. Audio starts at frame zero for this job, while source spans, segment IDs
 and `seed.wrapping_add(original_segment_id)` retain their original identities.
-This is the primitive for later reader navigation, not reader navigation itself.
+The shared [reader controls](reader-api.md) reuse these frozen plans and original
+indices for sentence navigation.
 
 `Utf16Map` rejects interior UTF-8 bytes, interior surrogate pairs, reversed spans
 and out-of-range offsets. Source slicing never uses normalized-text offsets.
@@ -45,6 +46,6 @@ Validation for this change:
 Portable tests cover readiness, explicit locale fallback, unavailable voices,
 Korean/emoji/combining characters, UTF-16 slicing, long-sentence grouping, frozen
 suffix identity, invalid cursors and foreign-model plan rejection. The public
-[SDK translations](developer-sdk.md) and [installed-package qualification](developer-api-qualification.md)
+[SDK translations](developer-sdk.md) and [installed-package qualification](internal/developer-api-qualification.md)
 cover readiness, request inspection and original-text spans. Old layouts and
 UTF-8 fields remain unchanged.

@@ -100,4 +100,4 @@ errors, old error compatibility, option sizes, PCM validation, no-clobber writin
 and partial cleanup. Shared reader tests verify retained export sample identity,
 zero extra inference, foreign-owner rejection and file survival. Cross-language
 and installed-package acceptance is tracked separately in
-[the progress checklist](developer-api-progress.md).
+[the progress checklist](internal/developer-api-progress.md).

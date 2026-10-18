@@ -3,7 +3,7 @@
 This is the implementation contract for the developer API designed in
 `ignore/chatgpt-conv1.md`. It extends the qualified Core ML synthesis slice;
 completion of that earlier slice does not imply completion of this SDK.
-[Progress and evidence](developer-api-progress.md) track the eight accepted steps.
+[Progress and evidence](internal/developer-api-progress.md) track the eight accepted steps.
 
 The v0 target is the full essential API on macOS Apple Silicon, with shared Rust
 behavior and C/Dart/Go/Python interfaces. Device/backend availability is a separate

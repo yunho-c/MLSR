@@ -37,7 +37,7 @@ tests.
 ## Qualification
 
 The muted tests below open the current macOS output device only when explicitly
-requested. The tracked [result](../tests/fixtures/developer-api/apple-output.json)
+requested. The tracked [result](../../tests/fixtures/developer-api/apple-output.json)
 records host, source hashes and actual observations. External logs are under
 `~/.cache/mlsr/qualification/developer-api-v0/step5-native-v2/`.
 

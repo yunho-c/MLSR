@@ -4,7 +4,7 @@ The shared developer API is implemented in Rust and exposed through C, Dart,
 Go and Python. It covers immediate speech handles, replace/enqueue controllers,
 lazy single-consumer PCM, rendering, native playback, retained audio, reader
 controls and original-text alignment. The [contract](developer-api.md) and
-[acceptance checklist](developer-api-progress.md) define its scope and evidence.
+[acceptance checklist](internal/developer-api-progress.md) define its scope and evidence.
 
 The qualified runtime/output target is macOS Apple Silicon. Core ML uses cidre;
 optional Apple playback uses the separate `mlsr-playback` crate. Headless builds

@@ -54,7 +54,7 @@ output failure/recovery; route/interruption policy and fire-and-forget lifetime.
 `cargo test --locked --workspace` passed (60 core tests, seven CLI tests and four
 FFI tests; two external-asset core tests skipped). Strict all-feature/all-target
 clippy, Rust 1.88 workspace checks and Windows core target compilation passed.
-Those step-4 counts are historical. Subsequent [Apple adapter](apple-output.md)
+Those step-4 counts are historical. Subsequent [Apple adapter](internal/apple-output.md)
 and [reader](reader-api.md) tests add native and retained-audio qualification.
 New C/language facade surfaces, Flutter migration and full installed/native
 acceptance remain tracked separately.

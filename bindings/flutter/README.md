@@ -3,7 +3,7 @@
 `mlsr_flutter` resolves model resources; the portable `mlsr` Dart package and Rust
 core own verification, installation, engine lifetimes, and synthesis. The current
 native resource adapter and Core ML hook target Apple Silicon with a macOS 15
-minimum. Release delivery is [qualified on M4 Pro / macOS 27.0.1](../../docs/model-delivery-qualification.md);
+minimum. Release delivery is [qualified on M4 Pro / macOS 27.0.1](../../docs/internal/model-delivery-qualification.md);
 the minimum OS and other devices still need validation. Other native platforms
 require their resource adapter and runtime qualification before use.
 

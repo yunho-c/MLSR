@@ -51,7 +51,7 @@ to the model bundle layer; loading a graph does not download or convert it.
 MACOSX_DEPLOYMENT_TARGET=15.0 cargo test -p mlsr --features coreml
 ```
 
-Apple tests compile the tiny [affine fixture](../tests/fixtures/coreml/README.md)
+Apple tests compile the tiny [affine fixture](../../tests/fixtures/coreml/README.md)
 with Xcode and execute it on CPU. They exercise independently known arithmetic,
 stride-aware copies, bit-preserving tensor transfer, output lifetime, malformed
 inputs/models, error recovery, and a controlled Objective-C exception. Portable
@@ -63,13 +63,13 @@ ctypes calls from foreign threads, and macOS/iOS compilation and deployment
 metadata. `--toolchain 1.88.0` selects the minimum supported Rust toolchain.
 These checks use the tiny fixture and need no speech model downloads.
 
-The recorded [Supertonic runtime qualification](../tests/fixtures/supertonic3/runtime-summary.yaml)
+The recorded [Supertonic runtime qualification](../../tests/fixtures/supertonic3/runtime-summary.yaml)
 contains 728 byte-exact tensor comparisons: 14 cases, two passes, and ordinary
 versus alternating output-buffer execution. Each session loaded six models once;
 the reuse run honored all 224 VE backing requests on the recorded M4 Pro/macOS
 27.0.1 host. The report records source/binary hashes and boundaries. It does not
 qualify physical iOS devices, minimum-OS execution, ANE residency, or performance.
-Reproduction commands are in the [model tool README](../tools/supertonic3/README.md#replay-through-the-rust-runtime).
+Reproduction commands are in the [model tool README](../../tools/supertonic3/README.md#replay-through-the-rust-runtime).
 
 ## Persistent sessions
 

@@ -32,7 +32,7 @@ native artifacts, and executes real inference from C and Python ctypes callers.
 It requires installed targets/toolchains and never installs them automatically.
 The same command tests/builds the Core ML CLI. Full Supertonic synthesis replay
 uses opt-in external assets via `python3 -m tools.supertonic3.synthesis_replay`;
-see the [synthesis documentation](../docs/supertonic3.md).
+see the [synthesis documentation](../docs/internal/supertonic3.md).
 
 `check_synthesis_bindings.py` explicitly qualifies real synthesis on macOS arm64:
 
@@ -56,7 +56,7 @@ explicit integration test, not a latency benchmark or broad speech-quality study
 processes. It preserves per-case warm first-audio/total samples, process peak RSS,
 initialization with existing OS caches, and cancellation signal/quiescence times.
 `--variant baseline` needs only the baseline bundle; `--variant all` needs the
-optional graphs. See [execution variants](../docs/execution-variants.md) for
+optional graphs. See [execution variants](../docs/internal/execution-variants.md) for
 preparation, parity gates and the experimental fixed-vocoder limitation.
 
 ## Explicit Apple Silicon qualification

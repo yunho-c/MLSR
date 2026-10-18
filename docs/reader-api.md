@@ -79,7 +79,7 @@ MLSR_TEST_BUNDLE=/absolute/verified/model cargo test -p mlsr --all-features \
 ```
 
 This test qualifies shared Rust reader behavior on macOS. The
-[combined qualification](developer-api-qualification.md) also covers language
+[combined qualification](internal/developer-api-qualification.md) also covers language
 wrappers, the Flutter reader UI and installed packages. A paused cursor at frame
 zero exposes the first segment's original text range; the shared regression and
 Flutter previous-sentence test cover that boundary.
