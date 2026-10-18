@@ -1,5 +1,5 @@
-#![cfg(all(feature = "qnn", target_os = "windows", target_arch = "aarch64"))]
 //! Opt-in headless SDK qualification against the pinned real QNN bundle.
+#![cfg(all(feature = "qnn", target_os = "windows", target_arch = "aarch64"))]
 use mlsr::{
     completion::{CancelReason, Outcome},
     config::{EngineOptions, SynthesisOptions},
