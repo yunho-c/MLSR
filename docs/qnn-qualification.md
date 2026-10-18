@@ -175,6 +175,56 @@ New raw evidence is retained under `ignore/qnn-replay-merge-20261018/`,
 `ignore/qnn-bindings-merge-20261018/`, `ignore/qnn-jobs-merge-20261018.json`, and
 `ignore/qnn-merge-*.log`; their key reports and logs are hashed in the snapshot.
 
+## Developer SDK integration — 2026-10-18
+
+Merge `c321ccb` integrates `main` at `09226ff` into `backend/qnn` and adapts
+the new headless developer API. The [SDK snapshot](../tests/fixtures/supertonic3/qnn-sdk-summary.yaml)
+records source/artifact hashes, exact checks, toolchains and retained evidence.
+SDK bit 8 and Apple output bit 16 keep their main-branch meanings; QNN now uses
+bit 32, and the real C smoke reports mask 45. Rebuild experimental consumers and
+their native library together when updating from the earlier branch.
+
+The real QNN SDK passes C, Python, Go and Dart checks. All four EN/KO M1/F1
+cases remain byte-exact across SDK WAV payloads, legacy binding PCM and the
+previous qualification. The three public SDK examples also export the same
+70,546-frame English/M1 PCM. The consuming Dart project builds its native asset
+through the QNN hook. Python and Go tests use their source packages; this pass
+does not claim installed-wheel or relocated-Go-package qualification.
+
+The Rust device test covers lazy cancellation, render/WAV parity, fixed-shape
+failure context and recovery, resumed plans with original segment seeds, and
+store lease release at facade close. Dart also checks facade creation racing
+caller model disposal and successful store removal only after facade disposal.
+Python and Go check verified-model readiness and independent facade ownership.
+Native handles return to their starting counts, and owned PCM survives closure.
+
+QNN voices and structured failures now identify `qnn`; qualified languages remain
+empty. Unsupported step counts fail before admission. Requests for another
+model cannot replace current speech. Portable tests exposed a shared seek race
+that published a new position before its sentence highlight; both now update
+together. The existing seek regression passed ten consecutive runs after the fix.
+
+Validation passed **85 workspace tests**, strict all-target/all-feature Clippy,
+Windows x64 cross-checking, generated C/Dart checks, Dart analysis/formatting and
+46 model-tool tests. Nine workspace tests were initially ignored; the five QNN
+runtime tests and the new QNN SDK test then passed explicitly on hardware. The
+binding suites passed 12 Python, nine Go and nine Dart tests, with each suite's
+Apple playback test skipped on Windows. One model-tool test was also skipped.
+
+The full replay again passes **92 adapter outcomes**; all **48 successful raw
+captures** were independently revalidated byte for byte. Public jobs pass,
+including twenty in-flight cancellations and five backpressure cancellations.
+The same **six of twelve canonical comparisons fail** at the unchanged 5% stage/
+final-latent and 10% spectral thresholds. The manifest, four PTEs and bridge are
+unchanged. QNN remains experimental and outside the builtin qualified catalog.
+
+Windows native speech output returns `unsupported_capability`. This pass adds
+no Windows output backend, new QAIRT profiles, controlled performance claims or
+native package publication. macOS/iOS Core ML and Flutter execution were not
+rerun on this Windows host. Raw evidence is retained under
+`ignore/qnn-sdk-bindings-20261018-final/`, `ignore/qnn-sdk-replay-20261018/`,
+`ignore/qnn-sdk-jobs-20261018.json` and `ignore/qnn-sdk-*.log`.
+
 ## Reproduction and retained evidence
 
 Follow [QNN setup and commands](qnn-runtime.md). The YAML snapshot hashes the core
