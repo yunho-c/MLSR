@@ -9,6 +9,34 @@ permissions:
   contents: read
 
 jobs:
+  flutter-model-delivery:
+    name: Flutter model delivery fixtures
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+        with:
+          repository: flutter/flutter
+          ref: '3.41.4'
+          path: .flutter-sdk
+      - name: Prepare the qualified Flutter SDK
+        run: |
+          echo "$GITHUB_WORKSPACE/.flutter-sdk/bin" >> "$GITHUB_PATH"
+          .flutter-sdk/bin/flutter precache --macos
+      - name: Test small model fixtures without weights or inference
+        working-directory: bindings/flutter
+        run: |
+          flutter pub get --enforce-lockfile
+          dart format --output=none --set-exit-if-changed lib test
+          flutter analyze
+          flutter test
+      - name: Type-check the native resource adapter
+        run: >-
+          xcrun --sdk macosx swiftc -typecheck -target arm64-apple-macosx15.0
+          -F .flutter-sdk/bin/cache/artifacts/engine/darwin-x64/FlutterMacOS.xcframework/macos-arm64_x86_64
+          bindings/flutter/macos/Classes/MlsrFlutterPlugin.swift
+
   model-tools:
     name: Model manifest and reference tooling
     runs-on: ubuntu-latest

@@ -10,7 +10,9 @@ class ModelFixture {
   final ModelDescriptor model;
   ModelFixture._(this.source, this.model);
 
-  static Future<ModelFixture> create() async {
+  static Future<ModelFixture> create({
+    String fixtureDirectory = 'test/fixtures',
+  }) async {
     final source = await Directory.systemTemp.createTemp('mlsr-model-fixture-');
     try {
       final manifest =
@@ -18,7 +20,7 @@ class ModelFixture {
                 jsonEncode(
                   loadYaml(
                     await File(
-                      'test/fixtures/supertonic3-coreml.yaml',
+                      '$fixtureDirectory/supertonic3-coreml.yaml',
                     ).readAsString(),
                   ),
                 ),
@@ -74,7 +76,7 @@ class ModelFixture {
           jsonDecode(
                 jsonEncode(
                   loadYaml(
-                    await File('test/fixtures/catalog.yaml').readAsString(),
+                    await File('$fixtureDirectory/catalog.yaml').readAsString(),
                   ),
                 ),
               )
