@@ -1,7 +1,7 @@
 use crate::{
     config::SynthesisOptions,
     error::{Error, Result},
-    runtime::{HostTensor, TensorData},
+    runtime::{BackendKind, HostTensor, TensorData},
 };
 use rand_chacha::{ChaCha8Rng, rand_core::SeedableRng};
 use rand_distr::{Distribution, StandardNormal};
@@ -14,30 +14,52 @@ pub struct SynthesisPlan {
     frames: usize,
     length: usize,
     bucket: usize,
+    noise_length: usize,
 }
 impl SynthesisPlan {
     /// Apply the pinned duration/frame policies to the graph's raw prediction.
     /// Reject nonfinite outputs and lengths outside the vocoder's 4..=512 range.
     pub fn from_duration(raw_duration: f32, options: SynthesisOptions) -> Result<Self> {
+        Self::for_backend(raw_duration, options, BackendKind::CoreMl)
+    }
+    pub(super) fn for_backend(
+        raw_duration: f32,
+        options: SynthesisOptions,
+        backend: BackendKind,
+    ) -> Result<Self> {
+        let max_length = match backend {
+            BackendKind::CoreMl => 512,
+            BackendKind::QnnHtp => 96,
+        };
+        if backend == BackendKind::QnnHtp && options.steps() != 8 {
+            return Err(Error::InvalidOptions(
+                "QNN Superfast requires exactly eight steps".into(),
+            ));
+        }
         if !raw_duration.is_finite() {
             return Err(Error::Synthesis("duration prediction is not finite".into()));
         }
         let duration = (raw_duration / options.speed().max(0.05)).max(0.05);
         let frames = duration * 44100.0f32;
-        if !frames.is_finite() || frames <= 0. || frames > (512 * 3072) as f32 {
+        if !frames.is_finite() || frames <= 0. || frames > (max_length * 3072) as f32 {
             return Err(Error::Synthesis(
                 "duration exceeds the supported frame range".into(),
             ));
         }
         let frames = frames as usize; // Positive and bounded; truncation toward zero.
         let length = frames.div_ceil(3072);
-        if !(4..=512).contains(&length) {
+        if !(4..=max_length).contains(&length) {
             return Err(Error::Synthesis(format!(
-                "vocoder cannot accept latent length {length}; expected 4..=512"
+                "vocoder cannot accept latent length {length}; expected 4..={max_length}"
             )));
         }
-        let bucket = [128, 256, 512]
-            .into_iter()
+        let buckets: &[usize] = match backend {
+            BackendKind::CoreMl => &[128, 256, 512],
+            BackendKind::QnnHtp => &[96],
+        };
+        let bucket = buckets
+            .iter()
+            .copied()
             .find(|&b| b >= length)
             .expect("validated length");
         Ok(Self {
@@ -46,6 +68,11 @@ impl SynthesisPlan {
             frames,
             length,
             bucket,
+            noise_length: if backend == BackendKind::QnnHtp {
+                128
+            } else {
+                length
+            },
         })
     }
     /// Unscaled duration graph output.
@@ -64,7 +91,7 @@ impl SynthesisPlan {
     pub fn latent_length(&self) -> usize {
         self.length
     }
-    /// Selected fixed VectorEstimator length, one of 128, 256, or 512.
+    /// Selected fixed VectorEstimator length: Core ML 128/256/512 or QNN 96.
     pub fn latent_bucket(&self) -> usize {
         self.bucket
     }
@@ -74,20 +101,21 @@ impl SynthesisPlan {
     /// use `prepare_saved_noise` for numerical comparisons with external captures.
     pub fn prepare_noise(&self, seed: u64) -> Result<PreparedLatent> {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
-        let values = (0..144 * self.length)
+        let values = (0..144 * self.noise_length)
             .map(|_| StandardNormal.sample(&mut rng))
             .collect::<Vec<f32>>();
         self.prepare_saved_noise(HostTensor::new(
-            vec![1, 144, self.length],
+            vec![1, 144, self.noise_length],
             TensorData::F32(values),
         )?)
     }
-    /// Use an actual captured Float32 [1,144,true_length] noise tensor unchanged.
+    /// Use captured Float32 noise: [1,144,true_length] for Core ML or
+    /// [1,144,128] for QNN. Crop each channel, then zero-pad to the VE bucket.
     /// Shape, dtype, and finiteness are checked before any padding or inference.
     pub fn prepare_saved_noise(&self, noise: HostTensor) -> Result<PreparedLatent> {
-        if noise.shape() != [1, 144, self.length] {
+        if noise.shape() != [1, 144, self.noise_length] {
             return Err(Error::Synthesis(
-                "noise shape differs from the predicted true latent length".into(),
+                "noise shape differs from the backend's source noise capacity".into(),
             ));
         }
         let TensorData::F32(values) = noise.data() else {
@@ -98,10 +126,10 @@ impl SynthesisPlan {
         }
         let mut padded = vec![0.; 144 * self.bucket];
         for (source, destination) in values
-            .chunks_exact(self.length)
+            .chunks_exact(self.noise_length)
             .zip(padded.chunks_exact_mut(self.bucket))
         {
-            destination[..self.length].copy_from_slice(source);
+            destination[..self.length].copy_from_slice(&source[..self.length]);
         }
         let mut mask = vec![0.; self.bucket];
         mask[..self.length].fill(1.);
