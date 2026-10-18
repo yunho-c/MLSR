@@ -19,6 +19,7 @@ from .sdk_types import (
     AudioClip,
     Completion,
     OutputCapabilities,
+    ModelDescriptor,
     Request,
     RequestMetadata,
     ResolvedVoice,
@@ -67,20 +68,21 @@ async def _offload(function, *, on_cancel=None, discard=None):
         raise
 
 
-def _fallback(lib, handle, forget):
+def _fallback(lib, handle, forget, release="mlsr_sdk_release"):
     # The library reference is retained by the finalizer. Explicit close/aclose is
     # preferred; GC timing is intentionally not a completion guarantee.
     try:
-        (lib.mlsr_sdk_forget if forget else lib.mlsr_sdk_release)(handle)
+        (lib.mlsr_sdk_forget if forget else getattr(lib, release))(handle)
     except Exception:
         pass
 
 
 class _Resource:
-    def _init(self, lib, handle, *, forget=False):
+    def _init(self, lib, handle, *, forget=False, release="mlsr_sdk_release"):
         self._lib, self._handle = lib, handle
-        self._lock = threading.Lock()
-        self._cleanup = weakref.finalize(self, _fallback, lib, handle, forget)
+        self._lock = threading.RLock()
+        self._release = release
+        self._cleanup = weakref.finalize(self, _fallback, lib, handle, forget, release)
 
     def _get(self):
         with self._lock:
@@ -93,7 +95,7 @@ class _Resource:
         with self._lock:
             handle, self._handle = self._handle, 0
             self._cleanup.detach()
-        if handle and self._lib.mlsr_sdk_release(handle) != 0:
+        if handle and getattr(self._lib, self._release)(handle) != 0:
             raise TtsError("release_failed", "SDK handle release failed")
 
     async def aclose(self):
@@ -139,6 +141,39 @@ def _resolve(lib, handle, locale, voice, fallback):
         "data"
     ]
     return ResolvedVoice._parse(data)
+
+
+class ModelHandle(_Resource):
+    """Verified immutable directory; no engine or output device is loaded.
+
+    The application owns the files and must retain them for derived engines.
+    close() waits for concurrent from_model creation to take its own lease.
+    """
+
+    def __init__(self, directory, descriptor: ModelDescriptor):
+        lib = ffi.library()
+        root, root_owner = ffi.old.string(os.fspath(directory))
+        catalog, catalog_owner = ffi.old.string(descriptor.catalog_yaml)
+        model_id, id_owner = ffi.old.string(descriptor.id)
+        platform, platform_owner = ffi.old.string(descriptor.platform)
+        spec = ffi.ModelSpec(C.sizeof(ffi.ModelSpec), catalog, model_id, platform)
+        handle = ffi.out(lib, "model_open", root, C.byref(spec))[1]
+        self._init(lib, handle, release="mlsr_model_release")
+
+    @classmethod
+    async def open_async(cls, directory, descriptor: ModelDescriptor):
+        return await _offload(
+            lambda: cls(directory, descriptor), discard=lambda model: model.close()
+        )
+
+    @property
+    def voices(self) -> tuple[Voice, ...]:
+        with self._lock:
+            return _voices(self._lib, self._get())
+
+    def resolve_voice(self, locale="en", voice="", *, fallback="strict"):
+        with self._lock:
+            return _resolve(self._lib, self._get(), locale, voice, fallback)
 
 
 class _Speaker(_Resource):
@@ -192,9 +227,44 @@ class Tts(_Speaker):
             reuse_output_buffers,
             execution_variant,
         )
+        self._initialize(lib, handle)
+
+    def _initialize(self, lib, handle):
         self._init(lib, handle)
         self._controller = None
         self._controller_lock = threading.Lock()
+
+    @classmethod
+    def from_model(
+        cls,
+        model: ModelHandle,
+        *,
+        options=TtsOptions(),
+        compute_policy="cpu_and_neural_engine",
+        reuse_output_buffers=True,
+        execution_variant=0,
+    ) -> Tts:
+        with model._lock:
+            handle = ffi.open_tts(
+                model._lib,
+                None,
+                None,
+                options,
+                compute_policy,
+                reuse_output_buffers,
+                execution_variant,
+                model_handle=model._get(),
+            )
+        owner = cls.__new__(cls)
+        owner._initialize(model._lib, handle)
+        return owner
+
+    @classmethod
+    async def from_model_async(cls, model: ModelHandle, **options) -> Tts:
+        return await _offload(
+            lambda: cls.from_model(model, **options),
+            discard=lambda owner: owner.close(),
+        )
 
     @classmethod
     async def open_async(cls, manifest, bundle, **options) -> Tts:

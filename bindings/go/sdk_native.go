@@ -86,14 +86,7 @@ func sdkRelease(handle uint64, forget bool) error {
 	}
 	return nil
 }
-func sdkOpen(manifest, bundle string, engine EngineOptions, options TTSOptions) (uint64, error) {
-	if err := sdkCheck(); err != nil {
-		return 0, err
-	}
-	m, freeM := cstring(manifest)
-	defer freeM()
-	b, freeB := cstring(bundle)
-	defer freeB()
+func sdkSettings(engine EngineOptions, options TTSOptions) (C.MlsrEngineOptions, C.MlsrTtsOptions) {
 	var e C.MlsrEngineOptions
 	C.mlsr_engine_options_default(&e)
 	if engine.CPUOnly {
@@ -113,6 +106,18 @@ func sdkOpen(manifest, bundle string, engine EngineOptions, options TTSOptions) 
 	s.max_segment_frames = C.uint32_t(options.MaxSegmentFrames)
 	s.max_retained_stores = C.uint32_t(options.MaxRetainedStores)
 	s.max_retained_bytes = C.uint64_t(options.MaxRetainedBytes)
+	return e, s
+}
+
+func sdkOpen(manifest, bundle string, engine EngineOptions, options TTSOptions) (uint64, error) {
+	if err := sdkCheck(); err != nil {
+		return 0, err
+	}
+	m, freeM := cstring(manifest)
+	defer freeM()
+	b, freeB := cstring(bundle)
+	defer freeB()
+	e, s := sdkSettings(engine, options)
 	var output, failure C.MlsrHandle
 	status := C.mlsr_tts_open(m, b, &e, &s, &output, &failure)
 	return uint64(output), sdkError(status, failure)
@@ -407,4 +412,34 @@ func sdkWritePCM(clip AudioClip, path string) (WavFile, error) {
 	var result WavFile
 	err := sdkJSON(output, &result)
 	return result, err
+}
+
+func sdkModelOpen(directory string, descriptor ModelDescriptor) (uint64, error) {
+	if err := sdkCheck(); err != nil {
+		return 0, err
+	}
+	root, freeRoot := cstring(directory)
+	defer freeRoot()
+	catalog, freeCatalog := cstring(descriptor.CatalogYAML)
+	defer freeCatalog()
+	id, freeID := cstring(descriptor.ID)
+	defer freeID()
+	platform, freePlatform := cstring(descriptor.Platform)
+	defer freePlatform()
+	spec := C.MlsrModelSpec{struct_size: C.sizeof_MlsrModelSpec, catalog: catalog, id: id, platform: platform}
+	var output, failure C.MlsrHandle
+	status := C.mlsr_model_open(root, &spec, &output, &failure)
+	return uint64(output), sdkError(status, failure)
+}
+func sdkModelRelease(handle uint64) error {
+	if C.mlsr_model_release(C.MlsrHandle(handle)) != 0 {
+		return &SDKError{Code: "release_failed", Message: "model handle release failed"}
+	}
+	return nil
+}
+func sdkFromModel(handle uint64, engine EngineOptions, options TTSOptions) (uint64, error) {
+	e, s := sdkSettings(engine, options)
+	var output, failure C.MlsrHandle
+	status := C.mlsr_tts_from_model(C.MlsrHandle(handle), &e, &s, &output, &failure)
+	return uint64(output), sdkError(status, failure)
 }

@@ -44,7 +44,15 @@ buffered end, seekable ranges, estimate/final duration and original text alignme
 and `utf16` are explicitly separate from Python character indices. Voice IDs are
 model scoped (`supertonic3:M1`); locale fallback is explicit. `mlsr.voices()` gives
 catalog metadata without loading models or output, and `tts.voices` gives loaded
-engine readiness. Use `TtsOptions(output_mode="headless")` to disable output even
+engine readiness. `ModelHandle(directory, ModelDescriptor(catalog_yaml, id,
+platform))` verifies an immutable directory without loading inference; its
+`voices` report `assets_verified`. `Tts.from_model(model)` takes its own native
+lease, so the model handle can be closed after loading. Both provide asynchronous
+loading variants (`ModelHandle.open_async`, `Tts.from_model_async`). The catalog
+must come from trusted application configuration and the application must retain
+its model files for every derived engine.
+
+Use `TtsOptions(output_mode="headless")` to disable output even
 in a playback-capable build.
 
 For asyncio, loading, blocking iteration, render, file writes and cleanup have

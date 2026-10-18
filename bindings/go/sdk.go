@@ -130,9 +130,12 @@ func OpenTTS(ctx context.Context, manifest, bundle string, engine EngineOptions,
 		_ = sdkRelease(h, false)
 		return nil, err
 	}
+	return newTTS(h), nil
+}
+func newTTS(h uint64) *TTS {
 	t := &TTS{resource: newSDKOwned(h)}
 	runtime.SetFinalizer(t, func(t *TTS) { _ = t.Close() })
-	return t, nil
+	return t
 }
 func (t *TTS) Close() error { defer runtime.KeepAlive(t); return t.resource.close(false) }
 func (t *TTS) Voices() ([]Voice, error) {

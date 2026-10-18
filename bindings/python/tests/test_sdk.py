@@ -233,3 +233,47 @@ class RealNativeSpeech(unittest.TestCase):
                 replacement.wait(1)
         gc.collect()
         self.assertEqual(lib.mlsr_live_handles(), before)
+
+
+class VerifiedModelReadiness(unittest.TestCase):
+    def test_invalid_catalog_does_not_create_an_owner(self):
+        from mlsr import ModelDescriptor, ModelHandle
+
+        lib = ffi.library()
+        before = lib.mlsr_live_handles()
+        with self.assertRaises(TtsError):
+            ModelHandle(
+                "/missing", ModelDescriptor("not a catalog", "model", "macos-arm64")
+            )
+        self.assertEqual(lib.mlsr_live_handles(), before)
+
+    @unittest.skipUnless(
+        os.environ.get("MLSR_TEST_CATALOG"), "verified model catalog not requested"
+    )
+    def test_verified_assets_then_independent_loaded_engine(self):
+        from mlsr import ModelDescriptor, ModelHandle
+
+        before = ffi.library().mlsr_live_handles()
+        descriptor = ModelDescriptor(
+            Path(os.environ["MLSR_TEST_CATALOG"]).read_text(),
+            "supertonic3-coreml-int4-v1",
+            "macos-arm64",
+        )
+        model = ModelHandle(os.environ["MLSR_TEST_BUNDLE"], descriptor)
+        tts = None
+        try:
+            self.assertEqual(model.voices[0].readiness, "assets_verified")
+            self.assertEqual(model.resolve_voice().voice.readiness, "assets_verified")
+            tts = Tts.from_model(model, options=TtsOptions(output_mode="headless"))
+            model.close()
+            self.assertEqual(tts.voices[0].readiness, "engine_ready")
+            with self.assertRaises(TtsError):
+                _ = model.voices
+            with tts.synthesize("Model ownership has moved.") as job:
+                job.cancel()
+                self.assertEqual(job.wait().outcome.reason, "requested")
+        finally:
+            if tts:
+                tts.close()
+            model.close()
+        self.assertEqual(ffi.library().mlsr_live_handles(), before)

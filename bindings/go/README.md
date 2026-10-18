@@ -28,6 +28,12 @@ admission. The new normalized `SpeakingRate=1.0` is separate from playback rate.
 model speed/steps/seed. Voice IDs are stable and model-scoped (`supertonic3:M1`).
 `Voices()` gives catalog-only metadata, `tts.Voices()` loaded-engine readiness;
 `ResolveVoice` requires explicit `SameLanguage` fallback for regional tags.
+`OpenModel(ctx, directory, ModelDescriptor{CatalogYAML: catalog, ID: id,
+Platform: platform})` verifies an immutable directory without loading inference;
+`model.Voices()` reports `assets_verified`. `TTSFromModel` takes its own native
+lease, so `model.Close()` is safe after loading. Model closure waits for concurrent
+facade creation. The application supplies the trusted catalog and retains its
+files for every derived engine.
 
 `tts.Controller(true)` creates an independent replace/enqueue scope, while
 `tts.Controller(false)` returns a caller-owned default-controller handle. Close

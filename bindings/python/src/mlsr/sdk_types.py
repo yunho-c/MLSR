@@ -8,6 +8,15 @@ from ._synthesis import SynthesisError
 
 
 @dataclass(frozen=True)
+class ModelDescriptor:
+    """Exact selection from a trusted application-owned YAML catalog."""
+
+    catalog_yaml: str
+    id: str
+    platform: str
+
+
+@dataclass(frozen=True)
 class Failure:
     request_id: int
     category: str

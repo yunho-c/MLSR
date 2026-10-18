@@ -395,3 +395,57 @@ func TestRealSDKNativeReader(t *testing.T) {
 		t.Fatal("native speech handle leak")
 	}
 }
+
+func TestSDKVerifiedModelReadiness(t *testing.T) {
+	before := nativeHandleCount()
+	if _, err := OpenModel(context.Background(), "/missing", ModelDescriptor{CatalogYAML: "not a catalog", ID: "model", Platform: "macos-arm64"}); err == nil {
+		t.Fatal("accepted invalid catalog")
+	}
+	if nativeHandleCount() != before {
+		t.Fatal("failed verification leaked an owner")
+	}
+	catalogPath := os.Getenv("MLSR_TEST_CATALOG")
+	if catalogPath == "" {
+		t.Skip("verified model catalog not requested")
+	}
+	catalog, err := os.ReadFile(catalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, err := OpenModel(context.Background(), os.Getenv("MLSR_TEST_BUNDLE"), ModelDescriptor{CatalogYAML: string(catalog), ID: "supertonic3-coreml-int4-v1", Platform: "macos-arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer model.Close()
+	voices, err := model.Voices()
+	if err != nil || voices[0].Readiness != "assets_verified" {
+		t.Fatalf("verified readiness: %v %v", voices, err)
+	}
+	resolved, err := model.ResolveVoice("en", "", StrictLocale)
+	if err != nil || resolved.Voice.Readiness != "assets_verified" {
+		t.Fatalf("verified resolution: %+v %v", resolved, err)
+	}
+	options := DefaultTTSOptions()
+	options.Output = HeadlessOutput
+	tts, err := TTSFromModel(context.Background(), model, EngineOptions{}, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tts.Close()
+	if err := model.Close(); err != nil {
+		t.Fatal(err)
+	}
+	voices, err = tts.Voices()
+	if err != nil || voices[0].Readiness != "engine_ready" {
+		t.Fatalf("loaded readiness: %v %v", voices, err)
+	}
+	if _, err := model.Voices(); err == nil {
+		t.Fatal("closed model remained usable")
+	}
+	if err := tts.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if nativeHandleCount() != before {
+		t.Fatal("model/facade handle leak")
+	}
+}

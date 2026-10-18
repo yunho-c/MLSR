@@ -13,6 +13,15 @@ H, String = old.H, old.String
 P = C.POINTER
 
 
+class ModelSpec(C.Structure):
+    _fields_ = [
+        ("struct_size", C.c_uint32),
+        ("catalog", String),
+        ("id", String),
+        ("platform", String),
+    ]
+
+
 class TtsOptions(C.Structure):
     _fields_ = [
         (name, C.c_uint32)
@@ -71,6 +80,8 @@ def library():
     if lib.mlsr_features() & 8 == 0:
         raise old.LibraryLoadError("Native MLSR library lacks developer SDK schema v1")
     signatures = {
+        "model_open": [String, P(ModelSpec), P(H), P(H)],
+        "model_release": [H],
         "tts_options_default": [P(TtsOptions)],
         "request_default": [P(Request)],
         "speech_options_default": [P(SpeechOptions)],
@@ -212,6 +223,8 @@ def open_tts(
     compute_policy,
     reuse_output_buffers,
     execution_variant,
+    *,
+    model_handle=None,
 ):
     settings = TtsOptions()
     lib.mlsr_tts_options_default(C.byref(settings))
@@ -241,6 +254,10 @@ def open_tts(
     )
     engine.reuse_output_buffers = bool(reuse_output_buffers)
     engine.execution_variant = _uint(execution_variant, 32, "execution_variant")
+    if model_handle is not None:
+        return out(
+            lib, "tts_from_model", model_handle, C.byref(engine), C.byref(settings)
+        )[1]
     manifest_arg, manifest_owner = old.string(os.fspath(manifest))
     bundle_arg, bundle_owner = old.string(os.fspath(bundle))
     return out(
