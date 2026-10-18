@@ -57,5 +57,28 @@ MLSR_TEST_BUNDLE=/path/to/model-bundle cargo test --locked -p mlsr \
   matches_frontend_with_real_tokenizer -- --ignored
 ```
 
-Planning and synthesis are the next implementation steps. The public C ABI and
-language bindings currently expose version queries.
+## Duration planning and noise
+
+`SynthesisOptions` validates 1..=64 steps and a finite positive speed; defaults
+are eight steps, speed 1.05, and seed zero. `SynthesisPlan::from_duration` uses
+Float32 for the speed clamp, duration floor, and frame multiplication, then
+truncates frames and rounds latent length upward. Only true lengths 4..=512
+are accepted; the selected VE bucket is 128, 256, or 512. Nonfinite output,
+overflow, and unsupported vocoder lengths fail explicitly.
+
+`prepare_noise(seed)` starts a new ChaCha8 generator for each request and draws
+row-major standard normal samples via pinned `rand_chacha` 0.9.0 and `rand_distr`
+0.5.1 (Float64 sampling converted to Float32). The seed is reproducible within
+this implementation, not a promise of matching NumPy or arbitrary future
+dependency versions. This is synthesis noise, not a cryptographic API.
+`prepare_saved_noise` accepts the actual Float32 noise tensor for independent
+reference comparisons, validates its true shape and finite values, and preserves
+every bit while padding each latent channel with zeros. True and padded masks
+are generated alongside it.
+
+The portable planner tests use `tests/fixtures/supertonic3/planning.yaml`, which
+records raw prediction/speed/duration Float32 bits and decisions extracted from
+the existing capture, including the 127/128/129 and 255/256/257 boundaries.
+
+Complete model orchestration is the next implementation step. The public C ABI
+and language bindings currently expose version queries.

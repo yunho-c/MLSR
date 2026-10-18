@@ -36,6 +36,10 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Invalid speed, step count, or another synthesis option.
+    InvalidOptions(String),
+    /// Model output or supplied diagnostic tensors violate synthesis invariants.
+    Synthesis(String),
     /// A synthesis input was rejected before invoking a model.
     Input {
         /// Stable category.
@@ -66,6 +70,8 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidOptions(message) => write!(f, "synthesis options: {message}"),
+            Self::Synthesis(message) => write!(f, "synthesis: {message}"),
             Self::Input { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Self::Manifest(message) => write!(f, "model manifest: {message}"),

@@ -14,6 +14,9 @@
   those saved tensors, including ordinary allocation and alternating output
   buffers. This supplies frontend inputs and duration/bucket decisions from
   fixtures; it does not qualify the future Rust text-to-PCM pipeline.
+- `planning.yaml`: raw duration, speed, and resulting duration Float32 bits plus
+  frame/latent/bucket decisions extracted from the saved capture. This tests
+  Rust's planning arithmetic on every real case without executing Core ML.
 
 The six boundary probes target true latent lengths 127/128/129 and 255/256/257.
 The harness predicts duration, then calibrates speaking rate to the middle of
