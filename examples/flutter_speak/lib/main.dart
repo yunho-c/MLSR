@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mlsr_app_models/app_models.dart';
 import 'speech_controller.dart';
 
 const paper = Color(0xfff6f4ed);
@@ -23,6 +24,19 @@ void main() {
       yield LicenseEntryWithLineBreaks([
         font,
       ], await rootBundle.loadString('assets/fonts/$font-OFL.txt'));
+    }
+  });
+  LicenseRegistry.addLicense(() async* {
+    for (final entry in {
+      'Supertonic3 model weights': 'supertonic3-OpenRAIL-M.txt',
+      'Supertone preprocessing': 'supertonic-MIT.txt',
+    }.entries) {
+      yield LicenseEntryWithLineBreaks(
+        [entry.key],
+        await rootBundle.loadString(
+          'packages/${AppModels.supertonic3.package}/notices/${entry.value}',
+        ),
+      );
     }
   });
   runApp(const SpeakApp());
@@ -92,12 +106,6 @@ class SpeakPage extends StatefulWidget {
 class _SpeakPageState extends State<SpeakPage> {
   late final SpeechController speech = widget.controller ?? SpeechController();
   final text = TextEditingController(text: english);
-  final manifest = TextEditingController(
-    text: const String.fromEnvironment('MLSR_MANIFEST'),
-  );
-  final bundle = TextEditingController(
-    text: const String.fromEnvironment('MLSR_BUNDLE'),
-  );
   String language = 'en', voice = 'M1';
   late final AppLifecycleListener lifecycle;
   bool get busy => speech.speaking || speech.loading || speech.exporting;
@@ -110,11 +118,8 @@ class _SpeakPageState extends State<SpeakPage> {
         return AppExitResponse.exit;
       },
     );
-    if (widget.controller == null &&
-        manifest.text.isNotEmpty &&
-        bundle.text.isNotEmpty &&
-        !speech.ready) {
-      unawaited(speech.load(manifest.text, bundle.text));
+    if (widget.controller == null && !speech.ready) {
+      unawaited(speech.load());
     }
   }
 
@@ -123,8 +128,6 @@ class _SpeakPageState extends State<SpeakPage> {
     lifecycle.dispose();
     unawaited(speech.close());
     text.dispose();
-    manifest.dispose();
-    bundle.dispose();
     if (widget.controller == null) speech.dispose();
     super.dispose();
   }
@@ -136,53 +139,38 @@ class _SpeakPageState extends State<SpeakPage> {
   }
 
   Future<void> settings() async {
-    final load = await showDialog<bool>(
+    final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Your local voices'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Choose a prepared Supertonic 3 bundle and its YAML manifest. Models stay on this Mac.',
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                key: const Key('manifest'),
-                controller: manifest,
-                decoration: const InputDecoration(
-                  labelText: 'Manifest path',
-                  hintText: '/path/to/supertonic3-coreml.yaml',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                key: const Key('bundle'),
-                controller: bundle,
-                decoration: const InputDecoration(
-                  labelText: 'Model bundle directory',
-                  hintText: '/path/to/model-bundle',
-                ),
-              ),
-            ],
+        content: const SizedBox(
+          width: 420,
+          child: Text(
+            'English and Korean, with voices M1 and F1.\n\n'
+            'Voices are included with this app. Speech runs on your Mac, even when you are offline.',
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context, 'licenses'),
+            child: const Text('Licenses'),
           ),
+          if (!speech.ready)
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'retry'),
+              child: const Text('Try again'),
+            ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Load voices'),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
           ),
         ],
       ),
     );
-    if (load == true) {
-      await speech.load(manifest.text.trim(), bundle.text.trim());
+    if (!mounted) return;
+    if (action == 'retry') await speech.load();
+    if (action == 'licenses' && mounted) {
+      showLicensePage(context: context, applicationName: 'MLSR Speak');
     }
   }
 
@@ -249,9 +237,9 @@ class _SpeakPageState extends State<SpeakPage> {
                           ),
                           const SizedBox(width: 12),
                           IconButton(
-                            tooltip: 'Model settings',
+                            tooltip: 'About voices',
                             onPressed: busy ? null : settings,
-                            icon: const Icon(Icons.tune, size: 20),
+                            icon: const Icon(Icons.info_outline, size: 20),
                           ),
                         ],
                       ),
@@ -516,18 +504,18 @@ class _SpeakPageState extends State<SpeakPage> {
                                               ? null
                                               : speech.ready
                                               ? speak
-                                              : settings,
+                                              : () => unawaited(speech.load()),
                                           icon: Icon(
                                             speech.ready
                                                 ? Icons.play_arrow_rounded
-                                                : Icons.folder_open,
+                                                : Icons.refresh_rounded,
                                           ),
                                           label: Text(
                                             speech.loading
                                                 ? 'Loading voices…'
                                                 : speech.ready
                                                 ? 'Speak'
-                                                : 'Set up voices',
+                                                : 'Try loading again',
                                           ),
                                         ),
                                 ),

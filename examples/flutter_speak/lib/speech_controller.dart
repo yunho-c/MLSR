@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
-import 'package:mlsr/mlsr.dart';
+import 'package:mlsr_flutter/mlsr_flutter.dart';
+import 'package:mlsr_app_models/app_models.dart';
 import 'pcm_player.dart';
 import 'wav_sink.dart';
 
@@ -27,7 +28,7 @@ class SpeechController extends ChangeNotifier {
       exporting = false;
   int generatedFrames = 0, predictedFrames = 0, playedFrames = 0;
   String? error;
-  String status = 'Choose a model bundle to begin';
+  String status = 'Getting your voices ready…';
   File? wav;
   final List<double> levels = [];
   Timer? _playbackTimer;
@@ -39,15 +40,12 @@ class SpeechController extends ChangeNotifier {
     if (!_closed) notifyListeners();
   }
 
-  Future<void> load(String manifest, String bundle) {
+  Future<void> load({ModelDelivery delivery = ModelDelivery.automatic}) {
     if (_closed) return Future.error(StateError('Player is closed'));
-    return _loading ??= _load(
-      manifest,
-      bundle,
-    ).whenComplete(() => _loading = null);
+    return _loading ??= _load(delivery).whenComplete(() => _loading = null);
   }
 
-  Future<void> _load(String manifest, String bundle) async {
+  Future<void> _load(ModelDelivery delivery) async {
     loading = true;
     error = null;
     status = 'Loading your voices…';
@@ -58,7 +56,23 @@ class SpeechController extends ChangeNotifier {
       final old = _engine;
       _engine = null;
       await old?.dispose();
-      final engine = await Engine.load(manifest: manifest, bundle: bundle);
+      final engine = await FlutterMlsr.open(
+        model: AppModels.supertonic3,
+        delivery: delivery,
+        onProgress: (progress) {
+          status = switch (progress.stage) {
+            ModelLoadStage.locating => 'Finding your voices…',
+            ModelLoadStage.waiting => 'Waiting for voices…',
+            ModelLoadStage.copying =>
+              progress.totalBytes == 0
+                  ? 'Preparing voices…'
+                  : 'Preparing voices… ${(100 * progress.copiedBytes / progress.totalBytes).floor()}%',
+            ModelLoadStage.verifying => 'Checking voices…',
+            ModelLoadStage.loading => 'Loading your voices…',
+          };
+          _update();
+        },
+      );
       if (_closed) {
         await engine.dispose();
         return;

@@ -1,15 +1,21 @@
 PODS:
   - FlutterMacOS (1.0.0)
+  - mlsr_flutter (0.1.0):
+    - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - mlsr_flutter (from `Flutter/ephemeral/.symlinks/plugins/mlsr_flutter/macos`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
+  mlsr_flutter:
+    :path: Flutter/ephemeral/.symlinks/plugins/mlsr_flutter/macos
 
 SPEC CHECKSUMS:
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  mlsr_flutter: 44767d5d7a6e7dc0ef0031a8f483a0c0e78afa58
 
 PODFILE CHECKSUM: 982a7de56b89457f4ec87ae4947dc1c2ea58f9eb
 

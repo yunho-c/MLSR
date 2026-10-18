@@ -26,6 +26,7 @@ crates/mlsr-cli/      Local bundle verification and text-to-WAV CLI
 crates/mlsr-ffi/      Shared C ABI adapter
 include/mlsr.h       Generated C header
 bindings/dart/       Dart package, generated FFI, and native build hook
+bindings/flutter/    Flutter asset discovery and model installation adapter
 bindings/go/         Go module using cgo
 bindings/python/     Python package using ctypes
 examples/flutter_speak/ macOS Flutter playback and WAV export example

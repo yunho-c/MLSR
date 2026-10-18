@@ -11,6 +11,10 @@ dependencies:
     sdk: flutter
   mlsr:
     path: ../../bindings/dart
+  mlsr_flutter:
+    path: ../../bindings/flutter
+  mlsr_app_models:
+    path: .mlsr/model_assets
 
 dev_dependencies:
   flutter_test:

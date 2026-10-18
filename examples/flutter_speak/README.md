@@ -8,29 +8,34 @@ speech as a mono Float32 WAV. Command-Enter speaks; Escape stops.
 
 Requires macOS 15+, Apple Silicon, Xcode, CocoaPods, Rust 1.88+, and Flutter
 3.41.4 / Dart 3.11.1 (the qualified SDK). Prepare a verified model bundle using
-the repository's [model tools](../../tools/supertonic3/README.md) first.
+the repository's [model tools](../../tools/supertonic3/README.md) first. The
+checked-in `mlsr-models.yaml` reads the usual local cache; edit its `source` if
+your verified payloads live elsewhere. This path is preparation input only.
 
 ```sh
+# From the repository root, before Pub resolves the generated asset package:
+cargo run --locked --release -p mlsr-cli -- models prepare-flutter \
+  --config examples/flutter_speak/mlsr-models.yaml
 cd examples/flutter_speak
 flutter pub get --enforce-lockfile
-flutter run -d macos \
-  --dart-define=MLSR_MANIFEST=/absolute/path/to/MLSR/model-manifests/supertonic3-coreml.yaml \
-  --dart-define=MLSR_BUNDLE=/absolute/path/to/prepared-bundle
+flutter run -d macos
 ```
 
-Both paths can instead be entered in the settings dialog. The Dart native build
+The app opens `AppModels.supertonic3` automatically. Models, their original YAML
+manifest, voices and notices ship in the generated Flutter asset package. No
+model paths or setup dialog are required at runtime. The Dart native build
 hook builds and bundles MLSR with Core ML enabled. It resolves the active Xcode
 SDK explicitly, tracks embedded YAML manifests as build inputs, and uses the
 same persistent Rust engine as the CLI and other language bindings. There are
 no model downloads in the app or build hook.
 
 `flutter build macos --release` produces `MLSR Speak.app` under
-`build/macos/Build/Products/Release/`. Paths supplied with `--dart-define` become
-build-time defaults; omit them for an app configured through its settings.
-This example currently builds only for the Apple Silicon host. It disables the
-macOS App Sandbox to read the external, potentially symlinked model bundle.
-App Store sandboxing, notarization, Intel/mobile builds, and model distribution
-are separate packaging work.
+`build/macos/Build/Products/Release/`. The release enables App Sandbox and
+user-selected file access for WAV export; model resources are inside the app.
+Debug/profile builds keep the sandbox disabled for test evidence and developer
+tooling. This example currently builds only for the Apple Silicon host.
+Notarization, App Store submission, Intel/mobile inference, and additional device
+qualification remain separate work. See [model delivery](../../docs/model-delivery.md).
 
 ## Ownership and playback
 
@@ -54,8 +59,6 @@ results. Generation completion and actual playback completion are distinct.
 flutter analyze --no-pub
 flutter test test/wav_sink_test.dart --no-pub
 flutter test integration_test/speak_test.dart -d macos --no-pub \
-  --dart-define=MLSR_MANIFEST=/absolute/path/to/MLSR/model-manifests/supertonic3-coreml.yaml \
-  --dart-define=MLSR_BUNDLE=/absolute/path/to/prepared-bundle \
   --dart-define=MLSR_TEST_OUTPUT=/absolute/path/to/new-evidence-directory
 ```
 
@@ -68,7 +71,15 @@ or compatibility with every supported minimum OS. The root
 `tools/dev.py test-real --flutter` command includes these checks in the explicit
 Apple Silicon suite.
 
+Add `--dart-define=MLSR_TEST_MATERIALIZE=true` to exercise the full-size native
+streaming path into Application Support. This is an integration-test option;
+the ordinary app loads immutable bundled resources directly. Small portable
+delivery tests live in `bindings/flutter`. Relocated offline release qualification
+is tracked separately in [delivery progress](../../docs/model-delivery-progress.md).
+
 The example is Apache-2.0. Fraunces and Manrope are bundled under the SIL Open
 Font License; exact upstream revisions and hashes are in
 `assets/fonts/provenance.json`, with the corresponding license texts alongside.
 Those license texts preserve upstream bytes, including their trailing whitespace.
+Model and preprocessing notices are included in the generated package and the
+app's license page; the library license does not relicense model weights.

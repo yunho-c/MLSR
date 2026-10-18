@@ -261,6 +261,41 @@ def main():
                 evidence("variants", output / "variants/report.yaml")
             if args.flutter:
                 app = ROOT / "examples/flutter_speak"
+                model_config = output / "flutter-models.yaml"
+                write_yaml(
+                    model_config,
+                    {
+                        "schema_version": 1,
+                        "package": "mlsr_app_models",
+                        "output": str(app / ".mlsr/model_assets"),
+                        "mlsr_package": str(ROOT / "bindings/dart"),
+                        "models": [
+                            {
+                                "id": "supertonic3-coreml-int4-v1",
+                                "dart_name": "supertonic3",
+                                "source": str(args.bundle),
+                                "manifest": str(
+                                    ROOT / "model-manifests/supertonic3-coreml.yaml"
+                                ),
+                                "platforms": ["macos-arm64"],
+                            }
+                        ],
+                    },
+                )
+                run(
+                    "cargo",
+                    "run",
+                    "--locked",
+                    "--release",
+                    "-p",
+                    "mlsr-cli",
+                    "--",
+                    "models",
+                    "prepare-flutter",
+                    "--config",
+                    model_config,
+                )
+                run("flutter", "pub", "get", "--enforce-lockfile", cwd=app)
                 run("flutter", "analyze", "--no-pub", cwd=app)
                 run("flutter", "test", "test/wav_sink_test.dart", "--no-pub", cwd=app)
                 run(
@@ -279,9 +314,6 @@ def main():
                     "-d",
                     "macos",
                     "--no-pub",
-                    "--dart-define=MLSR_MANIFEST="
-                    + str(ROOT / "model-manifests/supertonic3-coreml.yaml"),
-                    "--dart-define=MLSR_BUNDLE=" + str(args.bundle),
                     "--dart-define=MLSR_TEST_OUTPUT=" + str(output / "flutter"),
                     cwd=app,
                 )

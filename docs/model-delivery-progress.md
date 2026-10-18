@@ -10,7 +10,7 @@ native build hook packages code; Rust verifies and owns model lifetimes.
 | 2. Rust model store and C/Dart ownership | Implemented: verified atomic publication, cross-process locks and model/engine leases; portable Rust/C/Dart tests, real Core ML engine lifetime/synthesis test, strict Clippy, Rust 1.88 and Windows cross-check passed |
 | 3. Generated Flutter asset package | Implemented: offline CLI preparation, exact inventories, regular files, notices, platform filters and Dart constants; deterministic/negative fixture tests, real 29-file package hash audit, Flutter Pub/analyze, strict Clippy and Rust 1.88 check passed |
 | 4. Flutter model resolution | Implemented: macOS registrar lookup, direct loading, bounded native file streaming and leased installation; Dart fixture tests and Swift type checking passed; actual app resource placement/full-size native streaming are qualified in steps 5–6 |
-| 5. Example migration | Pending: bundled baseline, no required paths, existing playback/cancel/export behavior |
+| 5. Example migration | Implemented: bundled baseline opens automatically, no required paths, retry/license UI; real direct and materialized integration tests passed playback/cancel/export/cleanup with byte-identical English/Korean WAVs versus the previous POC; release app builds with App Sandbox |
 | 6. Downstream release qualification | Pending: separate consumer, relocated offline release app, fresh app data, no developer cache/checkout dependency |
 
 Completion requires the built release app to synthesize after relocation with
