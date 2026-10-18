@@ -14,6 +14,35 @@ fn read_json(handle: MlsrHandle) -> serde_json::Value {
 }
 
 #[test]
+fn request_metadata_records_effective_model_settings_without_planning() {
+    let voice = catalog(0)
+        .unwrap()
+        .resolve("en-US", Some("supertonic3:F1"), VoiceFallback::SameLanguage)
+        .unwrap();
+    let options = mlsr::request::RequestOptions::new(
+        1.5,
+        BackendOptions::Supertonic3 {
+            steps: 5,
+            seed: 1729,
+        },
+    )
+    .unwrap();
+    let request = Request::new("Original 😀 text.", voice, options).unwrap();
+    let value = read_json(super::synthesis::request_metadata(42, &request).unwrap());
+    assert_eq!(value["type"], "request");
+    assert_eq!(value["data"]["text"], "Original 😀 text.");
+    assert_eq!(value["data"]["voice"]["used_fallback"], true);
+    assert_eq!(value["data"]["speaking_rate"], 1.5);
+    assert_eq!(
+        value["data"]["effective_synthesis"]["speed"],
+        f64::from(1.5_f32 * 1.05)
+    );
+    assert_eq!(value["data"]["effective_synthesis"]["seed"], 1729);
+    assert_eq!(value["data"]["backend"]["model"], "supertonic3");
+    assert_eq!(value["data"]["start_segment"], 0);
+}
+
+#[test]
 fn catalog_resolution_metadata_and_wrong_kind_ownership() {
     let mut output = 0;
     let mut error = 0;

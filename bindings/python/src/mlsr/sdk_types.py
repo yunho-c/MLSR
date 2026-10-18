@@ -221,6 +221,36 @@ class Request:
 
 
 @dataclass(frozen=True)
+class EffectiveSynthesisOptions:
+    steps: int
+    speed: float
+    seed: int
+
+
+@dataclass(frozen=True)
+class RequestMetadata:
+    request_id: int
+    text: str
+    voice: ResolvedVoice
+    speaking_rate: float
+    backend: SupertonicOptions
+    effective_synthesis: EffectiveSynthesisOptions
+    start_segment: int
+
+    @classmethod
+    def _parse(cls, data):
+        return cls(
+            data["request_id"],
+            data["text"],
+            ResolvedVoice._parse(data["voice"]),
+            data["speaking_rate"],
+            SupertonicOptions(data["backend"]["steps"], data["backend"]["seed"]),
+            EffectiveSynthesisOptions(**data["effective_synthesis"]),
+            data["start_segment"],
+        )
+
+
+@dataclass(frozen=True)
 class TtsOptions:
     output_mode: str = "default"  # default, headless, host_managed
     max_requests: int = 16

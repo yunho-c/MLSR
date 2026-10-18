@@ -105,6 +105,11 @@ class RealDeveloperAPI(unittest.TestCase):
         self.assertIsNone(self.tts.output_capabilities)
         with self.tts.synthesize(self.request) as job:
             self.assertEqual(job.snapshot.phase, "created")
+            self.assertEqual(job.request.text, self.request.text)
+            self.assertEqual(job.request.request_id, job.id)
+            self.assertEqual(job.request.speaking_rate, 1.0)
+            self.assertAlmostEqual(job.request.effective_synthesis.speed, 1.05)
+            self.assertEqual(job.request.effective_synthesis.seed, 1729)
             self.assertIsNone(job.wait(0.01))
             self.assertIsNone(job.plan)
             with job.states() as states:

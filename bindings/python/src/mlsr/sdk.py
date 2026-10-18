@@ -20,6 +20,7 @@ from .sdk_types import (
     Completion,
     OutputCapabilities,
     Request,
+    RequestMetadata,
     ResolvedVoice,
     RetentionStats,
     SpeechOptions,
@@ -349,6 +350,12 @@ class _RequestHandle(_Resource):
         self._owner = owner
         self._init(owner._lib, handle, forget=True)
         self.id = self._lib.mlsr_sdk_id(handle)
+
+    @property
+    def request(self) -> RequestMetadata:
+        """Copied accepted options, resolved voice and effective model settings."""
+        data = ffi.metadata(self._lib, "sdk_request", self._get())[1]["data"]
+        return RequestMetadata._parse(data)
 
     @property
     def snapshot(self) -> SpeechState | SynthesisState:

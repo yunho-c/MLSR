@@ -134,7 +134,9 @@ impl Request {
         request.resume = Some((plan, start));
         Ok(request)
     }
-    pub(crate) fn start_segment(&self) -> usize {
+    /// Original segment index at which this request begins, including navigation.
+    /// Ordinary requests begin at zero; replay retains its source request offset.
+    pub fn start_segment(&self) -> usize {
         self.resume.as_ref().map_or(0, |(_, start)| *start)
     }
     pub(crate) fn prepare(&self, engine: &Engine) -> Result<(Arc<TextPlan>, usize)> {

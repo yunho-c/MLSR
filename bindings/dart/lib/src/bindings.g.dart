@@ -450,6 +450,24 @@ external int mlsr_sdk_id(int handle);
 @ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
 external int mlsr_sdk_release(int handle);
 
+/// Inspect copied request input, resolved voice, normalized public options,
+/// effective model speed/steps/seed and original start segment. Does not start
+/// lazy work. Replay reports its own request ID and the shared synthesis input.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_sdk_request(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
 /// Immediate versioned snapshot for SDK Tts, controller, speech, synthesis or
 /// audio handles. State reads never consume PCM or start a lazy job.
 /// # Safety

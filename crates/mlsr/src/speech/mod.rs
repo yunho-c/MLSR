@@ -511,6 +511,11 @@ impl Speech {
     pub fn id(&self) -> u64 {
         self.control.id()
     }
+    /// Immutable accepted synthesis input, including original navigation offset.
+    /// Replay shares this input but has its own speech identity and playback cursor.
+    pub fn request(&self) -> &Request {
+        self.control.job.request()
+    }
     /// Latest snapshot independent of any state subscription.
     pub fn snapshot(&self) -> SpeechSnapshot {
         let mut state = lock(&self.control.state);

@@ -1,5 +1,44 @@
 use super::*;
 
+pub(super) fn request_metadata(id: u64, request: &Request) -> ApiResult<MlsrHandle> {
+    let effective = request.options().effective_synthesis_options()?;
+    metadata(
+        "request",
+        json!({
+            "request_id":id,"text":request.text(),"voice":request.voice(),
+            "speaking_rate":request.options().speaking_rate(),"backend":request.options().backend(),
+            "effective_synthesis":{"steps":effective.steps(),"speed":effective.speed(),"seed":effective.seed()},
+            "start_segment":request.start_segment()
+        }),
+    )
+}
+/// Inspect copied request input, resolved voice, normalized public options,
+/// effective model speed/steps/seed and original start segment. Does not start
+/// lazy work. Replay reports its own request ID and the shared synthesis input.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mlsr_sdk_request(
+    handle: MlsrHandle,
+    output: *mut MlsrHandle,
+    error: *mut MlsrHandle,
+) -> MlsrStatus {
+    // SAFETY: Output pointer contracts.
+    unsafe {
+        guard(error, || {
+            clear_handle(output)?;
+            let entry = handles::get_any(handle)?;
+            let value = match entry.as_ref() {
+                Entry::Speech(speech) => request_metadata(speech.id(), speech.request())?,
+                Entry::Synthesis(job) => request_metadata(job.id(), job.request())?,
+                _ => return Err(wrong_kind()),
+            };
+            output.write(value);
+            Ok(MLSR_OK)
+        })
+    }
+}
+
 /// Create a lazy advanced synthesis handle. Reading state/done never starts it;
 /// explicitly start or claim its single audio consumer. Input is copied now.
 /// # Safety

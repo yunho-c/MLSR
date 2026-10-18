@@ -34,6 +34,8 @@ navigation result contains a new `speech` when inference must restart. Completed
 recordings use `speech.replay_from(frame)` to create a new identity; the original
 completion remains immutable. Discarding a Speech object preserves fire-and-forget
 playback. Explicit `close()` cancels/joins and releases its retained recording.
+`speech.request` / `job.request` expose the copied accepted input, resolved voice,
+effective model speed/steps/seed and original navigation start segment.
 
 Read `speech.snapshot` or use `with speech.states() as states: ...` to observe
 coalesced state without draining PCM. State includes source-frame position,

@@ -88,6 +88,7 @@ def library():
         "synthesis_audio": [H, P(H), P(H)],
         "audio_stream_poll": [H, C.c_uint32, P(H), P(H), P(H)],
         "sdk_snapshot": [H, P(H), P(H)],
+        "sdk_request": [H, P(H), P(H)],
         "sdk_wait": [H, C.c_uint32, P(H), P(H)],
         "sdk_states": [H, P(H), P(H)],
         "state_poll": [H, C.c_uint32, P(H), P(H)],

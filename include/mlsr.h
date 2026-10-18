@@ -880,6 +880,15 @@ MlsrStatus mlsr_speech_navigate(MlsrHandle speech,
                                 MlsrHandle *error);
 
 /**
+ * Inspect copied request input, resolved voice, normalized public options,
+ * effective model speed/steps/seed and original start segment. Does not start
+ * lazy work. Replay reports its own request ID and the shared synthesis input.
+ * # Safety
+ * Output/error are aligned, writable and disjoint.
+ */
+MlsrStatus mlsr_sdk_request(MlsrHandle handle, MlsrHandle *output, MlsrHandle *error);
+
+/**
  * Create a lazy advanced synthesis handle. Reading state/done never starts it;
  * explicitly start or claim its single audio consumer. Input is copied now.
  * # Safety

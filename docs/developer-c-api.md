@@ -36,7 +36,7 @@ Metadata is UTF-8 JSON in an owned SDK handle:
 `mlsr_json_read` borrows its bytes until release. Copy, decode, then release. The
 v1 type names are `voice_catalog`, `resolved_voice`, `tts`, `controller`,
 `speech_state`, `synthesis_state`, `audio`, `completion`, `text_plan`,
-`navigation`, `wav_file`, and `error`. Field names match the serializable Rust
+`navigation`, `wav_file`, `request`, and `error`. Field names match the serializable Rust
 types, with snake-case enum tags. Ranges have `start` and exclusive `end` fields;
 explicit `utf8` and `utf16` ranges retain original text coordinates. A duration
 is unknown when null. Playback rate does not change source-frame units.
@@ -47,6 +47,11 @@ is invalid. Language adapters copy once into language-owned storage. The shared
 `mlsr_pcm_write_wav` serializer borrows caller PCM only for its synchronous call.
 
 ## Synthesis and playback
+
+`mlsr_sdk_request` exposes the copied input/resolved voice, public speaking rate,
+typed backend options, effective model speed/steps/seed and original start segment.
+This observation works before planning without starting a lazy request. Replays
+report their own request identity and their shared original synthesis input.
 
 `mlsr_tts_synthesize` creates a lazy job; observing state, plan or completion does
 not start it. `mlsr_synthesis_start` starts explicitly; `mlsr_synthesis_audio`
