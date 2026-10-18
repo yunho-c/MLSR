@@ -10,6 +10,16 @@ use unicode_segmentation::UnicodeSegmentation;
 const SCAN_BYTES: usize = 4096;
 
 impl Bundle {
+    /// Freeze original sentence/segment identities and both UTF-8/UTF-16 spans.
+    /// Every segment is token-validated using this verified bundle before return.
+    pub fn plan_text(&self, text: &str, language: &str) -> Result<crate::text::TextPlan> {
+        crate::text::TextPlan::build(
+            text,
+            language,
+            self.manifest_sha256(),
+            self.segment_text(text, language)?,
+        )
+    }
     /// Split paragraphs/sentences, then oversized sentences at whitespace or
     /// extended grapheme boundaries. Every final segment is token-validated
     /// before inference begins. Empty normalized spans are skipped, not spoken.

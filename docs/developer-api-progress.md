@@ -7,7 +7,7 @@ must not be marked complete merely because a subset of tests passes.
 | Step | Deliverable | Status | Evidence |
 | --- | --- | --- | --- |
 | 1 | Developer contracts and Apple clock/completion/rate spike | Complete | [Contract](developer-api.md), [native probe and limitations](playback-probe.md), `tests/fixtures/developer-api/playback-probe.json` |
-| 2 | Voice catalog/resolution and frozen Unicode segment plans | Pending | |
+| 2 | Voice catalog/resolution and frozen Unicode segment plans | Complete | [Rust API and validation](voices-and-text-plans.md); SDK translations in step 7 |
 | 3 | Shared render/stream/WAV APIs with state and completion | Pending | |
 | 4 | Shared speech handles, bounded scheduler and state machine | Pending | |
 | 5 | Reusable native Apple playback and host policy adapter | Pending | |
@@ -26,12 +26,12 @@ primitive or the older demonstration already supports part of it.
 | API-01 | Installed public facade: open, speak, render, renderToFile, synthesize, dispose | Pending |
 | API-02 | Same shared behavior through Rust, C, Dart, Go and Python; idiomatic async adapters | Pending |
 | API-03 | Additive ABI; old functions/layouts/offset meanings preserved | Pending |
-| VOICE-01 | Stable IDs, metadata, supported languages/capabilities | Pending |
-| VOICE-02 | Catalog/verified-assets/loaded-engine readiness distinction | Pending |
-| VOICE-03 | Explicit locale resolution/fallback, missing voice errors | Pending |
-| TEXT-01 | Frozen original sentence/segment plan and immutable request options | Pending |
-| TEXT-02 | Correct original UTF-8/UTF-16 mapping including Korean/emoji/combining text | Pending |
-| TEXT-03 | Explicit input limits, segmentation without truncation, stable navigation seeds | Pending |
+| VOICE-01 | Stable IDs, metadata, supported languages/capabilities | Rust complete: `voice::tests`; SDK translation pending |
+| VOICE-02 | Catalog/verified-assets/loaded-engine readiness distinction | Rust complete: voice and engine tests; SDK translation pending |
+| VOICE-03 | Explicit locale resolution/fallback, missing voice errors | Rust complete: `explicit_fallback_never_silently_changes_language_or_voice`; SDK translation pending |
+| TEXT-01 | Frozen original sentence/segment plan and immutable request options | Frozen plan complete; facade option snapshot pending |
+| TEXT-02 | Correct original UTF-8/UTF-16 mapping including Korean/emoji/combining text | Rust complete: `text::plan::tests`; Dart translation pending |
+| TEXT-03 | Explicit input limits, segmentation without truncation, stable navigation seeds | Rust complete: segmentation/suffix tests plus real seeded PCM equality; navigation integration pending |
 | SYN-01 | Lazy advanced audio consumption/explicit start; states do not drain audio | Pending |
 | SYN-02 | Independent bounded state snapshots and synthesis completion | Pending |
 | SYN-03 | Speaking-rate normalization and typed backend options | Pending |

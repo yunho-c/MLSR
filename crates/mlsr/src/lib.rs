@@ -14,6 +14,7 @@ pub mod job;
 pub mod models;
 pub mod runtime;
 pub mod text;
+pub mod voice;
 
 /// Version of the Rust implementation, shared by all language bindings.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

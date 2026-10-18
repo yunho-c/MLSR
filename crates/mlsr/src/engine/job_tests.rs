@@ -12,6 +12,9 @@ struct Fake {
     panic: bool,
 }
 impl Backend for Fake {
+    fn voice_catalog(&self) -> VoiceCatalog {
+        crate::models::supertonic3::BundleManifest::baseline().voice_catalog()
+    }
     fn voices(&self) -> Vec<String> {
         vec!["M1".into()]
     }
@@ -203,6 +206,138 @@ fn stream_orders_metadata_spans_and_frames_with_exactly_one_terminal() {
         .unwrap();
     assert!(next.id() > job.id());
     assert!(matches!(terminal(&next).outcome, Outcome::Completed));
+}
+
+#[test]
+fn frozen_plan_suffix_preserves_original_spans_ids_and_readiness() {
+    let (engine, calls) = fake();
+    let catalog = engine.voice_catalog().unwrap();
+    assert_eq!(catalog.voices().len(), 1);
+    assert_eq!(catalog.voices()[0].readiness(), VoiceReadiness::EngineReady);
+    let text = "😀 First sentence.\nSecond sentence.\nThird sentence.";
+    let plan = Arc::new(engine.plan_text(text, "en", "M1").unwrap());
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "planning must not infer");
+    let start = plan.sentences()[1].segments().start;
+    let job = engine
+        .start_plan(
+            plan.clone(),
+            start,
+            "M1",
+            SynthesisOptions::default(),
+            JobOptions::default(),
+        )
+        .unwrap();
+    let mut predicted = Vec::new();
+    loop {
+        match job.poll(Duration::from_secs(5)) {
+            Poll::Event(event) => match event.event {
+                Event::Predicted(info) => {
+                    let segment = &plan.segments()[info.id as usize];
+                    assert_eq!(info.text_span, segment.utf8_span());
+                    predicted.push(info.id);
+                }
+                Event::Audio(chunk) => assert!(
+                    chunk
+                        .audio
+                        .samples()
+                        .iter()
+                        .all(|&x| x == chunk.segment.id as f32)
+                ),
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    break;
+                }
+            },
+            other => panic!("missing suffix event: {other:?}"),
+        }
+    }
+    assert_eq!(predicted, vec![1, 2]);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert!(
+        engine
+            .start_plan(
+                plan.clone(),
+                plan.segments().len(),
+                "M1",
+                SynthesisOptions::default(),
+                JobOptions::default()
+            )
+            .is_err()
+    );
+    assert!(matches!(
+        engine.start_plan(
+            plan,
+            0,
+            "absent",
+            SynthesisOptions::default(),
+            JobOptions::default()
+        ),
+        Err(Error::VoiceUnavailable(_))
+    ));
+    let parts = crate::models::supertonic3::plan_segments(text, "en").unwrap();
+    let foreign = Arc::new(TextPlan::build(text, "en", "another manifest", parts).unwrap());
+    assert!(
+        engine
+            .start_plan(
+                foreign,
+                0,
+                "M1",
+                SynthesisOptions::default(),
+                JobOptions::default()
+            )
+            .is_err()
+    );
+    engine.shutdown().unwrap();
+    assert!(matches!(engine.voice_catalog(), Err(Error::Closed)));
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE and real Core ML execution"]
+fn real_frozen_suffix_preserves_seeded_pcm() {
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let bundle = Bundle::open(root).unwrap();
+    let plan = Arc::new(
+        bundle
+            .plan_text("Hello from MLSR.\nThis is another sentence.", "en")
+            .unwrap(),
+    );
+    let engine = Engine::from_bundle(bundle, EngineOptions::default()).unwrap();
+    let start = plan.sentences()[1].segments().start;
+    let options = SynthesisOptions::new(8, 1.05, 1729).unwrap();
+    let job = engine
+        .start_plan(plan.clone(), start, "M1", options, JobOptions::default())
+        .unwrap();
+    let mut actual = Vec::new();
+    loop {
+        match job.poll(Duration::from_secs(30)) {
+            Poll::Event(event) => match event.event {
+                Event::Audio(chunk) => {
+                    actual.extend(chunk.audio.samples().iter().map(|v| v.to_bits()))
+                }
+                Event::Predicted(info) => assert!(info.id as usize >= start),
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    break;
+                }
+            },
+            other => panic!("missing real suffix: {other:?}"),
+        }
+    }
+    let mut expected = Vec::new();
+    for segment in &plan.segments()[start..] {
+        let output = engine
+            .synthesize(SynthesisRequest {
+                text: segment.original(),
+                language: "en",
+                voice: "M1",
+                options: SynthesisOptions::new(8, 1.05, segment.seed(1729)).unwrap(),
+            })
+            .unwrap();
+        expected.extend(output.pcm().iter().map(|v| v.to_bits()));
+    }
+    assert!(!actual.is_empty());
+    assert_eq!(actual, expected);
 }
 #[test]
 fn cancellation_bypasses_inflight_call_and_engine_is_busy_until_quiescent() {

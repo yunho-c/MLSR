@@ -36,6 +36,10 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// A requested stable voice ID is not present in this catalog.
+    VoiceUnavailable(String),
+    /// No voice supports the requested locale under the selected fallback rule.
+    UnsupportedLocale(String),
     /// A model installation, lease, or removal could not proceed.
     ModelStore {
         /// Stable store failure category.
@@ -85,6 +89,8 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::VoiceUnavailable(message) => write!(f, "voice_unavailable: {message}"),
+            Self::UnsupportedLocale(message) => write!(f, "unsupported_locale: {message}"),
             Self::ModelStore { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::Busy => f.write_str("engine_busy: another request is active"),
             Self::Closed => f.write_str("engine_closed: engine is unavailable"),
@@ -105,6 +111,8 @@ impl Error {
     /// Stable machine-readable category for foreign-language adapters.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::VoiceUnavailable(_) => "voice_unavailable",
+            Self::UnsupportedLocale(_) => "unsupported_locale",
             Self::ModelStore { kind, .. } => kind.as_str(),
             Self::Busy => "engine_busy",
             Self::Closed => "engine_closed",
