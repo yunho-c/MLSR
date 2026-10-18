@@ -3,7 +3,7 @@
 //! This initial scaffold exposes version information. Model loading and
 //! synthesis will be added after the first model and runtime are selected.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod audio;
 pub mod config;
