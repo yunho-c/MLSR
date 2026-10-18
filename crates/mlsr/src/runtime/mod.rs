@@ -4,12 +4,13 @@
 //! `coreml` feature on macOS and iOS only. Model execution is being implemented.
 
 mod error;
+mod session;
 mod tensor;
 
 pub use error::{Error, Result};
+pub use session::{ComputePolicy, Model, Session, SessionStats, Tensor};
 pub use tensor::{DType, HostTensor, TensorData};
 
 #[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]
 #[allow(unsafe_code)] // Audited scoped buffer copies live only in this module.
-#[allow(dead_code)] // Adapter primitives are connected to the session in task 3.
 mod coreml;

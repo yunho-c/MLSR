@@ -4,6 +4,14 @@ use std::fmt;
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
+    /// The requested backend was not built for this platform.
+    BackendUnavailable,
+    /// The session has shut down, or its worker has exited.
+    SessionClosed,
+    /// A model or tensor belongs to a different session.
+    ForeignHandle,
+    /// Worker creation, protocol, or execution failed.
+    Worker(String),
     /// A tensor's shape, dtype, storage, or layout is invalid.
     InvalidTensor(String),
     /// A named model feature violates the model's contract.
@@ -29,6 +37,12 @@ pub type Result<T> = std::result::Result<T, Error>;
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BackendUnavailable => {
+                write!(f, "Core ML requires the coreml feature on macOS/iOS")
+            }
+            Self::SessionClosed => write!(f, "runtime session is closed"),
+            Self::ForeignHandle => write!(f, "resource belongs to a different runtime session"),
+            Self::Worker(message) => write!(f, "runtime worker: {message}"),
             Self::InvalidTensor(message) => write!(f, "invalid tensor: {message}"),
             Self::InvalidFeature(message) => write!(f, "invalid feature: {message}"),
             Self::InvalidModel(message) => write!(f, "invalid model: {message}"),

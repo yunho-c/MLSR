@@ -2,10 +2,11 @@
 
 mod model;
 mod tensor;
+mod worker;
 
-#[cfg(test)]
 pub(super) use model::NativeModel;
 pub(super) use tensor::NativeTensor;
+pub(super) use worker::run;
 
 use super::{Error, Result};
 use cidre::{ns, objc};
