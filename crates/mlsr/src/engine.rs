@@ -11,6 +11,10 @@ use crate::{
     text::{TextPlan, TextSegment},
     voice::{VoiceCatalog, VoiceReadiness},
 };
+#[cfg(test)]
+pub(crate) use job_tests::fake as fake_engine;
+#[cfg(test)]
+pub(crate) use job_tests::gated_fake as gated_fake_engine;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     path::Path,

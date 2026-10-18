@@ -1,5 +1,42 @@
 //! Owned PCM independent of playback devices and inference lifetimes.
 use crate::error::{Error, Result};
+use serde::Serialize;
+mod wav;
+pub use wav::{WavFile, WavWriter};
+
+/// PCM frame format; one frame contains `channels` interleaved Float32 samples.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct AudioFormat {
+    sample_rate: u32,
+    channels: u16,
+}
+impl AudioFormat {
+    /// Validate a sample rate of 1..=384,000 and 1..=32 channels.
+    pub fn new(sample_rate: u32, channels: u16) -> Result<Self> {
+        if !(1..=384_000).contains(&sample_rate) || !(1..=32).contains(&channels) {
+            return Err(Error::InvalidOptions("invalid PCM format".into()));
+        }
+        Ok(Self {
+            sample_rate,
+            channels,
+        })
+    }
+    /// Frames per second.
+    pub fn sample_rate(self) -> u32 {
+        self.sample_rate
+    }
+    /// Interleaved samples per frame.
+    pub fn channels(self) -> u16 {
+        self.channels
+    }
+    /// Source media duration; playback rate does not alter this value.
+    pub fn duration_seconds(self, frames: u64) -> f64 {
+        frames as f64 / f64::from(self.sample_rate)
+    }
+}
+
+/// Completed in-memory PCM. This alias preserves the existing owned Audio API.
+pub type AudioClip = Audio;
 
 /// Finite interleaved Float32 PCM, owned entirely by Rust. The first Supertonic
 /// implementation produces mono 44,100 Hz audio without clipping/normalization.
@@ -10,6 +47,22 @@ pub struct Audio {
     channels: u16,
 }
 impl Audio {
+    /// Own a nonempty complete waveform, preserving every finite sample bit.
+    pub fn new(samples: Vec<f32>, format: AudioFormat) -> Result<Self> {
+        if samples.is_empty()
+            || !samples.len().is_multiple_of(usize::from(format.channels))
+            || samples.iter().any(|v| !v.is_finite())
+        {
+            return Err(Error::InvalidOptions(
+                "PCM must contain finite, complete, nonempty frames".into(),
+            ));
+        }
+        Ok(Self {
+            samples,
+            sample_rate: format.sample_rate,
+            channels: format.channels,
+        })
+    }
     pub(crate) fn mono(samples: Vec<f32>, sample_rate: u32) -> Result<Self> {
         if samples.is_empty() || sample_rate == 0 || samples.iter().any(|v| !v.is_finite()) {
             return Err(Error::Synthesis(
@@ -25,6 +78,20 @@ impl Audio {
     /// Interleaved samples. Their lifetime depends only on this Audio value.
     pub fn samples(&self) -> &[f32] {
         &self.samples
+    }
+    /// Explicit PCM format, shared with streaming/file metadata.
+    pub fn format(&self) -> AudioFormat {
+        AudioFormat {
+            sample_rate: self.sample_rate,
+            channels: self.channels,
+        }
+    }
+    /// Write a new Float32 WAV atomically. Preserves an existing destination and
+    /// removes only its own incomplete temporary file if writing fails.
+    pub fn write_wav(&self, path: impl AsRef<std::path::Path>) -> Result<WavFile> {
+        let mut writer = WavWriter::create(path, self.format(), self.frames() as u64)?;
+        writer.write_samples(self.samples())?;
+        writer.finish()
     }
     /// Take ownership of the sample allocation.
     pub fn into_samples(self) -> Vec<f32> {

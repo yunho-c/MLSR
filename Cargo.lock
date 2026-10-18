@@ -355,6 +355,7 @@ version = "0.1.0"
 dependencies = [
  "cidre",
  "fs2",
+ "hound",
  "rand_chacha",
  "rand_distr",
  "serde",

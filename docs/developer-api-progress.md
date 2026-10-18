@@ -8,7 +8,7 @@ must not be marked complete merely because a subset of tests passes.
 | --- | --- | --- | --- |
 | 1 | Developer contracts and Apple clock/completion/rate spike | Complete | [Contract](developer-api.md), [native probe and limitations](playback-probe.md), `tests/fixtures/developer-api/playback-probe.json` |
 | 2 | Voice catalog/resolution and frozen Unicode segment plans | Complete | [Rust API and validation](voices-and-text-plans.md); SDK translations in step 7 |
-| 3 | Shared render/stream/WAV APIs with state and completion | Pending | |
+| 3 | Shared render/stream/WAV APIs with state and completion | Complete | [Shared Rust facade and qualification](headless-sdk.md); SDK translations in step 7 |
 | 4 | Shared speech handles, bounded scheduler and state machine | Pending | |
 | 5 | Reusable native Apple playback and host policy adapter | Pending | |
 | 6 | Retention, seeking, reader timeline and navigation | Pending | |
@@ -29,15 +29,15 @@ primitive or the older demonstration already supports part of it.
 | VOICE-01 | Stable IDs, metadata, supported languages/capabilities | Rust complete: `voice::tests`; SDK translation pending |
 | VOICE-02 | Catalog/verified-assets/loaded-engine readiness distinction | Rust complete: voice and engine tests; SDK translation pending |
 | VOICE-03 | Explicit locale resolution/fallback, missing voice errors | Rust complete: `explicit_fallback_never_silently_changes_language_or_voice`; SDK translation pending |
-| TEXT-01 | Frozen original sentence/segment plan and immutable request options | Frozen plan complete; facade option snapshot pending |
+| TEXT-01 | Frozen original sentence/segment plan and immutable request options | Rust complete: text plans plus `request::tests`; SDK translation pending |
 | TEXT-02 | Correct original UTF-8/UTF-16 mapping including Korean/emoji/combining text | Rust complete: `text::plan::tests`; Dart translation pending |
 | TEXT-03 | Explicit input limits, segmentation without truncation, stable navigation seeds | Rust complete: segmentation/suffix tests plus real seeded PCM equality; navigation integration pending |
-| SYN-01 | Lazy advanced audio consumption/explicit start; states do not drain audio | Pending |
-| SYN-02 | Independent bounded state snapshots and synthesis completion | Pending |
-| SYN-03 | Speaking-rate normalization and typed backend options | Pending |
-| RENDER-01 | Bounded in-memory AudioClip with format/frame metadata | Pending |
-| RENDER-02 | Shared incremental WAV output, no clobber, owned partial cleanup | Pending |
-| RENDER-03 | Cancellation/disk/quota failures propagate; parity across bindings | Pending |
+| SYN-01 | Lazy advanced audio consumption/explicit start; states do not drain audio | Rust complete: `synthesis::tests`; SDK translation pending |
+| SYN-02 | Independent bounded state snapshots and synthesis completion | Rust complete: late/slow observer and quiescence tests; SDK translation pending |
+| SYN-03 | Speaking-rate normalization and typed backend options | Rust complete: request tests and real legacy PCM equality; SDK translation pending |
+| RENDER-01 | Bounded in-memory AudioClip with format/frame metadata | Rust complete: render limit and real PCM tests; SDK translation pending |
+| RENDER-02 | Shared incremental WAV output, no clobber, owned partial cleanup | Rust/CLI complete: WAV and consumer tests; SDK translation pending |
+| RENDER-03 | Cancellation/disk/quota failures propagate; parity across bindings | Rust failure paths and native PCM parity complete; cross-binding parity pending |
 | SESSION-01 | Immediate per-request Speech handle, immutable outcome exactly once | Pending |
 | SESSION-02 | Replace scope, enqueue order, bounded queue count/text bytes | Pending |
 | SESSION-03 | Queued cancellation, old callback rejection, close/join races | Pending |

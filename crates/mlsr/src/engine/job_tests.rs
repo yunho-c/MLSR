@@ -127,7 +127,7 @@ fn optimized_engines_cancel_recover_and_retain_a_bounded_model_set() {
         assert!(first.pcm().iter().any(|v| v.abs() > 0.001));
     }
 }
-fn fake() -> (Engine, Arc<AtomicUsize>) {
+pub(crate) fn fake() -> (Engine, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let engine = Engine::with_backend(Box::new(Fake {
         calls: calls.clone(),
@@ -137,6 +137,18 @@ fn fake() -> (Engine, Arc<AtomicUsize>) {
     }))
     .unwrap();
     (engine, calls)
+}
+pub(crate) fn gated_fake() -> (Engine, Receiver<()>, SyncSender<()>) {
+    let (entered_tx, entered_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel(1);
+    let engine = Engine::with_backend(Box::new(Fake {
+        calls: Arc::new(AtomicUsize::new(0)),
+        entered: Some(entered_tx),
+        release: Some(release_rx),
+        panic: false,
+    }))
+    .unwrap();
+    (engine, entered_rx, release_tx)
 }
 fn terminal(job: &Job) -> JobReport {
     loop {
