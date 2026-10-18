@@ -180,3 +180,25 @@ fn os_locks_coordinate_processes_and_release_after_process_exit() {
     drop(model);
     assert!(store.remove(&descriptor).unwrap());
 }
+
+#[cfg(unix)]
+#[test]
+fn owner_drop_releases_a_lock_despite_a_duplicated_descriptor() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("lifetime.lock");
+    for exclusive in [true, false] {
+        let owner = lock(&path, exclusive, StoreErrorKind::Busy).unwrap();
+        // A fork duplicates the open file description even with CLOEXEC, until
+        // the child reaches exec. Model ownership must end in the parent now.
+        let inherited = owner.file.try_clone().unwrap();
+        drop(owner);
+        let replacement = lock(&path, true, StoreErrorKind::Busy)
+            .expect("a descriptor copy must not prolong the owner's lock");
+        drop(inherited);
+        kind(
+            lock(&path, true, StoreErrorKind::Busy),
+            StoreErrorKind::Busy,
+        );
+        drop(replacement);
+    }
+}

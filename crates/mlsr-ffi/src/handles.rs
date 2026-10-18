@@ -9,17 +9,28 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex, OnceLock},
 };
+mod sdk;
+pub(crate) use sdk::{OwnedAudio, OwnedStream, Watch};
 
 #[derive(Debug)]
 pub(crate) struct ApiError {
     pub code: String,
     pub message: String,
+    pub details: Option<serde_json::Value>,
 }
 impl ApiError {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            details: None,
+        }
+    }
     pub fn invalid(message: impl Into<String>) -> Self {
         Self {
             code: "invalid_argument".into(),
             message: message.into(),
+            details: None,
         }
     }
     pub fn view(&self) -> MlsrErrorInfo {
@@ -34,6 +45,10 @@ impl From<mlsr::error::Error> for ApiError {
         Self {
             code: error.code().into(),
             message: error.to_string(),
+            details: match &error {
+                mlsr::error::Error::OperationFailed(failure) => serde_json::to_value(failure).ok(),
+                _ => None,
+            },
         }
     }
 }
@@ -49,6 +64,7 @@ impl OwnedEvent {
                 Outcome::Failed(error) => Some(ApiError {
                     code: error.code().into(),
                     message: error.to_string(),
+                    details: None,
                 }),
                 _ => None,
             },
@@ -108,6 +124,14 @@ pub(crate) enum Entry {
     Job(Job),
     Event(OwnedEvent),
     Error(ApiError),
+    Tts(mlsr::tts::Tts),
+    Controller(mlsr::speech::SpeechController),
+    Speech(mlsr::speech::Speech),
+    Synthesis(mlsr::synthesis::SynthesisJob),
+    Stream(OwnedStream),
+    Watch(Mutex<Watch>),
+    Audio(OwnedAudio),
+    Json(String),
 }
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Kind {
@@ -117,6 +141,14 @@ pub(crate) enum Kind {
     Job,
     Event,
     Error,
+    Tts,
+    Controller,
+    Speech,
+    Synthesis,
+    Stream,
+    Watch,
+    Audio,
+    Json,
 }
 impl Entry {
     fn kind(&self) -> Kind {
@@ -127,6 +159,14 @@ impl Entry {
             Self::Job(_) => Kind::Job,
             Self::Event(_) => Kind::Event,
             Self::Error(_) => Kind::Error,
+            Self::Tts(_) => Kind::Tts,
+            Self::Controller(_) => Kind::Controller,
+            Self::Speech(_) => Kind::Speech,
+            Self::Synthesis(_) => Kind::Synthesis,
+            Self::Stream(_) => Kind::Stream,
+            Self::Watch(_) => Kind::Watch,
+            Self::Audio(_) => Kind::Audio,
+            Self::Json(_) => Kind::Json,
         }
     }
 }
@@ -166,11 +206,19 @@ pub(crate) fn get(id: MlsrHandle, kind: Kind) -> ApiResult<Arc<Entry>> {
         .ok_or_else(|| ApiError {
             code: "invalid_handle".into(),
             message: "unknown, released, or wrong-kind handle".into(),
+            details: None,
         })
 }
-pub(crate) fn release(id: MlsrHandle, kind: Kind) -> ApiResult<()> {
+pub(crate) fn get_any(id: MlsrHandle) -> ApiResult<Arc<Entry>> {
+    lock()
+        .entries
+        .get(&id)
+        .cloned()
+        .ok_or_else(|| ApiError::new("invalid_handle", "unknown or released handle"))
+}
+fn remove(id: MlsrHandle, kind: Kind) -> ApiResult<Option<Arc<Entry>>> {
     if id == 0 {
-        return Ok(());
+        return Ok(None);
     }
     let entry = {
         let mut registry = lock();
@@ -178,9 +226,20 @@ pub(crate) fn release(id: MlsrHandle, kind: Kind) -> ApiResult<()> {
             return Err(ApiError {
                 code: "invalid_handle".into(),
                 message: "unknown, released, or wrong-kind handle".into(),
+                details: None,
             });
         }
         registry.entries.remove(&id).expect("validated handle")
+    };
+    Ok(Some(entry))
+}
+pub(crate) fn forget(id: MlsrHandle, kind: Kind) -> ApiResult<()> {
+    drop(remove(id, kind)?);
+    Ok(())
+}
+pub(crate) fn release(id: MlsrHandle, kind: Kind) -> ApiResult<()> {
+    let Some(entry) = remove(id, kind)? else {
+        return Ok(());
     };
     // In-flight API calls retain an Arc, but release still cancels and waits.
     // No registry mutex is held while native work or a consumer is running.
@@ -188,6 +247,25 @@ pub(crate) fn release(id: MlsrHandle, kind: Kind) -> ApiResult<()> {
         Entry::Engine(engine) => engine.shutdown().map_err(Into::into),
         Entry::Job(job) => {
             job.cancel_and_wait();
+            Ok(())
+        }
+        Entry::Tts(tts) => tts.close().map_err(Into::into),
+        Entry::Controller(controller) => controller.close().map_err(Into::into),
+        Entry::Speech(speech) => speech.dispose().map_err(Into::into),
+        Entry::Synthesis(job) => {
+            job.cancel();
+            while job.wait(std::time::Duration::from_millis(50)).is_none() {}
+            Ok(())
+        }
+        Entry::Stream(stream) => {
+            stream
+                .job
+                .cancel_with(mlsr::completion::CancelReason::ConsumerDropped);
+            while stream
+                .job
+                .wait(std::time::Duration::from_millis(50))
+                .is_none()
+            {}
             Ok(())
         }
         _ => Ok(()),

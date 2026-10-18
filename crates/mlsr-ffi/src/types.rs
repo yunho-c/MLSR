@@ -1,5 +1,8 @@
 //! Fixed-layout C values. Handles are registry IDs, never Rust addresses.
 
+mod sdk;
+pub use sdk::*;
+
 /// Opaque library-owned handle. Zero is null; IDs are never reused.
 pub type MlsrHandle = u64;
 /// Success, timeout/end, or failure. On failure read/release the error handle.
@@ -20,7 +23,11 @@ pub const MLSR_FEATURE_COREML: u32 = 2;
 /// Model ownership and transactional store API is available.
 pub const MLSR_FEATURE_MODEL_STORE: u32 = 4;
 /// Experimental QNN HTP backend is built for this target.
-pub const MLSR_FEATURE_QNN_HTP: u32 = 8;
+pub const MLSR_FEATURE_QNN_HTP: u32 = 32;
+/// Developer SDK with metadata schema v1 is available.
+pub const MLSR_FEATURE_DEVELOPER_SDK: u32 = 8;
+/// Apple native audio output is built for this target.
+pub const MLSR_FEATURE_APPLE_OUTPUT: u32 = 16;
 
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
 /// before asynchronous use. Output views live until their owning handle release.

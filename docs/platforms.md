@@ -4,10 +4,10 @@ Cross-platform support requires both a portable API and a working inference
 runtime on each target. Supertonic text-to-PCM synthesis is implemented through
 Core ML and qualified on macOS arm64, including the public C ABI and installed
 Dart/Go/Python synthesis packages and a Flutter playback example. The
-[POC qualification](poc-qualification.md) records the exact host, artifacts,
+[POC qualification](internal/poc-qualification.md) records the exact host, artifacts,
 timing boundaries, and remaining device/release gates.
 The [experimental QNN integration](qnn-qualification.md) additionally executes on
-Windows ARM64/X2 Elite. Its native adapter and lifecycle are validated; the
+Windows ARM64/X2 Elite. Its native adapter, headless developer SDK and lifecycle are validated; the
 Superfast preset's canonical numerical quality gate remains failed.
 
 | Target | Scaffold configuration | Validation |
@@ -17,7 +17,7 @@ Superfast preset's canonical numerical quality gate remains failed.
 | Linux x64, glibc | Native host builds; CI job configured | Awaiting CI run |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
 | Windows x64, MSVC Rust | Native host builds; CI job configured | All-target/all-feature Rust cross-check passed; native execution and CI run unverified |
-| Windows arm64, MSVC Rust | Optional QNN/ExecuTorch bridge; native C/Dart/Go/Python | Real X2 Elite SoC 88/HTP V81 execution, exact adapter replay, four SDK HTP profiles, bounded jobs/cancellation, native bindings and matching PCM; experimental model fails canonical screen |
+| Windows arm64, MSVC Rust | Optional QNN/ExecuTorch bridge; headless Rust/C/Dart/Go/Python SDK | Real X2 Elite SoC 88/HTP V81 execution, exact adapter replay, four QAIRT HTP profiles, lazy jobs/cancellation, model ownership, WAV/PCM parity and text plans; native speech output unavailable; experimental model fails canonical screen |
 | iOS arm64 / simulator | Core ML shared/static artifacts, minimum iOS 18 | Cross-compiled/linked locally; device execution and app packaging unqualified |
 | Android | Future runtime and target-specific packaging | Not implemented |
 | Browser / WebAssembly | Future dedicated binding and compatible runtime | Not implemented |

@@ -1,8 +1,10 @@
 # MLSR Speak
 
-A local Flutter player for the macOS Apple Silicon proof of concept. Write text,
+A local Flutter player and reader for the macOS Apple Silicon developer SDK. Write text,
 choose English or Korean and voice M1/F1, then speak, stop, or export completed
-speech as a mono Float32 WAV. Command-Enter speaks; Escape stops.
+speech as a mono Float32 WAV. Replace or enqueue a new script while reading;
+pause, change volume/rate, seek retained audio, and navigate sentences.
+Command-Enter speaks; Escape stops all queued speech.
 
 ## Run
 
@@ -24,7 +26,7 @@ flutter run -d macos
 The app opens `AppModels.supertonic3` automatically. Models, their original YAML
 manifest, voices and notices ship in the generated Flutter asset package. No
 model paths or setup dialog are required at runtime. The Dart native build
-hook builds and bundles MLSR with Core ML enabled. It resolves the active Xcode
+hook builds and bundles MLSR with Core ML and native Apple output enabled. It resolves the active Xcode
 SDK explicitly, tracks embedded YAML manifests as build inputs, and uses the
 same persistent Rust engine as the CLI and other language bindings. There are
 no model downloads in the app or build hook.
@@ -39,32 +41,41 @@ qualification remain separate work. See [model delivery](../../docs/model-delive
 
 ## Ownership and playback
 
-`SpeechController` owns one engine and job. Model loading, event polling, and
-native cleanup run in the Dart binding's adapter isolate. The UI keeps a small
-waveform history and writes audio incrementally to an owned temporary WAV.
-Completed exports create a new file; an existing destination is preserved.
-Cancelled partial files are removed, and app exit cleans up the engine and
-temporary directory.
+`DemoController` owns public `Tts` and `Speech` handles and bounded presentation
+subscriptions. It does not consume PCM, advance queues, schedule native buffers,
+or implement a playback clock. `FlutterMlsr.openTts` uses the same verified model
+delivery as the lower-level engine API. The shared Rust SDK owns replacement,
+queueing, cancellation, native Apple playback, bounded temporary retention,
+source-frame positions and final playback completion. The app's only custom
+native channel opens the macOS save panel.
 
-The separate Swift `PcmPlayer` uses AVAudioEngine on a serial queue. It bounds
-scheduled PCM to 22,050 frames (half a second), plus one pending native chunk.
-Dart awaits each enqueue, preserving backpressure through to the Rust job's
-bounded queue. Stop flushes scheduled audio before waiting for native inference
-to quiesce. Request epochs discard stale playback callbacks and synthesis
-results. Generation completion and actual playback completion are distinct.
+The reader uses original UTF-16 segment spans from `SpeechState`; alignment is
+segment-level, not word-level. Edits affect the next request, while the reader
+shows the immutable accepted text. Seek commits once at the end of a slider drag.
+Seeking a completed recording creates a new paused replay with a new request ID.
+The UI retains only active/queued handles and the latest displayed recording.
+
+Export calls `Tts.writeSpeech` for a completed recording, using the shared
+incremental WAV writer. It does not synthesize again or collect a full PCM array
+in Dart. Existing destinations are preserved; partial cancelled speech is not
+exportable. Closing the app joins native work and releases owned retention.
 
 ## Validate
 
 ```sh
 flutter analyze --no-pub
-flutter test test/wav_sink_test.dart --no-pub
+flutter test test/audio_clip_test.dart --no-pub
 flutter test integration_test/speak_test.dart -d macos --no-pub \
   --dart-define=MLSR_TEST_OUTPUT=/absolute/path/to/new-evidence-directory
 ```
 
 The integration test uses real synthesis and muted native playback. It checks
-UI heartbeats while loading/speaking, bounded playback, immediate stop/flush,
-reuse, playback completion, English/Korean WAV export, and native handle cleanup.
+UI heartbeats while loading/speaking, bounded retention, replacement/enqueue/stop,
+pause/rate/volume/seek/replay, original Unicode spans and sentence navigation,
+English/Korean WAV export, and native handle cleanup. UI observations of first
+retained PCM, first presented position and cancellation completion are reported
+separately; they do not measure acoustic onset or native flush latency. Those
+output-driver boundaries have separate [native tests](../../docs/internal/apple-output.md).
 It saves screenshots, paired audio, and a report into a **new** directory. These
 checks establish behavior on the tested machine, not audible listening quality
 or compatibility with every supported minimum OS. The root
@@ -76,7 +87,7 @@ streaming path into Application Support. This is an integration-test option;
 the ordinary app loads immutable bundled resources directly. Small portable
 delivery tests live in `bindings/flutter`. The separate downstream release check
 tests a relocated app with fresh data and denied access to developer files and
-the network; see [release qualification](../../docs/model-delivery-qualification.md)
+the network; see [release qualification](../../docs/internal/model-delivery-qualification.md)
 for evidence and reproduction commands.
 
 The example is Apache-2.0. Fraunces and Manrope are bundled under the SIL Open

@@ -6,10 +6,37 @@ import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 import 'bindings.g.dart' as native;
 
+part 'sdk_native.dart';
+
 class NativeFailure implements Exception {
   final String code;
   final String message;
-  const NativeFailure(this.code, this.message);
+  final String? stage, backend, category;
+  final int? requestId;
+  const NativeFailure(
+    this.code,
+    this.message, {
+    this.stage,
+    this.backend,
+    this.category,
+    this.requestId,
+  });
+  List<Object?> toMessage() => [
+    code,
+    message,
+    stage,
+    backend,
+    category,
+    requestId,
+  ];
+  factory NativeFailure.fromMessage(List values) => NativeFailure(
+    values[0] as String,
+    values[1] as String,
+    stage: values.length > 2 ? values[2] as String? : null,
+    backend: values.length > 3 ? values[3] as String? : null,
+    category: values.length > 4 ? values[4] as String? : null,
+    requestId: values.length > 5 ? values[5] as int? : null,
+  );
   @override
   String toString() => 'MLSR $code: $message';
 }
@@ -285,7 +312,7 @@ Object? nativeOperation(String operation, Map<String, Object?> args) {
         releaseNative('installation', args['installation'] as int);
         return null;
       default:
-        throw NativeFailure('invalid_operation', operation);
+        return sdkNativeOperation(operation, args);
     }
   });
 }
@@ -303,11 +330,7 @@ void adapterMain(SendPort responses) {
       );
       responses.send([id, result, null]);
     } on NativeFailure catch (error) {
-      responses.send([
-        id,
-        null,
-        [error.code, error.message],
-      ]);
+      responses.send([id, null, error.toMessage()]);
     } catch (error) {
       responses.send([
         id,

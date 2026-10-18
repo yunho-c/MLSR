@@ -8,7 +8,7 @@ six-model baseline; fused eight-step VE is opt-in, and fixed vocoders remain
 explicitly experimental.
 
 The compact, hashed evidence index is
-[`poc-summary.yaml`](../tests/fixtures/supertonic3/poc-summary.yaml). Raw reports,
+[`poc-summary.yaml`](../../tests/fixtures/supertonic3/poc-summary.yaml). Raw reports,
 audio, screenshots, traces, and failed attempts are retained under
 `~/.cache/mlsr/qualification/poc-v1/`. These are local qualification artifacts,
 not files downloaded by builds or committed model weights.
@@ -66,11 +66,11 @@ The single initialization sample cannot establish general startup latency.
 RSS is the child process's `/usr/bin/time -l` maximum, including Python and Core
 ML; it is not ANE memory. This is one machine/run without a guarantee of no
 unrelated system activity. The earlier per-variant comparison remains in
-[`variants-summary.yaml`](../tests/fixtures/supertonic3/variants-summary.yaml).
+[`variants-summary.yaml`](../../tests/fixtures/supertonic3/variants-summary.yaml).
 
 ## Flutter and release artifacts
 
-The [example](../examples/flutter_speak/README.md) keeps model work in the Dart
+The [example](../../examples/flutter_speak/README.md) keeps model work in the Dart
 adapter isolate and playback in a separate Swift AVAudioEngine adapter. Native
 playback schedules at most 22,050 frames plus one pending chunk. The final debug
 integration run observed 20,480 scheduled and 4,096 pending frames, a 46.18 ms
@@ -128,7 +128,7 @@ profiling model initialization and makes that exclusion explicit.
 ## Reproduce
 
 Prepare local pinned bundles/reference fixtures using the
-[model tools](../tools/supertonic3/README.md), then choose fresh output directories:
+[model tools](../../tools/supertonic3/README.md), then choose fresh output directories:
 
 ```sh
 python3 tools/dev.py check
@@ -143,7 +143,7 @@ python3 tools/dev.py benchmark --bundle /path/to/baseline-bundle \
   --output /path/to/new-benchmark
 ```
 
-See [development tools](../tools/README.md) for placement/trace commands and the
+See [development tools](../../tools/README.md) for placement/trace commands and the
 example README for release builds. No command creates a venv, upgrades global
 toolchains, clears OS caches, or downloads model weights during synthesis.
 

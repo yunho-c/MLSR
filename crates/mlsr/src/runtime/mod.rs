@@ -22,6 +22,16 @@ pub enum BackendKind {
     QnnHtp,
 }
 
+impl BackendKind {
+    /// Stable backend identifier used in model and SDK metadata.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::CoreMl => "coreml",
+            Self::QnnHtp => "qnn",
+        }
+    }
+}
+
 #[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]
 #[allow(unsafe_code)] // Audited scoped buffer copies live only in this module.
 mod coreml;

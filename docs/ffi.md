@@ -14,12 +14,18 @@ so app packagers can relocate the library and rewrite its load commands.
 NUL-terminated UTF-8 string valid while the library is loaded. These original
 queries are unchanged. Bindings check the ABI before interpreting layouts.
 `mlsr_features()` reports `MLSR_FEATURE_JOBS` (1), `MLSR_FEATURE_COREML` (2)
-on Apple builds with Core ML enabled, `MLSR_FEATURE_MODEL_STORE` (4), and
-`MLSR_FEATURE_QNN_HTP` (8) on Windows ARM64 with QNN enabled. Building the
+on Apple builds with Core ML enabled, `MLSR_FEATURE_MODEL_STORE` (4),
+`MLSR_FEATURE_DEVELOPER_SDK` (8), `MLSR_FEATURE_APPLE_OUTPUT` (16) on macOS with
+native output enabled, and `MLSR_FEATURE_QNN_HTP` (32) on Windows ARM64 with QNN enabled. Building the
 portable API does not supply a TTS backend. `compute_policy` selects `0` Core ML
 CPU, `1` Core ML CPU/Neural Engine, or `2` QNN HTP. ABI version and layouts remain
 unchanged. QNN accepts only execution variant `0` with its separately pinned
 Superfast manifest; Core ML's optimized variants cannot select QNN graphs.
+
+The QNN headless build reports mask 45. Rebuild experimental QNN consumers and
+their native library together: the earlier branch used bit 8 for QNN, before
+integrating the main branch's SDK capability. SDK and Apple output bits retain
+their main-branch values; no structure layout changes are required.
 
 All options and event/error views have fixed C layouts. Initialize options with
 `mlsr_engine_options_default` / `mlsr_job_options_default`; their `struct_size`
@@ -29,7 +35,7 @@ and entry points or an ABI change, rather than reading past an older struct.
 
 `execution_variant` selects `0` baseline, `1` fused eight-step L128 VE with
 fallback, or `2` fused VE plus **experimental** exact L30/L32 vocoders. Value 2
-changes PCM and has no perceptual qualification. See [execution variants](execution-variants.md).
+changes PCM and has no perceptual qualification. See [execution variants](internal/execution-variants.md).
 
 ## Handles and ownership
 

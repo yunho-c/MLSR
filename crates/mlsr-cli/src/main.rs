@@ -114,26 +114,11 @@ fn input_text(args: &Synthesize) -> Result<String> {
 }
 
 fn write_wav(path: &Path, samples: &[f32], sample_rate: u32, channels: u16) -> Result<()> {
-    let parent = path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or(Path::new("."));
-    // Write/finalize a temporary in the destination directory, then publish
-    // without clobbering. Failed encoding never leaves a partial output WAV.
-    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    let spec = hound::WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample: 32,
-        sample_format: hound::SampleFormat::Float,
-    };
-    let mut writer = hound::WavWriter::new(temporary.as_file_mut(), spec)?;
-    for &sample in samples {
-        writer.write_sample(sample)?;
-    }
-    writer.finalize()?;
-    temporary.as_file().sync_all()?;
-    temporary.persist_noclobber(path)?;
+    let format = mlsr::audio::AudioFormat::new(sample_rate, channels)?;
+    let frames = (samples.len() / usize::from(channels)) as u64;
+    let mut writer = mlsr::audio::WavWriter::create(path, format, frames)?;
+    writer.write_samples(samples)?;
+    writer.finish()?;
     Ok(())
 }
 

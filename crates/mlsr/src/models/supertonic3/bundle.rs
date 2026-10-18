@@ -126,6 +126,20 @@ impl BundleManifest {
             BackendKind::CoreMl
         }
     }
+    /// Exact source revision declared by this manifest.
+    pub fn revision(&self) -> &str {
+        &self.parsed.source.revision
+    }
+    /// Voice declarations without reading payloads or loading inference graphs.
+    pub fn voice_catalog(&self) -> crate::voice::VoiceCatalog {
+        crate::voice::VoiceCatalog::supertonic3(
+            self.id(),
+            self.revision(),
+            self.sha256(),
+            self.backend(),
+            crate::voice::VoiceReadiness::CatalogOnly,
+        )
+    }
     /// Every payload file in the validated contract.
     pub fn files(&self) -> impl Iterator<Item = &LockedFile> {
         self.parsed.artifacts.values().flat_map(|a| &a.files)
@@ -159,6 +173,7 @@ pub struct Bundle {
     indexer: Vec<i32>,
     voices: BTreeMap<String, Voice>,
     manifest_sha256: String,
+    revision: String,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -272,6 +287,7 @@ impl Bundle {
             indexer,
             voices,
             manifest_sha256: description.sha256.clone(),
+            revision: manifest.source.revision.clone(),
         })
     }
     /// Bundle identifier recorded by the manifest.
@@ -285,6 +301,16 @@ impl Bundle {
     /// SHA-256 of the original manifest bytes used to verify this bundle.
     pub fn manifest_sha256(&self) -> &str {
         &self.manifest_sha256
+    }
+    /// Verified local assets, without claiming a loaded or available runtime.
+    pub fn voice_catalog(&self) -> crate::voice::VoiceCatalog {
+        crate::voice::VoiceCatalog::supertonic3(
+            self.id(),
+            &self.revision,
+            self.manifest_sha256(),
+            self.backend(),
+            crate::voice::VoiceReadiness::AssetsVerified,
+        )
     }
     /// Canonical local bundle directory.
     pub fn root(&self) -> &Path {

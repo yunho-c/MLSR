@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "result": "pass",
+  "host": {
+    "machine": "arm64",
+    "macos": "27.0.1",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "native_run_provenance": {
+    "sources": {
+      "Cargo.lock": "495f06e8e746f030b171443fe918066dfbf0c25f46f6a320b6c6fd5c11e0f6ed",
+      "crates/mlsr/src/retention.rs": "ef2df34a9020a3555d3abf774f8661f9c1a48a10533231dea4e129287d7f1495",
+      "crates/mlsr/src/speech/mod.rs": "33ff4591e88a84f0bdb21088dd4aae459dde2a0631d7c5dcc470721f2b651cdc",
+      "crates/mlsr/src/speech/worker.rs": "6f7f348db6c0ed830cdd0ff0e82bb6e53a8807ebbaf1ebb57e58d11b992c3c21",
+      "crates/mlsr/src/speech/tests.rs": "ac990182a10691528b782090244e7fc8d379646d1fed75f993f186590e564f9d",
+      "crates/mlsr/src/request.rs": "764605e16aafe67fd830140459c2acd56d43577560087078b1a86a00c6ed6414"
+    }
+  },
+  "reader": {
+    "completed_replay": "new request identity; shared retained PCM; paused rebase and seek to zero",
+    "muted": true,
+    "navigation": "new request with original sentence/segment IDs and seed offsets",
+    "original_frames": 160493,
+    "paused_lookahead_limit_frames": 8192,
+    "paused_seek_frame": 4096,
+    "result": "pass",
+    "retained_suffix": "every Float32 sample bit equals independently rendered original-plan suffix",
+    "retention_bytes_before_replay": 359296,
+    "retention_final": {
+      "live_stores": 0,
+      "peak_bytes": 359296,
+      "peak_stores": 2,
+      "used_bytes": 0
+    },
+    "seek_while_playing_frame": 1024,
+    "suffix_frames": 89824
+  },
+  "validation": {
+    "portable_speech_tests": 15,
+    "workspace_all_features_all_targets": "75 core, 7 CLI and 4 FFI passed; 10 external/native core tests skipped in ordinary suite",
+    "clippy": "workspace all-features/all-targets -D warnings passed",
+    "msrv_1_88": "workspace check plus final core all-features/all-targets check passed",
+    "windows_compile": "final core all-features/all-targets check passed"
+  },
+  "external_logs": "/Users/yunhocho/.cache/mlsr/qualification/developer-api-v0/step6-reader-v2",
+  "prior_attempt": {
+    "path": "step6-reader-v1",
+    "result": "pass",
+    "scope": "paused seek, navigation, exact retention and replay; v2 adds seek while playing"
+  }
+}

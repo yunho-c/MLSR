@@ -11,7 +11,7 @@ The Cargo workspace shares version metadata, a lockfile, and build outputs.
 `mlsr` and `mlsr-ffi` are the default members; `tools/codegen` is a development
 tool and is not a runtime dependency. Portable model loading uses Serde, YAML/JSON
 parsers, and SHA-256. JSON reads the upstream tokenizer/configuration/voice assets;
-model manifests and qualification reports remain YAML. The optional Apple-only
+model manifests use YAML. The optional Apple-only
 `coreml` feature adds pinned cidre bindings. The portable frontend and noise
 preparation use pinned Unicode normalization and random-generation crates.
 The optional Windows ARM64 `qnn` feature links a separately prepared narrow C++
@@ -29,15 +29,19 @@ is introduced; Rust owns the same frontend, noise, duration, flow and job policy
 | `text` | Text processing shared across supported models |
 | `models` | Model-specific tokenization, tensor preparation, inference sequence, and voice formats |
 | `runtime` | Executing networks and integrating optional platform backends |
+| `tts`, `request`, `voice` | Developer facade, immutable requests, voice discovery and resolution |
+| `synthesis`, `completion` | Shared inference scheduling, lazy PCM consumption and terminal outcomes |
+| `speech`, `output`, `retention` | Speech controllers, output contracts, reader timelines and retained audio |
 
 [Supertonic text-to-PCM synthesis](supertonic3.md) is implemented, including local
 asset verification, frontend, duration/bucket planning, model sequencing, and
-owned audio. `Engine` exposes a synchronous Rust interface. Its
-[Core ML](coreml-runtime.md) or [QNN session](qnn-runtime.md) owns native models/tensors on one worker;
+owned audio. `Engine` exposes synchronous synthesis and lower-level jobs;
+`Tts` adds the shared developer facade and request scheduler. The
+[Core ML session](coreml-runtime.md) owns native models/tensors on one worker;
 native bindings stay private. The pinned reference tools qualify every input,
 intermediate, shape decision, and PCM result from original text with saved noise.
-[Jobs, cancellation and long-text segmentation](jobs.md) run on a dedicated
-orchestration worker with bounded pull output. The [synthesis C ABI](ffi.md)
+[Jobs, cancellation and long-text segmentation](../jobs.md) run on a dedicated
+orchestration worker with bounded pull output. The [synthesis C ABI](../ffi.md)
 exposes that contract through checked handles, owned events and explicit release.
 
 Keep model architecture separate from the inference backend: a model pipeline
@@ -59,14 +63,16 @@ isolate and exposes a pull-driven stream; Go provides context cancellation and
 PCM into language-owned storage and preserves Rust's bounded output.
 
 Text normalization, model policy, inference scheduling, and synthesis stay in
-Rust. Host-language integrations should not reimplement them. Audio playback is
-a separate concern from producing PCM and is not a dependency of the core.
+Rust. Host-language integrations should not reimplement them. Native playback
+is optional through `mlsr-playback`; headless builds omit platform output
+dependencies.
 
-The [Flutter example](../examples/flutter_speak/README.md) demonstrates that
-boundary: Dart consumes the same job stream, a separate Swift AVAudioEngine
-adapter bounds and plays queued PCM, and WAV output is written incrementally.
-Stop flushes host playback before joining inference. Request epochs reject stale
-results; model selection and synthesis still belong to Rust.
+The [Flutter example](../../examples/flutter_speak/README.md) demonstrates that
+boundary: its Dart `DemoController` owns and observes public `Tts`/`Speech`
+handles. Rust owns speech scheduling, native Apple playback, retained audio and
+WAV serialization. The app's custom native channel only opens the save panel.
+Cancellation flushes playback independently of in-flight inference, and playback
+epochs reject stale callbacks.
 
 ## Assets and distribution
 
@@ -83,12 +89,13 @@ and capture summaries live in Git; model bundles, complete tensor captures, and
 WAVs live in a user-selected external cache. These references establish porting
 correctness, not broad speech-quality or performance qualification.
 
-Native releases will need an explicit OS/architecture/backend matrix, compatible
-library dependencies, and tests of installed packages. The present scaffold only
-has local builds, a Python wrapper wheel, and configurable external native
-libraries. It does not publish packages or ship prebuilt runtime bundles.
+The [platform matrix](../platforms.md) separates build support from tested runtime
+behavior. Installed C/Dart/Go/Python consumers and a relocated Flutter release
+have [qualification evidence](developer-api-qualification.md) on macOS Apple
+Silicon. Packages remain development packages with separately built native
+libraries; published native distributions are future work.
 
 `mlsr-cli` verifies local bundles and synthesizes complete Float32 WAV files
-through the public Rust engine. It owns argument parsing and WAV serialization;
-neither is a dependency of the `mlsr` library. No Python code executes in the
-production synthesis path.
+through the public Rust engine. It owns argument parsing and uses the shared
+Rust WAV writer in `mlsr`. No Python code executes in the production synthesis
+path.

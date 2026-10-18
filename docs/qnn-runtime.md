@@ -89,12 +89,13 @@ Cargo. The bridge and backend DLLs must remain loadable for every native host.
 Python uses `MLSR_DLL_DIRECTORIES` from this helper to register the explicit
 dependency directories with Windows' DLL loader.
 Select `ComputePolicy::QnnHtp`, CLI `--compute-policy qnn-htp`, or C ABI compute
-policy `2`. Feature bit `8` (`MLSR_FEATURE_QNN_HTP`) reports the compiled QNN capability. The ABI layout
+policy `2`. Feature bit `32` (`MLSR_FEATURE_QNN_HTP`) reports the compiled QNN capability. The ABI layout
 and default Core ML selection are unchanged.
 
-The model ownership/store API uses feature bit `4`. Rebuild native libraries and
-bindings together when updating from the earlier experimental QNN branch, which
-used that bit for QNN before integrating model delivery.
+The model ownership/store API uses feature bit `4`, developer SDK bit `8`, and
+Apple output bit `16`. A QNN headless build reports mask `45`. Rebuild native
+libraries and bindings together when updating the experimental branch: QNN used
+bit `4` before model delivery and bit `8` before this SDK integration.
 
 For leased models, explicitly load
 [`catalog-qnn-experimental.yaml`](../model-manifests/catalog-qnn-experimental.yaml)
@@ -106,6 +107,16 @@ to `ModelHandle::open` or a `ModelStore` installation, then call
 `Engine.fromModel` with `ComputePolicy.qnnHtp`. Engine ownership keeps the store
 lease until native shutdown completes. The builtin qualified catalog still
 contains only Core ML; the Flutter resource plugin remains macOS-only.
+
+The headless developer SDK uses the same explicit policy: Rust `Tts::open`, C
+`mlsr_tts_from_model`, Dart `Tts.fromModel`, Python `Tts.from_model`, and Go
+`TTSFromModel`. Manifest/path entry points (`Tts.open`, Python `Tts`, Go `OpenTTS`,
+and C `mlsr_tts_open`) also accept it. Use headless output for lazy PCM jobs,
+bounded rendering, WAV export and original-text plans. Loaded voices report
+`backend: qnn` and an empty `qualified_languages` list. Eight steps are required
+at admission; fixed latent/duration limits remain typed synthesis failures.
+Closing the facade joins work and releases its model lease; caller-owned PCM
+survives closure. Native Windows speech output returns `unsupported_capability`.
 
 One Rust worker owns persistent ExecuTorch modules, their contexts, typed host
 allocations and cached tensor handles. The narrow C++ bridge validates PTE
@@ -137,7 +148,8 @@ quality and listening qualification pass.
 
 The job contract remains [the current Rust contract](jobs.md): one active job,
 bounded output, UTF-8 byte source offsets and cancellation independent of the
-inference queue. Playback and the future `Tts`/`Speech` facade are separate.
+inference queue. The shared `Tts` facade adds a bounded FIFO and lazy requests
+above that engine; speech output remains a separate capability.
 
 ## Reproduce device checks
 
@@ -167,8 +179,20 @@ saved replay inputs and checks outputs against the reference.
 
 For all bindings, supply installed **ARM64** Python, Go, Dart 3.11+ and a compatible
 ARM64 LLVM-MinGW compiler. The script builds the shared ABI, tests C and each
-binding sequentially, exercises Dart's native-asset hook, then compares EN/KO
-M1/F1 PCM bytes. It does not download model weights, the SDK or toolchains.
+binding sequentially, exercises Dart's native-asset hook and leased SDK model
+disposal, then compares EN/KO M1/F1 PCM bytes across the legacy and headless SDK
+surfaces. It also runs the three public SDK export examples and checks that
+Windows native speech reports `unsupported_capability`. It does not download
+model weights, the SDK or toolchains.
+
+The opt-in Rust SDK test checks PCM/WAV parity, lazy cancellation, fixed-shape
+failure context and recovery, original segment seeds on resumed plans, and
+model lease release at close:
+
+```powershell
+$env:MLSR_QNN_TEST_BUNDLE = $bundle
+cargo test --locked --release -p mlsr --features qnn --test qnn_sdk -- --ignored --nocapture
+```
 
 ```powershell
 ./tools/check_qnn_bindings.ps1 -Bundle $bundle -OutputDirectory ignore/qnn-bindings-new -Python C:/tools/python-arm64/python.exe -Go C:/tools/go-arm64/bin/go.exe -Dart C:/tools/dart-arm64/bin/dart.exe -CCompiler C:/tools/llvm-mingw/bin/aarch64-w64-mingw32-clang.exe

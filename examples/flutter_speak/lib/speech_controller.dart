@@ -1,66 +1,96 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_app_models/app_models.dart';
-import 'pcm_player.dart';
-import 'wav_sink.dart';
+import 'file_dialog.dart';
 
-/// Owns one persistent engine and one generation. Epoch checks reject events
-/// from stopped/replaced requests at every await boundary before publication.
-class SpeechController extends ChangeNotifier {
-  final PcmPlayer player;
+class _Presentation {
+  final Speech speech;
+  final String original;
+  SpeechState? state;
+  StreamSubscription<SpeechState>? subscription;
+  _Presentation(this.speech, this.original);
+  Future<void> close() async {
+    await subscription?.cancel();
+    await speech.dispose();
+  }
+}
+
+/// UI ownership and presentation only. Rust chooses admission, queue order,
+/// replacement, playback completion, retention and navigation. No PCM crosses
+/// Flutter and this class never advances a queue or implements a playback clock.
+class DemoController extends ChangeNotifier {
   final bool muted;
-  Engine? _engine;
-  Job? _job;
-  Directory? _temporary;
-  Future<void>? _work;
-  Future<void>? _closing;
-  Future<void>? _loading;
+  Tts? _tts;
+  final Map<int, _Presentation> _presentations = {};
+  final Set<Future<void>> _retiring = {};
+  _Presentation? _current;
+  Future<void>? _loading, _closing;
   bool _closed = false;
-  bool _starting = false;
-  int _epoch = 0;
-  bool loading = false,
-      ready = false,
-      speaking = false,
-      generating = false,
-      exporting = false;
-  int generatedFrames = 0, predictedFrames = 0, playedFrames = 0;
+  bool loading = false, ready = false, exporting = false;
   String? error;
-  String status = 'Getting your voices ready…';
-  File? wav;
-  final List<double> levels = [];
-  Timer? _playbackTimer;
-  bool _readingPlayback = false;
-  SpeechController({PcmPlayer? player, this.muted = false})
-    : player = player ?? PcmPlayer();
+  String _loadStatus = 'Getting your voices ready…';
+  double playbackRate = 1, volume = 1;
+  DemoController({this.muted = false});
+
+  Speech? get speech => _current?.speech;
+  SpeechState? get state => _current?.state;
+  String get original => _current?.original ?? '';
+  bool get speaking => _current != null && state?.completion == null;
+  bool get paused => state?.playback == PlaybackPhase.paused;
+  bool get generating =>
+      speaking &&
+      state?.synthesis != SynthesisPhase.generated &&
+      state?.synthesis != SynthesisPhase.terminal;
+  bool get canExport => state?.completion?.kind == OutcomeKind.completed;
+  int get generatedFrames => state?.bufferedUntilFrame ?? 0;
+  int get playedFrames => state?.positionFrame ?? 0;
+  int get pendingCount => _presentations.values
+      .where(
+        (entry) =>
+            !identical(entry, _current) && entry.state?.completion == null,
+      )
+      .length;
+  String get status {
+    if (loading || !ready) return _loadStatus;
+    if (_current == null) return 'Ready when you are';
+    return switch (state?.playback) {
+      null || PlaybackPhase.queued => 'Waiting to speak…',
+      PlaybackPhase.buffering => 'Finding the next words…',
+      PlaybackPhase.playing => 'Reading aloud',
+      PlaybackPhase.draining => 'Finishing playback',
+      PlaybackPhase.paused => 'Paused',
+      PlaybackPhase.ended => 'All spoken. Yours to keep.',
+      PlaybackPhase.stopped => 'Stopped',
+      PlaybackPhase.failed => 'Speech interrupted',
+    };
+  }
 
   void _update() {
     if (!_closed) notifyListeners();
   }
 
+  void _failure(Object failure) {
+    error = failure.toString();
+    _update();
+  }
+
   Future<void> load({ModelDelivery delivery = ModelDelivery.automatic}) {
     if (_closed) return Future.error(StateError('Player is closed'));
+    if (ready) return Future.value();
     return _loading ??= _load(delivery).whenComplete(() => _loading = null);
   }
 
   Future<void> _load(ModelDelivery delivery) async {
     loading = true;
     error = null;
-    status = 'Loading your voices…';
     _update();
     try {
-      await stop();
-      ready = false;
-      final old = _engine;
-      _engine = null;
-      await old?.dispose();
-      final engine = await FlutterMlsr.open(
+      final tts = await FlutterMlsr.openTts(
         model: AppModels.supertonic3,
         delivery: delivery,
         onProgress: (progress) {
-          status = switch (progress.stage) {
+          _loadStatus = switch (progress.stage) {
             ModelLoadStage.locating => 'Finding your voices…',
             ModelLoadStage.waiting => 'Waiting for voices…',
             ModelLoadStage.copying =>
@@ -74,197 +104,197 @@ class SpeechController extends ChangeNotifier {
         },
       );
       if (_closed) {
-        await engine.dispose();
+        await tts.dispose();
         return;
       }
-      _engine = engine;
-      _temporary ??= await Directory.systemTemp.createTemp('mlsr-speak-');
+      _tts = tts;
       ready = true;
-      status = 'Ready when you are';
     } catch (failure) {
       error = failure.toString();
-      status = 'Could not load voices';
+      _loadStatus = 'Could not load voices';
     } finally {
       loading = false;
       _update();
     }
   }
 
-  Future<void> speak(String text, String language, String voice) async {
-    if (!ready ||
-        loading ||
-        _closed ||
-        _starting ||
-        exporting ||
-        text.trim().isEmpty) {
-      return;
-    }
-    _starting = true;
-    try {
-      await stop();
-      if (_closed || !ready) return;
-      final epoch = ++_epoch;
-      speaking = true;
-      generating = true;
-      error = null;
-      generatedFrames = 0;
-      predictedFrames = 0;
-      playedFrames = 0;
-      levels.clear();
-      if (wav != null) {
-        await wav!.delete();
-        wav = null;
-      }
-      if (epoch != _epoch || _closed) return;
-      status = 'Finding the first words…';
-      _update();
-      _work = _run(epoch, text, language, voice);
-      await _work;
-    } finally {
-      _starting = false;
-    }
-  }
+  SpeechOptions _options({bool paused = false}) => SpeechOptions(
+    volume: muted ? 0 : volume,
+    playbackRate: playbackRate,
+    paused: paused,
+  );
 
-  Future<void> _run(
-    int epoch,
+  /// Admission is synchronous: a rejected replacement preserves the current
+  /// native request and its presentation. Accepted enqueue stays native-owned.
+  Speech? speak(
     String text,
     String language,
-    String voice,
-  ) async {
-    WavSink? sink;
-    Job? job;
-    bool saved = false;
+    String voice, {
+    SpeakMode mode = SpeakMode.replace,
+    bool paused = false,
+  }) {
+    if (!ready || loading || exporting || _closed || text.trim().isEmpty) {
+      return null;
+    }
     try {
-      await player.begin(epoch, muted: muted);
-      if (epoch != _epoch || _closed) return;
-      sink = await WavSink.create(_temporary!, epoch);
-      if (epoch != _epoch || _closed) return;
-      job = await _engine!.start(text, language: language, voice: voice);
-      if (epoch != _epoch || _closed) {
-        job.cancel();
-        return;
-      }
-      _job = job;
-      _playbackTimer = Timer.periodic(
-        const Duration(milliseconds: 100),
-        (_) => _readPlayback(epoch),
+      final next = _tts!.speak(
+        text,
+        request: RequestOptions(locale: language, voice: 'supertonic3:$voice'),
+        options: _options(paused: paused),
+        mode: mode,
       );
-      await for (final event in job.events) {
-        if (epoch != _epoch || _closed) break;
-        switch (event.kind) {
-          case EventKind.predicted:
-            predictedFrames += event.predictedFrames;
-          case EventKind.audio:
-            await sink.add(event.samples);
-            if (epoch != _epoch || _closed) break;
-            await player.enqueue(epoch, event.samples);
-            if (epoch != _epoch || _closed) break;
-            generatedFrames += event.frames;
-            var energy = 0.0;
-            for (final value in event.samples) {
-              energy += value * value;
-            }
-            levels.add(math.sqrt(energy / event.samples.length).clamp(0, 1));
-            if (levels.length > 90) levels.removeAt(0);
-            status = 'Reading aloud';
-          case EventKind.completed:
-            generating = false;
-            final file = await sink.finish();
-            if (epoch == _epoch && !_closed) {
-              wav = file;
-              saved = true;
-              status = 'Finishing playback';
-            }
-          case EventKind.failed:
-            throw event.error!;
-          case EventKind.cancelled:
-            return;
+      if (mode == SpeakMode.replace) {
+        for (final old in _presentations.values.toList()) {
+          _retire(old);
+        }
+      }
+      error = null;
+      _observe(next, text, select: mode == SpeakMode.replace || !speaking);
+      return next;
+    } catch (failure) {
+      _failure(failure);
+      return null;
+    }
+  }
+
+  void _observe(Speech next, String original, {bool select = true}) {
+    final entry = _Presentation(next, original);
+    _presentations[next.id] = entry;
+    if (select) _select(entry);
+    entry.subscription = next.states.listen(
+      (snapshot) {
+        if (_closed || !_presentations.containsKey(next.id)) return;
+        entry.state = snapshot;
+        // State from the native controller determines which queued request is
+        // active. This observer does not start, stop, or advance queued work.
+        if (snapshot.playback != PlaybackPhase.queued &&
+            snapshot.completion == null &&
+            !identical(entry, _current)) {
+          _select(entry);
+        }
+        if (identical(entry, _current)) {
+          if (snapshot.completion?.failure case final failure?) {
+            error = failure.message;
+          }
+        } else if (snapshot.completion != null) {
+          _retire(entry);
         }
         _update();
-      }
-      if (epoch != _epoch || _closed) return;
-      await player.finish(epoch);
-      if (epoch != _epoch || _closed) return;
-      playedFrames = generatedFrames;
-      status = 'All spoken. Yours to keep.';
-    } catch (failure) {
-      if (epoch == _epoch && !_closed) {
-        error = failure.toString();
-        status = 'Speech interrupted';
-        await player.stop(epoch);
-      }
-    } finally {
-      await job?.dispose();
-      if (!saved) await sink?.discard();
-      if (epoch == _epoch) {
-        _job = null;
-        speaking = false;
-        generating = false;
-        _playbackTimer?.cancel();
-        _update();
-      }
-    }
+      },
+      onError: (Object failure) {
+        if (identical(entry, _current)) _failure(failure);
+      },
+    );
+    _update();
   }
 
-  Future<void> _readPlayback(int epoch) async {
-    if (_readingPlayback) return;
-    _readingPlayback = true;
-    try {
-      final value = await player.state();
-      if (epoch == _epoch && !_closed && value['epoch'] == epoch) {
-        playedFrames = value['playedFrames'] as int;
-        _update();
-      }
-    } catch (failure) {
-      if (epoch == _epoch && !_closed) {
-        error = failure.toString();
-        _update();
-      }
-    } finally {
-      _readingPlayback = false;
-    }
+  void _select(_Presentation entry) {
+    final old = _current;
+    _current = entry;
+    if (old != null && old.state?.completion != null) _retire(old);
   }
 
-  /// Flush playback before waiting for inference to finish. Awaiting this method
-  /// also joins the previous job and file writer before a new request may start.
+  void _retire(_Presentation entry) {
+    if (_presentations.remove(entry.speech.id) == null) return;
+    if (identical(entry, _current)) _current = null;
+    late final Future<void> work;
+    work = entry
+        .close()
+        .catchError((Object failure) {
+          if (!_closed) _failure(failure);
+        })
+        .whenComplete(() => _retiring.remove(work));
+    _retiring.add(work);
+  }
+
   Future<void> stop() async {
-    final previous = _epoch++;
-    final stopped = _epoch;
-    _playbackTimer?.cancel();
-    _job?.cancel();
-    final work = _work;
+    final entries = _presentations.values.toList();
+    for (final entry in entries) {
+      entry.speech.cancel();
+    }
+    await Future.wait(
+      entries.map((entry) async {
+        try {
+          await entry.speech.done;
+        } catch (failure) {
+          _failure(failure);
+        }
+      }),
+    );
+  }
+
+  void _control(void Function(Speech) action) {
+    final current = speech;
+    if (current == null || _closed) return;
     try {
-      await player.stop(previous);
-    } finally {
-      await work;
-    }
-    if (identical(work, _work)) {
-      _work = null;
-      _job = null;
-    }
-    if (!_closed && _epoch == stopped) {
-      speaking = false;
-      generating = false;
-      if (ready) status = 'Stopped';
-      _update();
+      action(current);
+    } catch (failure) {
+      _failure(failure);
     }
   }
 
-  Future<void> exportTo(String path) async {
-    final file = wav;
-    if (file == null) throw StateError('No completed speech to export');
-    await WavSink.export(file, path);
+  void togglePause() => _control((current) {
+    if (canExport) {
+      final next = current.replayFrom(0, options: _options());
+      final text = original;
+      _retire(_current!);
+      _observe(next, text);
+    } else if (paused) {
+      current.resume();
+    } else {
+      current.pause();
+    }
+  });
+  void setRate(double value) {
+    _control((current) {
+      if (speaking) current.setPlaybackRate(value);
+    });
+    playbackRate = value;
+    _update();
+  }
+
+  void setVolume(double value) {
+    _control((current) {
+      if (speaking) current.setVolume(muted ? 0 : value);
+    });
+    volume = value;
+    _update();
+  }
+
+  void seek(int frame) => _control((current) {
+    if (canExport) {
+      final next = current.replayFrom(frame, options: _options(paused: true));
+      final text = original;
+      _retire(_current!);
+      _observe(next, text);
+    } else {
+      current.seek(frame);
+    }
+  });
+  void navigate({required bool next}) => _control((current) {
+    final result = next ? current.nextSentence() : current.previousSentence();
+    if (result.speech case final replacement?) {
+      final text = original;
+      _retire(_current!);
+      _observe(replacement, text);
+    }
+  });
+
+  Future<TtsState> engineState() => _tts!.snapshot();
+  Future<WavFile> exportTo(String path) {
+    if (!canExport) throw StateError('No completed speech to export');
+    return _tts!.writeSpeech(speech!, path);
   }
 
   Future<void> export() async {
-    if (exporting || wav == null) return;
+    if (exporting || !canExport) return;
     exporting = true;
     _update();
     try {
-      final path = await player.destination();
-      if (path != null) await exportTo(path);
+      final path = await FileDialog.destination();
+      if (path != null && !_closed) await exportTo(path);
     } catch (failure) {
-      error = failure.toString();
+      _failure(failure);
     } finally {
       exporting = false;
       _update();
@@ -275,10 +305,12 @@ class SpeechController extends ChangeNotifier {
   Future<void> _close() async {
     _closed = true;
     await _loading;
-    await stop();
-    await _engine?.dispose();
-    _engine = null;
-    await _temporary?.delete(recursive: true);
-    _temporary = null;
+    await _tts?.dispose();
+    for (final entry in _presentations.values.toList()) {
+      _retire(entry);
+    }
+    await Future.wait(_retiring.toList());
+    _tts = null;
+    ready = false;
   }
 }

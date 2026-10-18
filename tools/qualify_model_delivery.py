@@ -120,7 +120,7 @@ def main():
                 "-p",
                 "mlsr-ffi",
                 "--features",
-                "coreml",
+                "coreml,apple-output",
             ],
         )
         run("cli-build", ["cargo", "build", "--locked", "--release", "-p", "mlsr-cli"])
@@ -143,6 +143,7 @@ def main():
         )
         pubspec["hooks"]["user_defines"]["mlsr"] = {
             "coreml": True,
+            "apple-output": True,
             "native-library": str(library),
         }
         pubspec_path.write_text(yaml.safe_dump(pubspec, sort_keys=False))
@@ -156,6 +157,8 @@ def main():
                     "id": "supertonic3-coreml-int4-v1",
                     "dart_name": "supertonic3",
                     "source": str(bundle),
+                    "manifest": str(ROOT / "model-manifests/supertonic3-coreml.yaml"),
+                    "platforms": ["macos-arm64"],
                 }
             ],
         }
@@ -266,10 +269,14 @@ def main():
         ]
         if not all(p.is_file() for p in forbidden):
             raise RuntimeError("denial probes require existing developer files")
-        expected_wavs = {
-            "hello": "2e531ccb505d74a524338131a424f61fba853efcbffd2dacaee380b0112245d3",
-            "korean": "cb75390773f1248a1eb21f9634e935d0c11aa5e075ba45e599f3a54f813c16a5",
+        # Original POC PCM payloads, extracted from the previously qualified
+        # WAVs after verifying their full-file hashes (documented in the report).
+        # WAV serialization now belongs to Rust and its header differs.
+        expected_pcm = {
+            "hello": "1a4e3d62292e843bed979c680e7227b7d35f677770c9aea8ea138d3aee83ae3d",
+            "korean": "e73fe4ec4fccc0aaefdbbc0d32a0a10cf29f14b02f20fceb964e844fdbfcd8fb",
         }
+        report["expected_pcm_sha256"] = expected_pcm
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen()
@@ -355,12 +362,12 @@ def main():
                     raise RuntimeError(
                         "repeat launch did not reuse the installed version"
                     )
-                for name, expected in expected_wavs.items():
-                    if receipt["outputs"][name]["wav_sha256"] != expected:
+                for name, expected in expected_pcm.items():
+                    if receipt["outputs"][name]["pcm_sha256"] != expected:
                         raise RuntimeError(
                             f"{phase}: {name} differs from the qualified POC output"
                         )
-                if receipt["controller_wav_sha256"] != expected_wavs["hello"]:
+                if receipt["controller_pcm_sha256"] != expected_pcm["hello"]:
                     raise RuntimeError("ordinary release controller PCM changed")
                 expected_files = 29 if phase == "installed_first" else 0
                 if receipt["store_after"]["files"] != expected_files:

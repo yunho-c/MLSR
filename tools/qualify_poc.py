@@ -297,7 +297,7 @@ def main():
                 )
                 run("flutter", "pub", "get", "--enforce-lockfile", cwd=app)
                 run("flutter", "analyze", "--no-pub", cwd=app)
-                run("flutter", "test", "test/wav_sink_test.dart", "--no-pub", cwd=app)
+                run("flutter", "test", "test/audio_clip_test.dart", "--no-pub", cwd=app)
                 run(
                     "flutter",
                     "test",

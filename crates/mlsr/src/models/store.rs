@@ -68,7 +68,7 @@ pub struct ModelHandle(Arc<ModelData>);
 struct ModelData {
     bundle: Bundle,
     // Never duplicate this File: all clones share one lock's lifetime.
-    _lease: Option<File>,
+    _lease: Option<VersionLock>,
 }
 impl ModelHandle {
     /// Verify a located, immutable app-bundled directory without copying it.
@@ -82,7 +82,7 @@ impl ModelHandle {
             _lease: None,
         }))
     }
-    fn leased(bundle: Bundle, lease: File) -> Self {
+    fn leased(bundle: Bundle, lease: VersionLock) -> Self {
         Self(Arc::new(ModelData {
             bundle,
             _lease: Some(lease),
@@ -211,7 +211,7 @@ pub struct Installation {
     staging: tempfile::TempDir,
     paths: Paths,
     descriptor: ModelDescriptor,
-    _install_lock: File,
+    _install_lock: VersionLock,
 }
 impl Installation {
     /// Private staging directory for bounded platform-native streaming/copying.
@@ -327,7 +327,22 @@ fn inventory(
     }
     Ok(())
 }
-fn lock(path: &Path, exclusive: bool, busy: StoreErrorKind) -> Result<File> {
+// Closing a descriptor alone can leave flock held by a descriptor inherited
+// during a concurrent fork, even when CLOEXEC will close it at exec. Release the
+// lock at the end of its MLSR owner lifetime, before closing the descriptor.
+#[derive(Debug)]
+struct VersionLock {
+    file: File,
+}
+impl Drop for VersionLock {
+    fn drop(&mut self) {
+        #[cfg(any(unix, windows))]
+        {
+            let _ = fs2::FileExt::unlock(&self.file);
+        }
+    }
+}
+fn lock(path: &Path, exclusive: bool, busy: StoreErrorKind) -> Result<VersionLock> {
     // No truncation, no inode replacement. The store is application-private.
     if present(path)?
         && !fs::symlink_metadata(path)
@@ -361,7 +376,7 @@ fn lock(path: &Path, exclusive: bool, busy: StoreErrorKind) -> Result<File> {
                 io(path, e)
             }
         })?;
-        Ok(file)
+        Ok(VersionLock { file })
     }
     #[cfg(not(any(unix, windows)))]
     {

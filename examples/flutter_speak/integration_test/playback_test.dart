@@ -1,54 +1,54 @@
-import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mlsr_speak/pcm_player.dart';
+import 'package:mlsr_flutter/mlsr_flutter.dart';
+import 'package:mlsr_app_models/app_models.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'native playback drains, flushes a blocked producer and restarts',
+    'public controller owns queued cancellation and retained replay',
     (tester) async {
       await tester.pumpWidget(const SizedBox());
-      final player = PcmPlayer();
-      final pcm = Float32List(4096);
+      final tts = await FlutterMlsr.openTts(model: AppModels.supertonic3);
+      Speech? first, queued, replay;
       try {
-        for (final epoch in [1, 3]) {
-          await player.begin(epoch, muted: true);
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-          for (var i = 0; i < 10; i++) {
-            await player
-                .enqueue(epoch, pcm)
-                .timeout(const Duration(seconds: 3));
+        first = tts.speak(
+          'Hello from MLSR. Another sentence follows.',
+          options: const SpeechOptions(paused: true, volume: 0),
+        );
+        queued = tts.speak(
+          'This queued request is cancelled.',
+          mode: SpeakMode.enqueue,
+          options: const SpeechOptions(volume: 0),
+        );
+        queued.cancel();
+        expect((await queued.done).reason, CancelReason.requested);
+        final deadline = DateTime.now().add(const Duration(seconds: 60));
+        while ((await first.snapshot()).bufferedUntilFrame < 8192) {
+          if (DateTime.now().isAfter(deadline)) {
+            throw StateError('No retained audio');
           }
-          await player.finish(epoch).timeout(const Duration(seconds: 3));
-          final state = await player.state();
-          expect(state['queuedFrames'], 0);
-          expect(state['playedFrames'], 40960);
-          expect(state['active'], false);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
         }
-        await player.begin(4, muted: true);
-        for (var i = 0; i < 5; i++) {
-          await player.enqueue(4, pcm);
-        }
-        final blocked = expectLater(player.enqueue(4, pcm), throwsException);
-        await player.stop(4);
-        await blocked;
-        final state = await player.state();
-        expect(state['queuedFrames'], 0);
-        expect(state['pendingFrames'], 0);
-        expect(state['active'], false);
-        await player.begin(6, muted: true);
-        await player.enqueue(6, pcm);
-        await player.finish(6).timeout(const Duration(seconds: 3));
-        expect((await player.state())['playedFrames'], 4096);
-      } catch (failure) {
-        // Keep real device state in the test log if the host audio route stalls.
-        debugPrint('Playback failure: $failure; ${await player.state()}');
-        rethrow;
+        first.seek(4096);
+        first.setPlaybackRate(1.5);
+        first.resume();
+        expect((await first.done).kind, OutcomeKind.completed);
+        final completed = await first.snapshot();
+        expect(completed.positionFrame, completed.durationFrames);
+        replay = first.replayFrom(
+          4096,
+          options: const SpeechOptions(volume: 0, playbackRate: 2),
+        );
+        expect(replay.id, isNot(first.id));
+        expect((await replay.done).kind, OutcomeKind.completed);
+        expect((await first.done).kind, OutcomeKind.completed);
       } finally {
-        final state = await player.state();
-        await player.stop(state['epoch'] as int);
+        await tts.dispose();
+        await replay?.dispose();
+        await queued?.dispose();
+        await first?.dispose();
       }
     },
   );

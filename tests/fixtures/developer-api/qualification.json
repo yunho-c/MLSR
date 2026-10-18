@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "qualified_date": "2026-10-18",
+  "passed": true,
+  "scope": "Essential developer API v0 on macOS Apple Silicon; Core ML baseline, en/ko, M1/F1; native output muted",
+  "source_commit": "b3a64ec3df1d08e2836f39e49516b92c608f2185",
+  "host": {
+    "hardware": "Apple M4 Pro",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "rust": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "python": "3.14.8",
+    "go": "go version go1.27.1 darwin/arm64",
+    "dart": "Dart SDK version: 3.11.1 (stable) (Tue Feb 24 00:03:07 2026 -0800) on \"macos_arm64\"",
+    "flutter": "3.41.4"
+  },
+  "native_library_sha256": "cd3e58ff0c50a5472af25c4918a8ec5ac3f9731b879ea202be9c91014ed86206",
+  "manifest_file_sha256": "958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5",
+  "manifest_semantic_sha256": "4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c",
+  "catalog_file_sha256": "0e88fb3c446d52a83e6cc31229fa55c7b8e25bfde6ac3a56f7f8ce7ed2c3220e",
+  "qualified_source_files": {
+    "installed": 128,
+    "release": 196,
+    "all_match_working_tree": true
+  },
+  "installed": {
+    "report": "step8-installed-v2/report.yaml",
+    "python_tests_passed": 13,
+    "go_race_and_vet_passed": true,
+    "dart_tests_passed": 9,
+    "dart_optional_lease_skipped_in_matrix": true,
+    "dart_supplemental_lease_passed": true,
+    "c_shared_and_static_passed": true,
+    "parameters": {
+      "sample_rate": 44100,
+      "channels": 1,
+      "format": "float32",
+      "steps": 8,
+      "speaking_rate": 1.0,
+      "raw_speed": 1.05,
+      "seeds_by_case": {
+        "en_M1": 1729,
+        "en_F1": 1730,
+        "ko_M1": 1731,
+        "ko_F1": 1732
+      }
+    },
+    "pcm_cases": {
+      "en_M1": {
+        "sha256": "8b6c2c6384af482e79356b55865226db9b74a3dc543b0980799342359606f311",
+        "frames": 70669,
+        "five_sdk_consumers_and_legacy_byte_exact": true
+      },
+      "en_F1": {
+        "sha256": "2c4de2d4506c7b28f45b9ffc52d9fbc6e4de3df7c25312914106d35a3d467d53",
+        "frames": 70792,
+        "five_sdk_consumers_and_legacy_byte_exact": true
+      },
+      "ko_M1": {
+        "sha256": "6114543b59173748b13821a3b12c11235c635b0eb14d92ae238b2113d65ba303",
+        "frames": 126287,
+        "five_sdk_consumers_and_legacy_byte_exact": true
+      },
+      "ko_F1": {
+        "sha256": "5c9eb0db13b23f8f400e99d7b73a0e5fd594d6835ee39922ace316b39a774352",
+        "frames": 126533,
+        "five_sdk_consumers_and_legacy_byte_exact": true
+      }
+    },
+    "examples": {
+      "python": {
+        "wav_sha256": "325a3676677284ed97c1af4a854bcdac5c51a9beb4239c39de35d7c776582f95",
+        "frames": 70669,
+        "pcm_byte_exact": true
+      },
+      "go": {
+        "wav_sha256": "325a3676677284ed97c1af4a854bcdac5c51a9beb4239c39de35d7c776582f95",
+        "frames": 70669,
+        "pcm_byte_exact": true
+      },
+      "dart": {
+        "wav_sha256": "325a3676677284ed97c1af4a854bcdac5c51a9beb4239c39de35d7c776582f95",
+        "frames": 70669,
+        "pcm_byte_exact": true
+      }
+    }
+  },
+  "release": {
+    "report": "step8-release-v4/report.json",
+    "container_absent_before_launch": true,
+    "entitlements": {
+      "com.apple.security.app-sandbox": true,
+      "com.apple.security.files.user-selected.read-write": true,
+      "com.apple.security.get-task-allow": true
+    },
+    "release_app_logical_bytes": 193492361,
+    "final_model_bytes": 169340543,
+    "source_reference": {
+      "hello": {
+        "original_wav_sha256": "2e531ccb505d74a524338131a424f61fba853efcbffd2dacaee380b0112245d3",
+        "pcm_sha256": "1a4e3d62292e843bed979c680e7227b7d35f677770c9aea8ea138d3aee83ae3d",
+        "reference": "~/.cache/mlsr/qualification/model-delivery-v1/step6-release-v5/audio/automatic_first/hello-export.wav"
+      },
+      "korean": {
+        "original_wav_sha256": "cb75390773f1248a1eb21f9634e935d0c11aa5e075ba45e599f3a54f813c16a5",
+        "pcm_sha256": "e73fe4ec4fccc0aaefdbbc0d32a0a10cf29f14b02f20fceb964e844fdbfcd8fb",
+        "reference": "~/.cache/mlsr/qualification/model-delivery-v1/step6-release-v5/audio/automatic_first/korean-export.wav"
+      }
+    },
+    "phases": {
+      "automatic_first": {
+        "passed": true,
+        "copied_files": 0,
+        "copied_bytes": 0,
+        "retention_peak_bytes": 506132,
+        "retention_after_bytes": 0,
+        "handles_before": 0,
+        "handles_after": 0,
+        "network_denied_errno": 1,
+        "developer_file_denial_errnos": [
+          1,
+          1,
+          1
+        ]
+      },
+      "automatic_repeat": {
+        "passed": true,
+        "copied_files": 0,
+        "copied_bytes": 0,
+        "retention_peak_bytes": 506132,
+        "retention_after_bytes": 0,
+        "handles_before": 0,
+        "handles_after": 0,
+        "network_denied_errno": 1,
+        "developer_file_denial_errnos": [
+          1,
+          1,
+          1
+        ]
+      },
+      "installed_first": {
+        "passed": true,
+        "copied_files": 29,
+        "copied_bytes": 169340543,
+        "retention_peak_bytes": 506132,
+        "retention_after_bytes": 0,
+        "handles_before": 0,
+        "handles_after": 0,
+        "network_denied_errno": 1,
+        "developer_file_denial_errnos": [
+          1,
+          1,
+          1
+        ],
+        "engine_lease_blocked_removal": true
+      },
+      "installed_repeat": {
+        "passed": true,
+        "copied_files": 0,
+        "copied_bytes": 0,
+        "retention_peak_bytes": 506132,
+        "retention_after_bytes": 0,
+        "handles_before": 0,
+        "handles_after": 0,
+        "network_denied_errno": 1,
+        "developer_file_denial_errnos": [
+          1,
+          1,
+          1
+        ],
+        "engine_lease_blocked_removal": true,
+        "removed_after_shutdown": true
+      }
+    }
+  },
+  "timing": {
+    "report": "step8-timing-v1/report.json",
+    "power_state": "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=35782755)\t89%; discharging; 6:11 remaining present: true",
+    "repeats": 3,
+    "cases": 4,
+    "summary_ms": {
+      "first_pcm_ms": {
+        "count": 12,
+        "median": 77.5233335,
+        "max": 99.304584
+      },
+      "synthesis_done_ms": {
+        "count": 12,
+        "median": 101.74085400000001,
+        "max": 164.558042
+      },
+      "speech_first_buffered_ms": {
+        "count": 12,
+        "median": 79.631271,
+        "max": 134.649041
+      },
+      "speech_first_position_ms": {
+        "count": 12,
+        "median": 197.339896,
+        "max": 242.260541
+      },
+      "speech_done_ms": {
+        "count": 12,
+        "median": 2490.6619165,
+        "max": 3113.926583
+      }
+    },
+    "cancel_ms": {
+      "cancel_call_ms": {
+        "count": 3,
+        "min": 0.028333,
+        "median": 0.034,
+        "max": 0.041667
+      },
+      "cancel_to_done_ms": {
+        "count": 3,
+        "min": 6.288375,
+        "median": 10.544625,
+        "max": 13.788834
+      }
+    },
+    "initialization_ms": 452.136208,
+    "first_output_warmup_through_drain_ms": 1638.840667,
+    "retention_peak_bytes": 506132,
+    "retention_after_bytes": 0,
+    "handles_before": 0,
+    "handles_after": 0,
+    "peak_process_rss_bytes": 125779968,
+    "boundaries": {
+      "first_pcm_ms": "synthesize admission through first copied PCM from the public Python/C audio iterator",
+      "speech_first_buffered_ms": "speak admission through first nonzero retained PCM snapshot; 2 ms poll interval",
+      "speech_first_position_ms": "speak admission through first positive latency-adjusted source position; 2 ms poll interval, not acoustic onset",
+      "speech_done_ms": "speak admission through observed native playback drain and quiescent completion",
+      "cancel_call_ms": "native cancellation request return; not native flush completion",
+      "cancel_to_done_ms": "cancel request through quiescent terminal outcome",
+      "initialization": "fresh Python Tts with existing OS compiler/file caches, no system-cache eviction",
+      "rss": "Python process peak RSS including Rust/Core ML mappings; excludes other processes and driver allocations"
+    }
+  },
+  "native_output": {
+    "configuration_change": "synthetic native notification; physical route change unqualified",
+    "flush_boundary": "native flush return, not acoustic silence or inference quiescence",
+    "flush_native_call_seconds": 0.00935275,
+    "format": "mono_float32_44100",
+    "memory_boundary": "owned native PCM buffers, not physical driver allocation or RSS",
+    "muted": true,
+    "owned_native_buffer_allocations": 15,
+    "owned_native_buffer_final": 0,
+    "owned_native_buffer_peak": 4,
+    "owned_native_frame_capacity_peak": 44100,
+    "pause_observation_ms": 160,
+    "rates": [
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 1.004044708,
+        "rate": 0.5,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.610765125,
+        "rate": 1.0,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.524313542,
+        "rate": 1.25,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.484576666,
+        "rate": 1.5,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.403121167,
+        "rate": 2.0,
+        "source_seconds": 0.4
+      }
+    ],
+    "result": "pass",
+    "starvation_observation_ms": 140,
+    "starvation_stops": 1
+  },
+  "other_checks_passed": [
+    "cargo test --locked --workspace --all-features",
+    "cargo clippy --locked --workspace --all-features --all-targets -- -D warnings",
+    "cargo +1.88.0 check --locked --workspace --all-features --all-targets",
+    "cargo check --locked -p mlsr --all-features --all-targets --target x86_64-pc-windows-msvc",
+    "python3 tools/dev.py check-generated",
+    "Flutter analysis, writer and native speak/reader integration"
+  ],
+  "evidence_root": "~/.cache/mlsr/qualification/developer-api-v0",
+  "report_sha256": {
+    "step8-installed-v2/report.yaml": "ac1c3ce1c8371c33f0d777e547238456bc9ff2fcaa8e51b3b48c2b1fff190de3",
+    "step8-release-v4/report.json": "edc016bdbf2eea8c432a3722fd0acb3a88932ba28cdfd4493a2d53780b3713e3",
+    "step8-timing-v1/report.json": "f56d52a74775d0be6bb956ccad5a893cf90c43e6af60c49ebb35c207be27e1ca",
+    "step8-native-output-v1/report.json": "c0d8f11568cb39ec2b01fb4abe69022348ab9b1a7d99a6bb850df50b5208d037",
+    "step8-native-output-v1/provenance.json": "efffe9eff959b5f9e838002b29c13f57bcbc5f8350d190941fac33db6b14b23f",
+    "step8-dart-lease-v1/report.json": "47be4394179d9be97186a8e177475f2d30c88e9d86b003a3ed2c82f97f4a671b",
+    "step8-generated-v1/result.json": "053b1e0d75b4f0766f037d8a12982c6334986b973f7f9cb9275ff4f1ebaf9d61",
+    "step7-flutter-v3/ui/report.json": "8d3486caec1d22c894034139866f55be04d3ab4add7fae20366c31edc3ba21ff",
+    "store-lock-audit-v1/results.json": "d963f2fc9e2a00fccb51b4440c279213c295d05905092b29704a9adf38b2b2a1",
+    "store-lock-audit-v2/results.json": "a8f8a3acb11af43589ab0629da1a35378243ef8111525de88015e5f4407ba198"
+  },
+  "log_sha256": {
+    "step8-installed-v2/commands.log": "1de8bfaf0e67ba4c03836ded5962cb6d4b22a94682164b40903949824036b23e",
+    "step8-native-output-v1/test.log": "87539e425006a821810fd1f6da0a1f967ec835bceec04f9b257b92f960f4dce1",
+    "step8-dart-lease-v1/test.log": "67be1bab9dc556193add3505e907042bc66a1fff1128e73fd89bfbc55c7b9a0e",
+    "step8-generated-v1/check.log": "a806f18d0ee2da3cdafef321ed196cc0dce8ba5bbda55aa950f26741aa19de0b"
+  },
+  "limits": [
+    "One macOS M4 Pro host and OS; no physical iOS, Android/QNN or Windows runtime qualification",
+    "Muted playback and adjusted source clocks; no acoustic onset or new listening-quality claim",
+    "Synthetic configuration notification; no physical route-change qualification",
+    "Native flush return, cancellation request return and inference quiescence are separate measurements",
+    "Owned buffers, retained disk bytes, caller-owned clips and process RSS have distinct boundaries",
+    "Battery-powered warm observations, no cache eviction or peak-throughput claim",
+    "Development packages and ad-hoc signed app; no publication, notarization or remotely verified CI",
+    "Baseline model unchanged; no quantization promotion or ANE residency claim"
+  ]
+}

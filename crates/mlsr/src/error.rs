@@ -36,6 +36,32 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Navigation on an old speech cannot override another controller request.
+    NotCurrentSpeech,
+    /// Requested frame is outside retained audio. The current position is unchanged.
+    InvalidSeek {
+        /// Rejected absolute source frame.
+        frame: u64,
+        /// Current retained end frame (zero means nothing is retained).
+        available_end: u64,
+    },
+    /// The selected output/device cannot provide an explicitly requested feature.
+    UnsupportedCapability(&'static str),
+    /// Native audio output failed independently of inference.
+    Output(String),
+    /// Structured high-level request failure, preserving its category and stage.
+    OperationFailed(crate::completion::Failure),
+    /// A finite queue, memory or storage budget would be exceeded.
+    LimitExceeded {
+        /// Budget whose limit was reached.
+        kind: LimitKind,
+        /// Owned diagnostic.
+        message: String,
+    },
+    /// A requested stable voice ID is not present in this catalog.
+    VoiceUnavailable(String),
+    /// No voice supports the requested locale under the selected fallback rule.
+    UnsupportedLocale(String),
     /// A model installation, lease, or removal could not proceed.
     ModelStore {
         /// Stable store failure category.
@@ -85,6 +111,22 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NotCurrentSpeech => {
+                f.write_str("speech_not_current: another request is current on this controller")
+            }
+            Self::InvalidSeek {
+                frame,
+                available_end,
+            } => write!(
+                f,
+                "invalid_seek: frame {frame}, retained end {available_end}"
+            ),
+            Self::UnsupportedCapability(name) => write!(f, "unsupported_capability: {name}"),
+            Self::Output(message) => write!(f, "output_failed: {message}"),
+            Self::OperationFailed(error) => error.fmt(f),
+            Self::LimitExceeded { kind, message } => write!(f, "{}: {message}", kind.as_str()),
+            Self::VoiceUnavailable(message) => write!(f, "voice_unavailable: {message}"),
+            Self::UnsupportedLocale(message) => write!(f, "unsupported_locale: {message}"),
             Self::ModelStore { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::Busy => f.write_str("engine_busy: another request is active"),
             Self::Closed => f.write_str("engine_closed: engine is unavailable"),
@@ -105,6 +147,14 @@ impl Error {
     /// Stable machine-readable category for foreign-language adapters.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::NotCurrentSpeech => "speech_not_current",
+            Self::InvalidSeek { .. } => "invalid_seek",
+            Self::UnsupportedCapability(_) => "unsupported_capability",
+            Self::Output(_) => "output_failed",
+            Self::OperationFailed(error) => error.category,
+            Self::LimitExceeded { kind, .. } => kind.as_str(),
+            Self::VoiceUnavailable(_) => "voice_unavailable",
+            Self::UnsupportedLocale(_) => "unsupported_locale",
             Self::ModelStore { kind, .. } => kind.as_str(),
             Self::Busy => "engine_busy",
             Self::Closed => "engine_closed",
@@ -113,6 +163,9 @@ impl Error {
             Self::InvalidOptions(_) => "invalid_options",
             Self::Synthesis(_) => "synthesis_failed",
             Self::Input { kind, .. } => kind.as_str(),
+            Self::Io { source, .. } if source.kind() == std::io::ErrorKind::StorageFull => {
+                "disk_full"
+            }
             Self::Io { .. } => "io_error",
             Self::Manifest(_) => "invalid_manifest",
             Self::Asset { .. } => "invalid_asset",
@@ -124,6 +177,7 @@ impl Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::OperationFailed(error) => Some(error),
             Self::Io { source, .. } => Some(source),
             Self::Runtime(source) => Some(source),
             _ => None,
@@ -134,5 +188,29 @@ impl std::error::Error for Error {
 impl From<crate::runtime::Error> for Error {
     fn from(value: crate::runtime::Error) -> Self {
         Self::Runtime(value)
+    }
+}
+
+/// Stable resource-budget categories for facade and output errors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LimitKind {
+    /// Pending request count or copied text bytes.
+    RequestQueue,
+    /// In-memory render collection.
+    RenderMemory,
+    /// Owned temporary audio retention.
+    RetainedAudio,
+    /// Configured output frames or the RIFF container size limit.
+    WaveFile,
+}
+impl LimitKind {
+    /// Stable cross-language error code.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::RequestQueue => "queue_full",
+            Self::RenderMemory => "render_memory_limit",
+            Self::RetainedAudio => "retention_quota_exceeded",
+            Self::WaveFile => "wave_file_limit",
+        }
     }
 }

@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "muted": true,
+  "timing_boundary": "UI observation at 20 ms pump intervals; not acoustic or native flush timing",
+  "first_retained_pcm_observed_ms": 276.08,
+  "first_position_observed_ms": 356.319,
+  "retained_peak_bytes": 344064,
+  "cancel_to_terminal_observed_ms": 78.701,
+  "generation_finished_while_playing": true,
+  "wav_frames": 70669,
+  "unsupported_character_rejected": true,
+  "handles_before": 0,
+  "handles_after": 0,
+  "heartbeat_ticks": 390,
+  "heartbeat_max_gap_ms": 78.434,
+  "host": "Apple M4 Pro, macOS 27.0.1",
+  "configuration": "Flutter debug, Core ML baseline, native Apple output muted",
+  "native_playback_integration_passed": true,
+  "artifacts": "~/.cache/mlsr/qualification/developer-api-v0/step7-flutter-v3",
+  "note": "Single UI observations, not benchmark percentiles; no acoustic or native flush timing. Prior v1/v2 failed runs retained; v2 isolated the paused frame-zero highlight regression fixed in 059e022."
+}

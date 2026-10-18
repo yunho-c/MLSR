@@ -3,7 +3,7 @@
 `mlsr_flutter` resolves model resources; the portable `mlsr` Dart package and Rust
 core own verification, installation, engine lifetimes, and synthesis. The current
 native resource adapter and Core ML hook target Apple Silicon with a macOS 15
-minimum. Release delivery is [qualified on M4 Pro / macOS 27.0.1](../../docs/model-delivery-qualification.md);
+minimum. Release delivery is [qualified on M4 Pro / macOS 27.0.1](../../docs/internal/model-delivery-qualification.md);
 the minimum OS and other devices still need validation. Other native platforms
 require their resource adapter and runtime qualification before use.
 
@@ -22,22 +22,32 @@ hooks:
   user_defines:
     mlsr:
       coreml: true
+      apple-output: true
 ```
 
 ```dart
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_app_models/app_models.dart';
 
-final engine = await FlutterMlsr.open(model: AppModels.supertonic3);
+final tts = await FlutterMlsr.openTts(model: AppModels.supertonic3);
 try {
-  final job = await engine.start('Hello from MLSR.');
-  await for (final event in job.events) {
-    // Feed audio events to an app-owned bounded player or WAV sink.
+  final speech = tts.speak('Hello from MLSR.');
+  try {
+    await speech.done; // Synthesis and native playback have both finished.
+    await tts.writeSpeech(speech, '/chosen/new-file.wav');
+  } finally {
+    await speech.dispose();
   }
 } finally {
-  await engine.dispose();
+  await tts.dispose();
 }
 ```
+
+`openTts` uses the same verified delivery path as the existing low-level `open`
+engine API. Playback, bounded retention, scheduling, reader controls, and WAV
+writing belong to the shared SDK; apps only observe state and present controls.
+For a headless application, omit `apple-output` and use
+`TtsOptions(output: OutputMode.headless)`.
 
 The default uses an addressable app-bundled directory without a duplicate copy.
 When resources have no directory, the adapter streams files into a Rust-owned

@@ -3,10 +3,10 @@
 The first synthesis target is macOS arm64 with the pinned Core ML v2 export,
 English/Korean qualification, voices M1/F1, and 44,100 Hz mono Float32 PCM.
 
-Windows ARM64 also has an [experimental QNN Superfast backend](qnn-runtime.md).
+Windows ARM64 also has an [experimental QNN Superfast backend](../qnn-runtime.md).
 It shares the Rust frontend and job API, with a separate pinned manifest,
 eight-step/fixed-shape contract and explicit `QnnHtp` selection. Adapter and
-binding checks pass; the [canonical model-quality screen fails](qnn-qualification.md).
+binding checks pass; the [canonical model-quality screen fails](../qnn-qualification.md).
 
 ## Verified local bundles
 
@@ -101,7 +101,7 @@ and waveform. TE and intermediate VE tensors stay native. Synthesis requires
 `&mut self`, so two requests cannot alias the reusable buffers concurrently;
 the pipeline can move between caller threads. Errors drop per-request tensors.
 `shutdown` joins the worker, and owned output PCM remains valid after shutdown
-or destruction. In-flight native calls are synchronous; the [job API](jobs.md)
+or destruction. In-flight native calls are synchronous; the [job API](../jobs.md)
 checks cancellation before/after predictions and between denoising steps.
 
 `synthesize_with_diagnostics` runs the same logic with optional captured noise
@@ -166,18 +166,20 @@ target/release/mlsr synthesize --manifest model-manifests/supertonic3-coreml.yam
 ```
 
 Use `--text-file input.txt` for UTF-8 input instead of `--text`. The CLI writes
-mono 44,100 Hz Float32 WAV using Hound. It finalizes a temporary file in the
-destination directory, then publishes it without overwriting any existing path.
+mono 44,100 Hz Float32 WAV using the shared Rust writer. It finalizes a temporary
+file in the destination directory, then publishes it without overwriting any existing path.
 Failures do not leave a partial output WAV. The destination directory must exist.
 `--compute-policy cpu-only` and `--no-output-reuse` support controlled comparisons;
 they do not alter preprocessing or model math. The CLI and Rust engine need no
 Python interpreter and never download assets.
 
 The synchronous API remains a single-segment operation. For paragraphs and
-cancellation, use the [Rust job API](jobs.md), which streams bounded PCM and
-preserves original UTF-8 source ranges. The public [C ABI](ffi.md) and Dart, Go,
-Python bindings expose the same job contract. Playback, physical iOS qualification, additional
-runtimes, and performance/quality studies are subsequent milestones.
+cancellation, use the [Rust job API](../jobs.md), which streams bounded PCM and
+preserves original UTF-8 source ranges. The public [C ABI](../ffi.md) and Dart, Go,
+Python bindings expose the same job contract. The [developer SDK](../developer-sdk.md)
+adds shared speech controllers and native Apple playback. Physical iOS
+qualification, additional runtimes and further performance/quality studies
+remain separate work.
 
 ## Recorded qualification
 
@@ -185,7 +187,7 @@ runtimes, and performance/quality studies are subsequent milestones.
 with strict step/bucket fallback. The baseline remains the default; exact-length
 fixed vocoders are explicitly experimental because their PCM differs.
 
-The compact [synthesis qualification record](../tests/fixtures/supertonic3/synthesis-summary.yaml)
+The compact [synthesis qualification record](../../tests/fixtures/supertonic3/synthesis-summary.yaml)
 identifies the host, toolchains, source/binary hashes, full-pipeline parity,
 native packaging checks, and CLI WAV receipts. Large reports and audio remain
 in an external cache. Numerical equivalence is to the pinned Core ML baseline;

@@ -134,7 +134,7 @@ qualification is implied by a numerical match.
 
 This section qualifies tensor execution with fixture-supplied model inputs.
 For complete Rust synthesis from original text and saved noise, use
-[`synthesis_replay`](../../docs/supertonic3.md#persistent-model-pipeline).
+[`synthesis_replay`](../../docs/internal/supertonic3.md#persistent-model-pipeline).
 
 Build the development transport and run either allocation mode against a
 verified reference. This path needs NumPy/PyYAML, macOS and Xcode, but does not

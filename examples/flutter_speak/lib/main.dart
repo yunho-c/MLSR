@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'dart:ui' show AppExitResponse;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mlsr_app_models/app_models.dart';
+import 'package:mlsr_flutter/mlsr_flutter.dart' show SpeakMode;
 import 'speech_controller.dart';
+import 'reader_controls.dart';
 
 const paper = Color(0xfff6f4ed);
 const ink = Color(0xff243e33);
@@ -43,7 +44,7 @@ void main() {
 }
 
 class SpeakApp extends StatelessWidget {
-  final SpeechController? controller;
+  final DemoController? controller;
   const SpeakApp({super.key, this.controller});
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -97,18 +98,19 @@ class SpeakApp extends StatelessWidget {
 }
 
 class SpeakPage extends StatefulWidget {
-  final SpeechController? controller;
+  final DemoController? controller;
   const SpeakPage({super.key, this.controller});
   @override
   State<SpeakPage> createState() => _SpeakPageState();
 }
 
 class _SpeakPageState extends State<SpeakPage> {
-  late final SpeechController speech = widget.controller ?? SpeechController();
+  late final DemoController speech = widget.controller ?? DemoController();
   final text = TextEditingController(text: english);
   String language = 'en', voice = 'M1';
+  bool enqueue = false;
   late final AppLifecycleListener lifecycle;
-  bool get busy => speech.speaking || speech.loading || speech.exporting;
+  bool get busy => speech.loading || speech.exporting;
   @override
   void initState() {
     super.initState();
@@ -134,7 +136,12 @@ class _SpeakPageState extends State<SpeakPage> {
 
   void speak() {
     if (!busy && utf8.encode(text.text).length <= 65536) {
-      unawaited(speech.speak(text.text, language, voice));
+      speech.speak(
+        text.text,
+        language,
+        voice,
+        mode: enqueue ? SpeakMode.enqueue : SpeakMode.replace,
+      );
     }
   }
 
@@ -484,48 +491,69 @@ class _SpeakPageState extends State<SpeakPage> {
                                 const SizedBox(height: 20),
                                 SizedBox(
                                   width: double.infinity,
-                                  child: speech.speaking
-                                      ? FilledButton.icon(
-                                          key: const Key('stop'),
-                                          onPressed: () =>
-                                              unawaited(speech.stop()),
-                                          icon: const Icon(Icons.stop_rounded),
-                                          label: const Text('Stop'),
-                                        )
-                                      : FilledButton.icon(
-                                          key: const Key('speak'),
-                                          onPressed:
-                                              busy ||
-                                                  text.text.trim().isEmpty ||
-                                                  utf8
-                                                          .encode(text.text)
-                                                          .length >
-                                                      65536
-                                              ? null
-                                              : speech.ready
-                                              ? speak
-                                              : () => unawaited(speech.load()),
-                                          icon: Icon(
-                                            speech.ready
-                                                ? Icons.play_arrow_rounded
-                                                : Icons.refresh_rounded,
-                                          ),
-                                          label: Text(
-                                            speech.loading
-                                                ? 'Loading voices…'
-                                                : speech.ready
-                                                ? 'Speak'
-                                                : 'Try loading again',
-                                          ),
-                                        ),
+                                  child: FilledButton.icon(
+                                    key: const Key('speak'),
+                                    onPressed:
+                                        busy ||
+                                            text.text.trim().isEmpty ||
+                                            utf8.encode(text.text).length >
+                                                65536
+                                        ? null
+                                        : speech.ready
+                                        ? speak
+                                        : () => unawaited(speech.load()),
+                                    icon: const Icon(Icons.play_arrow_rounded),
+                                    label: Text(
+                                      speech.loading
+                                          ? 'Loading voices…'
+                                          : !speech.ready
+                                          ? 'Try loading again'
+                                          : speech.speaking
+                                          ? enqueue
+                                                ? 'Add to queue'
+                                                : 'Speak new text'
+                                          : 'Speak',
+                                    ),
+                                  ),
                                 ),
+                                Row(
+                                  children: [
+                                    Checkbox(
+                                      key: const Key('enqueue'),
+                                      value: enqueue,
+                                      onChanged: busy
+                                          ? null
+                                          : (value) => setState(
+                                              () => enqueue = value!,
+                                            ),
+                                    ),
+                                    const Text(
+                                      'Queue after current',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                                if (speech.speaking || speech.pendingCount > 0)
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      key: const Key('stop'),
+                                      onPressed: () => unawaited(speech.stop()),
+                                      icon: const Icon(Icons.stop_rounded),
+                                      label: Text(
+                                        speech.pendingCount > 0
+                                            ? 'Stop all (${speech.pendingCount} queued)'
+                                            : 'Stop',
+                                      ),
+                                    ),
+                                  ),
                                 const SizedBox(height: 10),
                                 SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton.icon(
                                     key: const Key('export'),
                                     onPressed:
-                                        speech.wav == null || speech.exporting
+                                        !speech.canExport || speech.exporting
                                         ? null
                                         : () => unawaited(speech.export()),
                                     icon: const Icon(
@@ -585,7 +613,7 @@ class _SpeakPageState extends State<SpeakPage> {
                                   const SizedBox(height: 6),
                                   Text(
                                     speech.speaking
-                                        ? '${speech.generating ? 'Generating' : 'Generated'} · Playing ${seconds(speech.playedFrames)} / ${seconds(speech.generatedFrames)}'
+                                        ? '${speech.generating ? 'Generating' : 'Generated'} · ${speech.paused ? 'Paused' : 'Played'} ${seconds(speech.playedFrames)} / ${seconds(speech.generatedFrames)}'
                                         : 'Supertonic 3  ·  44.1 kHz',
                                     style: TextStyle(
                                       color: paper.withValues(alpha: .55),
@@ -599,8 +627,20 @@ class _SpeakPageState extends State<SpeakPage> {
                             Expanded(
                               child: SizedBox(
                                 height: 42,
-                                child: CustomPaint(
-                                  painter: WavePainter(speech.levels),
+                                child: Center(
+                                  child: LinearProgressIndicator(
+                                    value: speech.generatedFrames == 0
+                                        ? 0
+                                        : (speech.playedFrames /
+                                                  speech.generatedFrames)
+                                              .clamp(0, 1),
+                                    color: accent,
+                                    backgroundColor: paper.withValues(
+                                      alpha: .15,
+                                    ),
+                                    semanticsLabel:
+                                        'Played fraction of generated audio',
+                                  ),
                                 ),
                               ),
                             ),
@@ -616,6 +656,10 @@ class _SpeakPageState extends State<SpeakPage> {
                           ],
                         ),
                       ),
+                      if (speech.original.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        ReaderControls(controller: speech),
+                      ],
                       if (speech.error != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 14),
@@ -670,32 +714,4 @@ Widget label(String text) => Text(
 String seconds(int frames) {
   final time = frames ~/ 44100;
   return '${time ~/ 60}:${(time % 60).toString().padLeft(2, '0')}';
-}
-
-class WavePainter extends CustomPainter {
-  final List<double> values;
-  WavePainter(List<double> values) : values = List.of(values);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = accent.withValues(alpha: .65)
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-    final bars = math.min(65, (size.width / 6).floor());
-    for (var i = 0; i < bars; i++) {
-      final index = values.length - bars + i;
-      final value = index >= 0 ? values[index] : 0.0;
-      final height = 2 + (math.sqrt(value) * 70).clamp(0, 36);
-      final x = i * size.width / math.max(1, bars - 1);
-      canvas.drawLine(
-        Offset(x, (size.height - height) / 2),
-        Offset(x, (size.height + height) / 2),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(WavePainter oldDelegate) =>
-      !listEquals(values, oldDelegate.values);
 }

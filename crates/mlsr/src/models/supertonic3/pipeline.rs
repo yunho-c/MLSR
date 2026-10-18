@@ -262,6 +262,10 @@ impl Pipeline {
     pub fn voices(&self) -> impl Iterator<Item = &str> {
         self.bundle.voices()
     }
+    /// Verified metadata for this pipeline's exact model and voice assets.
+    pub fn voice_catalog(&self) -> crate::voice::VoiceCatalog {
+        self.bundle.voice_catalog()
+    }
     /// Native model-load, successful-prediction, and retained-handle counts.
     pub fn stats(&self) -> Result<SessionStats> {
         Ok(self.session.stats()?)

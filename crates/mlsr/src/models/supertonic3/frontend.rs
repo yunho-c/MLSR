@@ -8,7 +8,9 @@ use crate::{
 };
 use unicode_normalization::UnicodeNormalization;
 
-const LANGUAGES: &[&str] = &[
+/// Language tags accepted by the pinned frontend. Execution/quality qualification
+/// is narrower than this model-declared list; see the voice catalog.
+pub const SUPPORTED_LANGUAGES: &[&str] = &[
     "en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
     "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "vi",
 ];
@@ -64,7 +66,7 @@ fn input(kind: Kind, message: impl Into<String>) -> Error {
 /// Apply Unicode 15.0 NFKD, the pinned symbol rules, whitespace, and language tags.
 /// Token lookup and the 128-token model limit are applied by `Bundle::encode_text`.
 pub fn normalize_text(text: &str, language: &str) -> Result<String> {
-    if !LANGUAGES.contains(&language) {
+    if !SUPPORTED_LANGUAGES.contains(&language) {
         return Err(input(
             Kind::UnsupportedLanguage,
             format!("unsupported language: {language}"),

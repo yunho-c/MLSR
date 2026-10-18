@@ -14,6 +14,48 @@ import 'dart:ffi' as ffi;
 @ffi.Native<ffi.Uint32 Function()>()
 external int mlsr_abi_version();
 
+/// Borrow PCM until this audio handle's release. The view covers a completed
+/// clip or one bounded streaming chunk. Copy before releasing; never free samples.
+/// # Safety
+/// Output is writable/aligned for output_size bytes and disjoint from error.
+/// Do not release the audio handle while the returned view is in use.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrPcmView>,
+    ffi.UintPtr,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_audio_read(
+  int audio,
+  ffi.Pointer<MlsrPcmView> output,
+  int output_size,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Pull one PCM chunk or one terminal completion, then END. On OK exactly one
+/// of audio/completion is nonzero; both are owned SDK handles. TIMEOUT is temporary
+/// starvation, never EOF. timeout_ms is capped at 30 seconds. Concurrent pulls fail.
+/// # Safety
+/// Audio/completion/error are aligned, writable and mutually disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_audio_stream_poll(
+  int stream,
+  int timeout_ms,
+  ffi.Pointer<ffi.Uint64> audio,
+  ffi.Pointer<ffi.Uint64> completion,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
 /// Verify/load local assets. Blocking: call off UI threads. options may be null
 /// for defaults. On failure output is zero; error optionally owns a diagnostic.
 /// # Safety
@@ -72,6 +114,23 @@ external int mlsr_engine_release(int engine);
 /// A non-null error output must be writable/aligned for one handle.
 @ffi.Native<ffi.Int32 Function(ffi.Uint64, ffi.Pointer<ffi.Uint64>)>()
 external int mlsr_engine_shutdown(int engine, ffi.Pointer<ffi.Uint64> error);
+
+/// Copy an old/new error's code, message and optional structured failure into a
+/// versioned JSON handle. The original error handle remains caller-owned.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_error_details(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
 
 /// Borrow an error diagnostic until error_release. Null/size mismatch returns
 /// MLSR_ERROR without creating another diagnostic.
@@ -195,6 +254,23 @@ external int mlsr_job_start(
 external int mlsr_job_wait(
   int job,
   int timeout_ms,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Borrow the UTF-8 JSON envelope until its SDK handle is released. Every envelope
+/// has schema_version=1, type, and data. Copy before releasing; no PCM is in JSON.
+/// # Safety
+/// Output/error are aligned, writable and disjoint. Do not release during view use.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrString>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_json_read(
+  int handle,
+  ffi.Pointer<MlsrString> output,
   ffi.Pointer<ffi.Uint64> error,
 );
 
@@ -326,6 +402,500 @@ external int mlsr_model_store_remove(
   ffi.Pointer<ffi.Uint64> error,
 );
 
+/// Write caller-owned PCM with the shared Rust WAV serializer. Input is borrowed
+/// only for this blocking call, so language AudioClips need no native allocation
+/// after copying a render. Finite complete PCM is required; at most 1 GiB of
+/// samples. No-clobber publication and owned partial cleanup match render_to_file.
+/// # Safety
+/// View is aligned/readable and its samples are aligned/readable for sample_count
+/// Float32 values. Path is readable UTF-8; output/error are writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Pointer<MlsrPcmView>,
+    MlsrString,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_pcm_write_wav(
+  ffi.Pointer<MlsrPcmView> view,
+  MlsrString path,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Initialize immutable request defaults, with empty text/locale/voice ranges.
+/// # Safety
+/// Non-null output points to writable aligned MlsrRequest storage.
+@ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrRequest>)>()
+external int mlsr_request_default(ffi.Pointer<MlsrRequest> output);
+
+/// Forget a speech handle without cancelling fire-and-forget playback, or drop a
+/// synthesis handle using Rust's last-owner/consumer-drop semantics. A live audio
+/// consumer still owns its synthesis job. Suitable for language cleanup fallbacks.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_sdk_forget(int handle);
+
+/// Request identity for a speech or advanced synthesis handle; invalid/wrong-kind
+/// handles return zero. Registry IDs and request IDs are different namespaces.
+@ffi.Native<ffi.Uint64 Function(ffi.Uint64)>()
+external int mlsr_sdk_id(int handle);
+
+/// Release an SDK Tts/controller/speech/synthesis/stream/watch/audio/JSON handle.
+/// Owners cancel/join work; speech also releases its recording. Zero is a no-op.
+/// In-flight calls retain safe ownership. Blocking: use off UI/event-loop threads.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_sdk_release(int handle);
+
+/// Inspect copied request input, resolved voice, normalized public options,
+/// effective model speed/steps/seed and original start segment. Does not start
+/// lazy work. Replay reports its own request ID and the shared synthesis input.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_sdk_request(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Immediate versioned snapshot for SDK Tts, controller, speech, synthesis or
+/// audio handles. State reads never consume PCM or start a lazy job.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_sdk_snapshot(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Create an independent, bounded state observer for speech or synthesis. It
+/// stores only a revision and shared latest state, never an event/audio queue.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_sdk_states(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Wait for immutable speech/synthesis completion without consuming audio/state.
+/// A failed request still returns OK with a structured failed outcome. TIMEOUT
+/// returns no handle. Waiting alone never starts a lazy synthesis job.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_sdk_wait(
+  int handle,
+  int timeout_ms,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Copy input/options and return a Speech immediately, using a Tts default or
+/// explicit controller handle. Admission failure preserves existing speech.
+/// PCM stays inside Rust/native output; no host-language audio loop is required.
+/// # Safety
+/// Request/settings/strings are readable; output/error are writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrRequest>,
+    ffi.Pointer<MlsrSpeechOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_speak(
+  int owner,
+  ffi.Pointer<MlsrRequest> input_request,
+  ffi.Pointer<MlsrSpeechOptions> playback,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Speech command: 0 cancel, 1 pause, 2 resume, 3 volume(value), 4 playback rate(value).
+/// Cancellation requests prompt flush; wait for completion for native quiescence.
+/// Other commands return after admission; state confirms native application.
+/// # Safety
+/// A non-null error output is aligned/writable.
+@ffi.Native<
+  ffi.Int32 Function(ffi.Uint64, ffi.Uint32, ffi.Float, ffi.Pointer<ffi.Uint64>)
+>()
+external int mlsr_speech_command(
+  int speech,
+  int command,
+  double value,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Navigate original spoken sentences. target=-1 is previous, -2 next, otherwise
+/// a nonnegative original sentence ID. Returns navigation JSON (seeked/started/
+/// boundary) plus a new owned Speech only for started. The prior outcome remains
+/// immutable. An old handle cannot override a different current request.
+/// # Safety
+/// New-speech/JSON/error outputs are aligned, writable and mutually disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Int64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_speech_navigate(
+  int speech,
+  int target,
+  ffi.Pointer<ffi.Uint64> new_speech,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Initialize speech settings (replace, normal rate/volume, retained audio).
+/// # Safety
+/// Non-null output points to writable aligned MlsrSpeechOptions storage.
+@ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrSpeechOptions>)>()
+external int mlsr_speech_options_default(ffi.Pointer<MlsrSpeechOptions> output);
+
+/// Replay completed retained audio with a new Speech identity/outcome. Storage
+/// is shared, with no inference or second PCM disk copy. The old outcome remains.
+/// # Safety
+/// Settings are readable; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint64,
+    ffi.Pointer<MlsrSpeechOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_speech_replay(
+  int speech,
+  int frame,
+  ffi.Pointer<MlsrSpeechOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Seek an active/paused speech in exact source frames. Invalid ranges do not
+/// move output. Paused seeks stay paused; retained PCM is never synthesized again.
+/// # Safety
+/// A non-null error output is aligned/writable.
+@ffi.Native<
+  ffi.Int32 Function(ffi.Uint64, ffi.Uint64, ffi.Pointer<ffi.Uint64>)
+>()
+external int mlsr_speech_seek(
+  int speech,
+  int frame,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Current state first, then coalesced revisions and one terminal snapshot, then
+/// END. A paused/slow poller cannot accumulate native snapshots. Concurrent polls
+/// on one observer fail; separate observers remain independent of audio and done.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_state_poll(
+  int handle,
+  int timeout_ms,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Claim the sole PCM consumer and start a lazy job. A second consumer fails
+/// without cancelling the first. Releasing an unfinished stream cancels and joins.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_synthesis_audio(
+  int job,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Request cancellation without waiting for inference. reason=0 means requested;
+/// reason=1 means an adapter dropped the sole audio consumer. First cause wins.
+/// # Safety
+/// A non-null error output is writable/aligned.
+@ffi.Native<
+  ffi.Int32 Function(ffi.Uint64, ffi.Uint32, ffi.Pointer<ffi.Uint64>)
+>()
+external int mlsr_synthesis_cancel(
+  int job,
+  int reason,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Explicitly start a lazy synthesis job; no audio consumer is created.
+/// # Safety
+/// A non-null error output is writable/aligned.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64, ffi.Pointer<ffi.Uint64>)>()
+external int mlsr_synthesis_start(int job, ffi.Pointer<ffi.Uint64> error);
+
+/// Obtain the frozen original plan for a speech/synthesis handle, including both
+/// UTF-8 byte and UTF-16 code-unit ranges. TIMEOUT means planning is not ready;
+/// this read never starts a lazy job. Owns the returned versioned JSON handle.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_text_plan(
+  int handle,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Collect an advanced job into an owned AudioClip under max_bytes (zero selects
+/// 32 MiB). Claims its sole consumer. Blocking; the job remains independently
+/// cancellable. It must belong to this Tts. Release the audio after copying it.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint64,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_collect(
+  int tts,
+  int job,
+  int max_bytes,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Obtain a reusable controller: independent=0 returns the Tts default, 1 creates
+/// another scoped queue sharing inference. No output device is opened yet.
+/// Releasing a controller closes it; disposing the default does not resurrect it.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_controller(
+  int tts,
+  int independent,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Load a facade from an existing verified model, retaining its lease. The model
+/// handle remains caller-owned. Blocking; output remains lazy.
+/// # Safety
+/// Settings are readable; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrEngineOptions>,
+    ffi.Pointer<MlsrTtsOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_from_model(
+  int model,
+  ffi.Pointer<MlsrEngineOptions> engine,
+  ffi.Pointer<MlsrTtsOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Verify/load local paths into the shared facade. Blocking, no download, lazy
+/// output. Settings pointers may be null for defaults. Owns the returned SDK handle.
+/// # Safety
+/// Strings/settings are readable; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    MlsrString,
+    ffi.Pointer<MlsrEngineOptions>,
+    ffi.Pointer<MlsrTtsOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_open(
+  MlsrString manifest,
+  MlsrString bundle,
+  ffi.Pointer<MlsrEngineOptions> engine,
+  ffi.Pointer<MlsrTtsOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Initialize facade settings. Null returns MLSR_ERROR.
+/// # Safety
+/// Non-null output points to writable aligned MlsrTtsOptions storage.
+@ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrTtsOptions>)>()
+external int mlsr_tts_options_default(ffi.Pointer<MlsrTtsOptions> output);
+
+/// Convenient bounded render. Blocking; for independent cancellation create a
+/// lazy synthesis job and call collect. Zero max_bytes selects the 32 MiB default.
+/// # Safety
+/// Request/strings are readable; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrRequest>,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_render(
+  int tts,
+  ffi.Pointer<MlsrRequest> settings,
+  int max_bytes,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Convenient incremental file render; zero max_frames selects the 30-minute
+/// default. For per-request cancellation create a synthesis handle and write_job.
+/// # Safety
+/// Request/path/strings are readable; output/error are writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrRequest>,
+    MlsrString,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_render_to_file(
+  int tts,
+  ffi.Pointer<MlsrRequest> settings,
+  MlsrString path,
+  int max_frames,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Create a lazy advanced synthesis handle. Reading state/done never starts it;
+/// explicitly start or claim its single audio consumer. Input is copied now.
+/// # Safety
+/// Request/strings are readable; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrRequest>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_synthesize(
+  int tts,
+  ffi.Pointer<MlsrRequest> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Incrementally write a lazy/started synthesis job belonging to this Tts. Zero
+/// max_frames selects the 30-minute default. The job remains independently
+/// cancellable. Returns WAV metadata only after successful no-clobber publication.
+/// # Safety
+/// Path is readable UTF-8; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint64,
+    MlsrString,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_write_job(
+  int tts,
+  int job,
+  MlsrString path,
+  int max_frames,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Export completed retained speech without inference or a full PCM memory copy.
+/// It must belong to this Tts. Returns finalized WAV metadata; preserves existing
+/// destinations. The speech outcome is unchanged, including when export fails.
+/// # Safety
+/// Path is readable UTF-8; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint64,
+    MlsrString,
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_tts_write_speech(
+  int tts,
+  int speech,
+  MlsrString path,
+  int max_frames,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
 /// Returns the library version as a borrowed, NUL-terminated UTF-8 string.
 ///
 /// The pointer remains valid while the library is loaded. Do not modify or free
@@ -333,17 +903,61 @@ external int mlsr_model_store_remove(
 @ffi.Native<ffi.Pointer<ffi.Char> Function()>()
 external ffi.Pointer<ffi.Char> mlsr_version();
 
+/// Return a versioned voice-catalog JSON handle. source=0 gives catalog-only
+/// metadata; a model handle gives verified assets, and a Tts handle engine readiness.
+/// # Safety
+/// Output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_voice_catalog(
+  int source,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Resolve a stable voice and locale in Rust. source has the voice-catalog meaning;
+/// fallback is 0 strict or 1 same-language. Empty voice chooses the catalog default.
+/// # Safety
+/// Strings are readable UTF-8; output/error are aligned, writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    MlsrString,
+    MlsrString,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_voice_resolve(
+  int source,
+  MlsrString locale,
+  MlsrString voice,
+  int fallback_policy,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
 const int MLSR_END = 2;
 
 const int MLSR_ERROR = -1;
 
+const int MLSR_FEATURE_APPLE_OUTPUT = 16;
+
 const int MLSR_FEATURE_COREML = 2;
+
+const int MLSR_FEATURE_DEVELOPER_SDK = 8;
 
 const int MLSR_FEATURE_JOBS = 1;
 
 const int MLSR_FEATURE_MODEL_STORE = 4;
 
-const int MLSR_FEATURE_QNN_HTP = 8;
+const int MLSR_FEATURE_QNN_HTP = 32;
 
 const int MLSR_OK = 0;
 
@@ -531,6 +1145,133 @@ final class MlsrModelSpec extends ffi.Struct {
   external MlsrString platform;
 }
 
+/// Borrowed PCM view. Output samples live until the audio handle is released;
+/// copying them gives the caller independent ownership. Input PCM is borrowed
+/// only for the duration of a write call. Samples never travel through JSON.
+final class MlsrPcmView extends ffi.Struct {
+  /// Source frames per second.
+  @ffi.Uint32()
+  external int sample_rate;
+
+  /// Interleaved Float32 samples per frame.
+  @ffi.Uint32()
+  external int channels;
+
+  /// Number of source frames; must equal sample_count/channels for input.
+  @ffi.Uint64()
+  external int frames;
+
+  /// Valid aligned Float32 samples, or null only when sample_count is zero.
+  external ffi.Pointer<ffi.Float> samples;
+
+  /// Scalar sample count, not bytes or frames.
+  @ffi.UintPtr()
+  external int sample_count;
+
+  static ffi.Pointer<MlsrPcmView> $allocate(
+    ffi.Allocator $allocator, {
+    required int sample_rate,
+    required int channels,
+    required int frames,
+    required ffi.Pointer<ffi.Float> samples,
+    required int sample_count,
+  }) => $allocator<MlsrPcmView>()
+    ..ref.sample_rate = sample_rate
+    ..ref.channels = channels
+    ..ref.frames = frames
+    ..ref.samples = samples
+    ..ref.sample_count = sample_count;
+}
+
+/// Copied immutable developer request. This normalizes speaking_rate=1.0 to
+/// the model's normal setting; old MlsrJobOptions.speed remains the raw speed.
+final class MlsrRequest extends ffi.Struct {
+  /// Must equal sizeof(MlsrRequest).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// 0: exact supported locale, 1: explicit same-language fallback.
+  @ffi.Uint32()
+  external int locale_fallback;
+
+  /// Finite positive multiplier; default 1.0 maps to Supertonic raw speed 1.05.
+  @ffi.Float()
+  external double speaking_rate;
+
+  /// Supertonic denoising steps, 1..=64; default 8. QNN Superfast requires 8.
+  @ffi.Uint32()
+  external int supertonic_steps;
+
+  /// Original segment n uses seed.wrapping_add(n).
+  @ffi.Uint64()
+  external int seed;
+
+  /// Original UTF-8, at most 64 KiB. Copied before submission returns.
+  external MlsrString text;
+
+  /// Locale, at most 64 UTF-8 bytes; empty selects en.
+  external MlsrString locale;
+
+  /// Stable model-scoped voice ID, at most 128 bytes; empty selects default.
+  external MlsrString voice;
+}
+
+/// Initial speech controls. Mutating caller storage after admission never changes
+/// a request. Playback rate is independent of generated PCM and source coordinates.
+final class MlsrSpeechOptions extends ffi.Struct {
+  /// Must equal sizeof(MlsrSpeechOptions).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// 0: replace this controller's speech; 1: enqueue.
+  @ffi.Uint32()
+  external int mode;
+
+  /// Pitch-preserving playback multiplier; default 1.0.
+  @ffi.Float()
+  external double playback_rate;
+
+  /// Linear output volume in 0..=1; default 1.0.
+  @ffi.Float()
+  external double volume;
+
+  /// 0: begin playing when ready, 1: begin paused.
+  @ffi.Uint32()
+  external int paused;
+
+  /// 0: no retention, 1: retain under the shared disk quota (default).
+  @ffi.Uint32()
+  external int retain_audio;
+
+  /// New generated frames ahead of presentation; default 88,200.
+  @ffi.Uint32()
+  external int lookahead_frames;
+
+  /// Must be zero.
+  @ffi.Uint32()
+  external int reserved;
+
+  static ffi.Pointer<MlsrSpeechOptions> $allocate(
+    ffi.Allocator $allocator, {
+    required int struct_size,
+    required int mode,
+    required double playback_rate,
+    required double volume,
+    required int paused,
+    required int retain_audio,
+    required int lookahead_frames,
+    required int reserved,
+  }) => $allocator<MlsrSpeechOptions>()
+    ..ref.struct_size = struct_size
+    ..ref.mode = mode
+    ..ref.playback_rate = playback_rate
+    ..ref.volume = volume
+    ..ref.paused = paused
+    ..ref.retain_audio = retain_audio
+    ..ref.lookahead_frames = lookahead_frames
+    ..ref.reserved = reserved;
+}
+
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
 /// before asynchronous use. Output views live until their owning handle release.
 final class MlsrString extends ffi.Struct {
@@ -548,4 +1289,72 @@ final class MlsrString extends ffi.Struct {
   }) => $allocator<MlsrString>()
     ..ref.data = data
     ..ref.len = len;
+}
+
+/// Shared facade limits. Initialize with mlsr_tts_options_default. All reserved
+/// fields must be zero. Headless operation performs no output-device I/O.
+final class MlsrTtsOptions extends ffi.Struct {
+  /// Must equal sizeof(MlsrTtsOptions).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// 0: compiled default output (lazy), 1: headless, 2: host-managed native output.
+  @ffi.Uint32()
+  external int output_mode;
+
+  /// Pending synthesis/replay count limit, 1..=128; default 16.
+  @ffi.Uint32()
+  external int max_requests;
+
+  /// Pending UTF-8 text budget, 1..=16 MiB; default 256 KiB.
+  @ffi.Uint32()
+  external int max_text_bytes;
+
+  /// Each native/consumer PCM queue's frame limit; default 44,100.
+  @ffi.Uint32()
+  external int queue_frames;
+
+  /// One complete PCM chunk limit; default 4,096.
+  @ffi.Uint32()
+  external int chunk_frames;
+
+  /// Model-segment allocation limit; default 1,572,864 frames.
+  @ffi.Uint32()
+  external int max_segment_frames;
+
+  /// Owned retained recording-count limit; default 128.
+  @ffi.Uint32()
+  external int max_retained_stores;
+
+  /// Shared retained PCM disk quota; default 128 MiB, max 16 GiB.
+  @ffi.Uint64()
+  external int max_retained_bytes;
+
+  /// Must be zero.
+  @ffi.Uint64()
+  external int reserved;
+
+  static ffi.Pointer<MlsrTtsOptions> $allocate(
+    ffi.Allocator $allocator, {
+    required int struct_size,
+    required int output_mode,
+    required int max_requests,
+    required int max_text_bytes,
+    required int queue_frames,
+    required int chunk_frames,
+    required int max_segment_frames,
+    required int max_retained_stores,
+    required int max_retained_bytes,
+    required int reserved,
+  }) => $allocator<MlsrTtsOptions>()
+    ..ref.struct_size = struct_size
+    ..ref.output_mode = output_mode
+    ..ref.max_requests = max_requests
+    ..ref.max_text_bytes = max_text_bytes
+    ..ref.queue_frames = queue_frames
+    ..ref.chunk_frames = chunk_frames
+    ..ref.max_segment_frames = max_segment_frames
+    ..ref.max_retained_stores = max_retained_stores
+    ..ref.max_retained_bytes = max_retained_bytes
+    ..ref.reserved = reserved;
 }

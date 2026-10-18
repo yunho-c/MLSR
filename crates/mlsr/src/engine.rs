@@ -8,8 +8,13 @@ use crate::{
     job::{Control, Job, JobReport, Outcome, SegmentInfo, lock},
     models::supertonic3::{Bundle, Pipeline, SynthesisObserver, SynthesisPlan},
     runtime::SessionStats,
-    text::TextSegment,
+    text::{TextPlan, TextSegment},
+    voice::{VoiceCatalog, VoiceReadiness},
 };
+#[cfg(test)]
+pub(crate) use job_tests::fake as fake_engine;
+#[cfg(test)]
+pub(crate) use job_tests::gated_fake as gated_fake_engine;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     path::Path,
@@ -37,6 +42,7 @@ struct Request {
     language: String,
     voice: String,
     options: SynthesisOptions,
+    plan: Option<(Arc<TextPlan>, usize)>,
 }
 impl Request {
     fn copy(input: SynthesisRequest<'_>) -> Result<Self> {
@@ -56,11 +62,13 @@ impl Request {
             language: input.language.into(),
             voice: input.voice.into(),
             options: input.options,
+            plan: None,
         })
     }
 }
 trait Backend: Send {
     fn voices(&self) -> Vec<String>;
+    fn voice_catalog(&self) -> VoiceCatalog;
     fn segments(&self, request: &Request) -> Result<Vec<TextSegment>>;
     fn single(
         &mut self,
@@ -77,6 +85,9 @@ trait Backend: Send {
     fn shutdown(&mut self) -> Result<()>;
 }
 impl Backend for Pipeline {
+    fn voice_catalog(&self) -> VoiceCatalog {
+        self.voice_catalog()
+    }
     fn voices(&self) -> Vec<String> {
         self.voices().map(str::to_owned).collect()
     }
@@ -125,6 +136,7 @@ impl Backend for Pipeline {
 }
 enum Command {
     Stream(Request, Arc<Control>),
+    Plan(Request, Arc<Control>, SyncSender<Result<TextPlan>>),
     Single(Request, Arc<Control>, SyncSender<Result<SynthesisOutput>>),
     Stats(Arc<Control>, SyncSender<Result<SessionStats>>),
     Shutdown,
@@ -144,6 +156,7 @@ pub struct Engine {
     state: Arc<Mutex<State>>,
     worker: Mutex<Option<JoinHandle<Result<()>>>>,
     voices: Vec<String>,
+    catalog: VoiceCatalog,
 }
 impl Engine {
     /// Verify assets and load the persistent graphs once, without downloads.
@@ -176,6 +189,10 @@ impl Engine {
     }
     fn with_backend(backend: Box<dyn Backend>) -> Result<Self> {
         let voices = backend.voices();
+        let catalog = backend
+            .voice_catalog()
+            .retain_voices(&voices)
+            .with_readiness(VoiceReadiness::EngineReady);
         let (commands, receiver) = mpsc::sync_channel(1);
         let state = Arc::new(Mutex::new(State {
             closed: false,
@@ -192,11 +209,70 @@ impl Engine {
             state,
             worker: Mutex::new(Some(worker)),
             voices,
+            catalog,
         })
     }
     /// Bundled voice identifiers, without copying native conditioning tensors.
     pub fn voices(&self) -> impl Iterator<Item = &str> {
         self.voices.iter().map(String::as_str)
+    }
+    /// Loaded voice metadata snapshot. A closed engine cannot claim readiness.
+    pub fn voice_catalog(&self) -> Result<VoiceCatalog> {
+        if lock(&self.state).closed {
+            return Err(Error::Closed);
+        }
+        Ok(self.catalog.clone())
+    }
+    /// Freeze and token-validate text on the engine worker without inference.
+    /// This uses the existing single-operation lane and may return Busy. The
+    /// high-level scheduler serializes planning and synthesis for callers.
+    pub fn plan_text(&self, text: &str, language: &str, voice: &str) -> Result<TextPlan> {
+        let request = Request::copy(SynthesisRequest {
+            text,
+            language,
+            voice,
+            options: SynthesisOptions::default(),
+        })?;
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.submit(JobOptions::default(), |control| {
+            Command::Plan(request, control, tx)
+        })?;
+        rx.recv().map_err(|_| Error::Closed)?
+    }
+    /// Execute a previously frozen plan or a suffix, preserving original source
+    /// ranges, segment IDs and noise seeds. Does not segment the suffix again.
+    pub fn start_plan(
+        &self,
+        plan: Arc<TextPlan>,
+        start_segment: usize,
+        voice: &str,
+        options: SynthesisOptions,
+        limits: JobOptions,
+    ) -> Result<Job> {
+        if start_segment >= plan.segments().len()
+            || self
+                .catalog
+                .voices()
+                .first()
+                .is_none_or(|v| v.manifest_sha256() != plan.manifest_sha256())
+        {
+            return Err(Error::InvalidOptions(
+                "plan belongs to another model or has an invalid starting segment".into(),
+            ));
+        }
+        if !self.voices().any(|v| v == voice) {
+            return Err(Error::VoiceUnavailable(voice.into()));
+        }
+        let mut request = Request::copy(SynthesisRequest {
+            text: plan.original(),
+            language: plan.language(),
+            voice,
+            options,
+        })?;
+        request.plan = Some((plan, start_segment));
+        Ok(Job {
+            control: self.submit(limits, |control| Command::Stream(request, control))?,
+        })
     }
     fn submit(
         &self,
@@ -308,7 +384,13 @@ fn stream(
     segments: &mut u32,
 ) -> Result<()> {
     control.checkpoint()?;
-    let parts = backend.segments(request)?;
+    let parts = match &request.plan {
+        Some((plan, start)) => plan.segments()[*start..]
+            .iter()
+            .map(|p| p.text_segment().clone())
+            .collect(),
+        None => backend.segments(request)?,
+    };
     for segment in parts {
         // A stopped consumer cannot trigger generation of another segment while
         // its queue is full, even before the next duration event is published.
@@ -365,6 +447,46 @@ fn worker(
     while let Ok(command) = receiver.recv() {
         let (control, frames, segments, outcome, poison) = match command {
             Command::Shutdown => break,
+            Command::Plan(request, control, reply) => {
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    control.checkpoint()?;
+                    let catalog = backend.voice_catalog();
+                    let hash = catalog
+                        .voices()
+                        .first()
+                        .ok_or_else(|| Error::Synthesis("empty voice catalog".into()))?
+                        .manifest_sha256();
+                    let parts = backend.segments(&request)?;
+                    let plan = TextPlan::build(&request.text, &request.language, hash, parts)?;
+                    control.checkpoint()?;
+                    Ok(plan)
+                }));
+                let poison = result.is_err();
+                let result = result.unwrap_or_else(|_| {
+                    Err(Error::WorkerFailed(
+                        "panic during text planning; backend retired".into(),
+                    ))
+                });
+                complete(
+                    &state,
+                    &control,
+                    JobReport {
+                        frames: 0,
+                        segments: 0,
+                        outcome: match &result {
+                            Ok(_) => Outcome::Completed,
+                            Err(Error::Cancelled) => Outcome::Cancelled,
+                            Err(e) => Outcome::Failed(Arc::new(Error::Synthesis(e.to_string()))),
+                        },
+                    },
+                    poison,
+                );
+                let _ = reply.send(result);
+                if poison {
+                    break;
+                }
+                continue;
+            }
             Command::Stream(request, control) => {
                 let (mut frames, mut segments) = (0, 0);
                 let result = catch_unwind(AssertUnwindSafe(|| {
