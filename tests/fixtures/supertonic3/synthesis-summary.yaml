@@ -1,0 +1,321 @@
+schema_version: 1
+kind: rust_supertonic_synthesis_qualification
+recorded_utc: '2026-10-18T04:34:54+00:00'
+bundle_id: supertonic3-coreml-int4-v1
+scope: Original text through Rust normalization, tokenization, duration/bucket planning, persistent Core
+  ML inference, and owned PCM; standalone Rust WAV CLI.
+passed: true
+manifest_sha256: 4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c
+manifest_file_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+corpus_sha256: 3c4d522b406c29a5a2d289aca7a11bca0b43b2776ee683141cd128435b756bd2
+reference_sha256: 5cfddc36a2dcba682a3c6f32d44d649583d3e3c71479849eadd8dea8b1581e71
+compute_policy: cpu_and_neural_engine
+environment:
+  platform: macOS-27.0.1-arm64-arm-64bit-Mach-O
+  python: 3.14.8
+  numpy: 2.2.6
+  hardware: Apple M4 Pro
+  os_build: 26A434
+  rust: rustc 1.95.0 (59807616e 2026-04-14)
+  minimum_rust_tested: rustc 1.88.0 (6b00bc388 2025-06-23)
+  xcode: 'Xcode 27.1
+
+    Build version 27A9275'
+  macos_sdk: '27.0'
+  ios_sdk: '27.1'
+  ios_simulator_sdk: '27.1'
+binaries_sha256:
+  coreml_synthesis_replay: 94ce53e3f813deb03db8b6f40d34243cfb54233d4dcfeaa04a345d3a69467422
+  mlsr_cli: 3dc45412f3422a7389022eb351024a4cf736a611e1234cc37375c24672423c24
+source_files:
+  Cargo.lock: 55105efeae832b2dc923759c4aa7ff72007c2665c8457f9e7719616373bb5055
+  Cargo.toml: aae33786f27ad06a97dd8dfe796c120264f95644320ae0fe385dec66efb6ac84
+  crates/mlsr/Cargo.toml: 7d2b2d6555fba60803cf28d0c424acd6a7953f505fec83a67b4eb90234ccbae4
+  crates/mlsr/examples/coreml_synthesis_replay.rs: 798835991231620b12bc2b11a8301ecf37c26badb70878958b5555950129c2a2
+  crates/mlsr/src/audio.rs: b6fbff17efd0fde6334993b6bb1a78bc69113c124d42de0dab905522fbc716a0
+  crates/mlsr/src/config.rs: cacf7157074a129502bd93e35d8b636fec75a089bb10b37faf8df24ab31a73be
+  crates/mlsr/src/engine.rs: 65059504a6ffebca7491d2564a56e4458f35f80df49cee1c72edd33260a4522a
+  crates/mlsr/src/error.rs: 831d19bdcd9fa189957c890c25343ea269f07961aa8c761c483872ddeef23290
+  crates/mlsr/src/lib.rs: bdc8434115914999e82b287ed79dd2f53d70861f49a1e4703fe01c1db1cebf84
+  crates/mlsr/src/models/mod.rs: 8d660467741981af16d83082dfb77da242045304d1cfe10b19523db43ec041bd
+  crates/mlsr/src/models/supertonic3/bundle/tests.rs: 99ee812b7f9977576492faee53c65c39b77d7fb0c7e030d9905aa4440b419b9d
+  crates/mlsr/src/models/supertonic3/bundle.rs: d55ab9a0ff54369e39d088ead348717166142dc763326946669f983301a1b1d6
+  crates/mlsr/src/models/supertonic3/frontend/tests.rs: 7ed84dc314027b0cdf67fcd43d5fdc4c8326fcf0664c00d5186d4e89f4dbfc3d
+  crates/mlsr/src/models/supertonic3/frontend.rs: 32a3d09d9159e498ce629ab8c17502cdb2317a22bacfbad6e57f15a7981fa8c4
+  crates/mlsr/src/models/supertonic3/mod.rs: 6f41e0152558c22812a291231fec298fd267b98a6d9c34c22839dc6ca6a7a14b
+  crates/mlsr/src/models/supertonic3/pipeline.rs: db7ae71fe130b07a5a9fce3ef099868b3c027b0d92a67ff95e225dfe6b6574ed
+  crates/mlsr/src/models/supertonic3/planning/tests.rs: ae3fe06d1956ea4a84f066b7a62c070a8615e165a654e7a23a2fca03dd412ad8
+  crates/mlsr/src/models/supertonic3/planning.rs: 3726a785ee4a2fa627e2359c82ca37399f1374a725dd17975322c561bf1ba1fa
+  crates/mlsr/src/runtime/coreml/mod.rs: 7f219c7f7e1efddcdad0ce68049c2af94d349047eec291d1472ac42a219c289e
+  crates/mlsr/src/runtime/coreml/model.rs: 326e3aae167158d52aac56f333960a843e00211a78bd6cd1b06d53aa1a5e493c
+  crates/mlsr/src/runtime/coreml/tensor.rs: dd07006169a46ff3cd6acf33c1bf61ad1ee3b047a56e2b3486484851e2807a5c
+  crates/mlsr/src/runtime/coreml/tests.rs: 2be44de880a2b546d11d67fb9ca0b5778029288eda8281cd06dfa532ec053a05
+  crates/mlsr/src/runtime/coreml/worker.rs: bba945f2b4510894ebc635966cb5517dbf855022cd178c759351d05e38e18e7c
+  crates/mlsr/src/runtime/error.rs: 70affbb86e86850cdfe9b6bcf1edea167f11d60a7bc6563a416bf4fd335172d3
+  crates/mlsr/src/runtime/mod.rs: 8d55c8c7d870119c795c33589fce1890efc3813ccfae6e7afcd2ba75282d31e0
+  crates/mlsr/src/runtime/session/tests.rs: ed11e0ab52cc8d943e6af535a11ec089fb762a6afa0249b4b063f37a5d9a584f
+  crates/mlsr/src/runtime/session.rs: 0dfaaf8ea2039591655cde422935f020fb04e3084159cee76e767d9da07b802d
+  crates/mlsr/src/runtime/tensor.rs: c13d6c5348fef8bd1d69c406235c9bbe8ca49d99c925b8320e111da3cbfcb7ea
+  crates/mlsr/src/text/mod.rs: 1e6b77a42da3d130808983815c932495724e906c98fdd5a6442d9acb1a397e82
+  tools/supertonic3/__init__.py: 696207481b0e922a9bada036a23bdba40e09e2cb4eef94c241286294d368996d
+  tools/supertonic3/__main__.py: 6aedc89e558ac426e8fe119b108359df24117c16407d142c3fa7fb777b39364b
+  tools/supertonic3/bundle.py: 6bf87e4e7ce7a3ddc114a8b8a0fd2ff2495008798f63f3c2a255813e33722cbe
+  tools/supertonic3/cli_smoke.py: d552ce6ab9bf0589fd0e0574db86bbad20eadf83ba287917f32e508e1ad78028
+  tools/supertonic3/freeze_frontend.py: d33b128f59875c835f130ab8efd6a2a17d1ae2774c0676dc42147e4ac00c7394
+  tools/supertonic3/frontend.py: aacad397cb551896bd0e19a892f7b19685d1000297f3bfa60be00411b7121a47
+  tools/supertonic3/reference.py: cd569f2b2f74efd93efc21720b2ae4d965d61e8e2c23e826a533f159fbc318ce
+  tools/supertonic3/rust_runtime.py: 694ba04a410c4ae571fb4b2257b7e376e668ec4187cf18c4f038a78f9c467e83
+  tools/supertonic3/synthesis_replay.py: 291fd2c0d228e2cb393726bc439fd972d988b1b9da4a2a1d69ad188101ad7518
+cli_source_files:
+  crates/mlsr-cli/Cargo.toml: 0d730504ffaf8f3172a9c57e0961b24d4612f72fcf0c97ec6036c7c73a7661ae
+  crates/mlsr-cli/src/main.rs: dbcee2c5ab26f2c1e26be38660271d82d067950712fed385b71206579068ad93
+  tools/supertonic3/cli_smoke.py: d552ce6ab9bf0589fd0e0574db86bbad20eadf83ba287917f32e508e1ad78028
+packaging_source_files:
+  tools/check_coreml.py: 36d6372cb3819188ca004c774448a8c9f5dc1ae0469b1cba7e91f9179d429a5c
+  tools/dev.py: 64e8c03486828e5e2a41601f6471e96803699e07da12e3c4bfe52398b8042de7
+  .github/workflows/ci.yml: 3194c5c8f27d857e1619a9139ee08745366d826e41e83aa17ea2bbcd0c692798
+  crates/mlsr/examples/coreml_ffi_probe.rs: 5ca4d4d5abcc913d2e45a397ee704aeb2054aa13cdf4b7f7047f0b342a091956
+  tests/integration/coreml_smoke.c: b1e0a407b21d67e1615e9d8a427585fe66da35435d00ca7a9bd7bbc9a6e32d02
+  tests/integration/coreml_ctypes.py: 80e1a85d5b867ca3e00c87a3c4a6347ea76cc6fc17ae8bddd2c7340e5c243498
+saved_noise_replay:
+  baseline: Pinned quantized Core ML reference; actual saved initial noise supplied; all other inputs
+    and decisions computed by Rust.
+  cases: 14
+  passes_per_mode: 2
+  tensors_per_case: 24
+  total_tensor_comparisons: 1344
+  atol: 0.0
+  rtol: 0.0
+  allocation_modes:
+    ordinary:
+      case_executions: 28
+      tensor_comparisons: 672
+      all_tensors_byte_exact: true
+      input_rejections: 5
+      seeded_checks: 4
+      model_loads: 6
+      successful_predictions: 396
+      persistent_tensor_handles: 6
+      all_case_tensor_counts_steady: true
+      ve_backings_reused: 0
+      worker_exit: 0
+    backings:
+      case_executions: 28
+      tensor_comparisons: 672
+      all_tensors_byte_exact: true
+      input_rejections: 5
+      seeded_checks: 4
+      model_loads: 6
+      successful_predictions: 396
+      persistent_tensor_handles: 12
+      all_case_tensor_counts_steady: true
+      ve_backings_reused: 224
+      worker_exit: 0
+  cases_covered:
+  - id: en_m1_basic
+    tokens: 59
+    latent_length: 60
+    latent_bucket: 128
+    pcm_frames: 183750
+  - id: en_f1_basic
+    tokens: 57
+    latent_length: 50
+    latent_bucket: 128
+    pcm_frames: 153152
+  - id: en_normalization
+    tokens: 58
+    latent_length: 62
+    latent_bucket: 128
+    pcm_frames: 189492
+  - id: en_punctuation
+    tokens: 45
+    latent_length: 56
+    latent_bucket: 128
+    pcm_frames: 171445
+  - id: ko_m1_basic
+    tokens: 52
+    latent_length: 54
+    latent_bucket: 128
+    pcm_frames: 164390
+  - id: ko_f1_basic
+    tokens: 49
+    latent_length: 45
+    latent_bucket: 128
+    pcm_frames: 136417
+  - id: ko_normalization
+    tokens: 44
+    latent_length: 51
+    latent_bucket: 128
+    pcm_frames: 156433
+  - id: ko_decomposed
+    tokens: 37
+    latent_length: 39
+    latent_bucket: 128
+    pcm_frames: 119109
+  - id: latent_127
+    tokens: 92
+    latent_length: 127
+    latent_bucket: 128
+    pcm_frames: 388608
+  - id: latent_128
+    tokens: 92
+    latent_length: 128
+    latent_bucket: 128
+    pcm_frames: 391680
+  - id: latent_129
+    tokens: 92
+    latent_length: 129
+    latent_bucket: 256
+    pcm_frames: 394752
+  - id: latent_255
+    tokens: 115
+    latent_length: 255
+    latent_bucket: 256
+    pcm_frames: 781824
+  - id: latent_256
+    tokens: 115
+    latent_length: 256
+    latent_bucket: 256
+    pcm_frames: 784896
+  - id: latent_257
+    tokens: 115
+    latent_length: 257
+    latent_bucket: 512
+    pcm_frames: 787968
+input_rejections:
+- id: empty
+  expected_error: empty_text
+  passed: true
+- id: emoji_only
+  expected_error: empty_text
+  passed: true
+- id: unsupported_language
+  expected_error: unsupported_language
+  passed: true
+- id: unsupported_scalar
+  expected_error: unsupported_character
+  passed: true
+- id: ko_overflow_after_normalization
+  expected_error: text_too_long
+  passed: true
+seeded_generation:
+  scope: Rust ChaCha8/normal generator, normal production versus diagnostic path, repeated per allocation
+    mode; not NumPy seed compatibility.
+  identical_across_allocation_modes: true
+  cases:
+  - id: en_m1_basic
+    seed: 1729
+    passed: true
+    normal_and_diagnostic_pcm_exact: true
+    noise_sha256: 1883e698583b91c0f0d02ca560d2c0af76e07e4cc20d4a3103f23243c9161a96
+    pcm_sha256: 52f009d557ea4ed156aae503b2aa04ed3ec3d01d165c4b4923329996be4774f6
+  - id: en_f1_basic
+    seed: 1730
+    passed: true
+    normal_and_diagnostic_pcm_exact: true
+    noise_sha256: 69bc71df32d0eb4a53faa3585df7b2867799e0d730341bc74e06a14cf29bfa6e
+    pcm_sha256: f73aa60089619b884e2ec156c9ff5415afceb462b38dc9ea4769fda7c738e660
+  - id: ko_m1_basic
+    seed: 1733
+    passed: true
+    normal_and_diagnostic_pcm_exact: true
+    noise_sha256: c2f7da89e6f63e4b6668447f6ebafcde89583197020b48386c32824e633dc0a9
+    pcm_sha256: c0a0f339be5ad4259a508fec50d866dc9448ccdfc9eb7f0b04840c26f584e68c
+  - id: ko_f1_basic
+    seed: 1734
+    passed: true
+    normal_and_diagnostic_pcm_exact: true
+    noise_sha256: c97f8da1eed81d515b2576944611a7ab2e770571a91f465a6ed55588f074b741
+    pcm_sha256: 4e81fe64e6aa40ebe11cd5c0fc31112d955f15ed520d551e91e437e2619161c7
+cli:
+  scope: Standalone release executable invoked outside checkout; PCM compared to Rust seeded replay receipts.
+  working_directory: ~/.cache/mlsr/qualification/synthesis-v1/cli
+  sample_rate: 44100
+  channels: 1
+  format: IEEE Float32 WAV
+  independent_riff_validation: passed
+  macos_afinfo: four WAVs recognized
+  text_file_case: ko_f1_basic
+  cases:
+  - id: en_m1_basic
+    passed: true
+    wav: en_m1_basic.wav
+    frames: 183750
+    pcm_sha256: 52f009d557ea4ed156aae503b2aa04ed3ec3d01d165c4b4923329996be4774f6
+    wav_sha256: 4d06082924c7381703bf75f9181af0a05d3d313bca8b1197a72e5d75ca1b9ad8
+  - id: en_f1_basic
+    passed: true
+    wav: en_f1_basic.wav
+    frames: 153152
+    pcm_sha256: f73aa60089619b884e2ec156c9ff5415afceb462b38dc9ea4769fda7c738e660
+    wav_sha256: 4bcd7740bf7daf762c24becd476220cbfe8f65e149df2226ec7aeceec59b750c
+  - id: ko_m1_basic
+    passed: true
+    wav: ko_m1_basic.wav
+    frames: 164390
+    pcm_sha256: c0a0f339be5ad4259a508fec50d866dc9448ccdfc9eb7f0b04840c26f584e68c
+    wav_sha256: 9cf8a566718bd24475429a5b6c57cf8185ab71acb9279ea7fe829113cc63c68d
+  - id: ko_f1_basic
+    passed: true
+    wav: ko_f1_basic.wav
+    frames: 136417
+    pcm_sha256: 4e81fe64e6aa40ebe11cd5c0fc31112d955f15ed520d551e91e437e2619161c7
+    wav_sha256: 87cdecd40df20c9956a6cb4d5397741a364aeb77ee8132ac06745e151131ff24
+  input_rejections: 5
+  existing_outputs_preserved: 4
+checks:
+  host_execution: macOS arm64 on recorded host only
+  rust_toolchains:
+  - 1.95.0
+  - 1.88.0
+  host_core_tests_per_toolchain: 21
+  host_cli_tests_per_toolchain: 3
+  host_ffi_version_tests_per_toolchain: 1
+  engine_rustdoc_tests_per_toolchain: 1
+  additional_real_asset_tests_per_toolchain: 4
+  real_asset_test_scope: bundle load, frontend fixtures, persistent pipeline recovery/reuse/thread move/shutdown,
+    public engine and independent audio
+  foreign_runtime_inference_callers:
+  - C linked to shared library
+  - C linked to static library
+  - Python ctypes from foreign threads
+  foreign_runtime_probe_scope: Tiny affine graph through development probe; not a public synthesis C ABI
+  cross_linked_with_stable_rust:
+  - x86_64-apple-darwin
+  - aarch64-apple-ios
+  - aarch64-apple-ios-sim
+  cross_link_scope: Native library and development inference probe; not execution on those targets
+  deployment_metadata_verified:
+    macos: '15.0'
+    ios: '18.0'
+    ios_simulator: '18.0'
+  windows_all_features_typecheck: passed for mlsr, mlsr-ffi, mlsr-cli
+  cidre_absent_from_default_and_windows_dependencies: passed
+  portable_model_tool_tests: 41
+  portable_workspace_format_lint_and_tests: passed
+  existing_c_python_go_dart_version_checks: passed on macOS arm64
+  generated_c_and_dart_bindings: current
+  ci: configured; not executed during local qualification
+external_evidence:
+  directory: ~/.cache/mlsr/qualification/synthesis-v1
+  files_sha256:
+    final-ordinary.yaml: 3eee7ebd4f103d6bdd1bd87797a716c9c31f90736a1ca1550609ffb16246b13f
+    final-backings.yaml: 25c99f9880ef74e17b2f32ba8f5b4b74470f175c05623b3bf1b3a2f43207ee5a
+    final-ordinary.native.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    final-backings.native.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    cli/report.yaml: d72c5cd5942e0f43dc20ce7974a473296d48452a70ec9123f9db842bae84980b
+    cli/commands.log: 614544c1a420399d8762ea2e7e96bb80310ec7b7697d39997c4e868a00553b48
+    cli/afinfo.log: 7df35cf5e9f42b8eb789262e02589180a02ef75660379066a544c064015ac9e2
+    task5-model-tools.log: 20569de47d3290058bd0ac4a77020c46db02884675310a384ea49bba23979971
+    task5-msrv-native.log: 7434f6a7fd2c9443599f28cfc800cc7904ca20e6e1beec43f9f321236dd5dc0a
+    task5-native-cross.log: e76a9b867f63f4b84bc0e8ba64eafe2fb357e4fa62c675b7322634a7465f2992
+    task5-portable-bindings.log: 509dda8c1683694399b9b2ee880ccf864bf91995da9331477651d752cd38057a
+    task5-real-synthesis.log: 3b5c1cafdd18ee15b851a7d6b9c141a4fb9208176c1cb7e174a2fd9f66ab1e69
+not_qualified:
+- Public C or language synthesis API, jobs, cancellation, and bounded streaming
+- Long-text segmentation or speech quality in other model languages
+- Execution on Intel macOS, minimum supported macOS/iOS versions, or physical iOS devices
+- iOS application packaging
+- ANE placement, residency, utilization, and performance
+- Perceptual speech quality or parity with the unquantized upstream model
+- QNN, LiteRT/XNNPACK, and other inference backends

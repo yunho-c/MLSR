@@ -1,5 +1,6 @@
 use super::{Bundle, EncodedText, SynthesisPlan};
 use crate::{
+    audio::Audio,
     config::SynthesisOptions,
     error::{Error, Result},
     runtime::{
@@ -30,18 +31,26 @@ pub struct Pipeline {
 /// Owned synthesis output, independent of model/session lifetime.
 #[derive(Debug)]
 pub struct SynthesisOutput {
-    pcm: Vec<f32>,
+    audio: Audio,
     text: EncodedText,
     plan: SynthesisPlan,
 }
 impl SynthesisOutput {
     /// Mono 44,100 Hz Float32 samples; finite, not clipped or normalized.
     pub fn pcm(&self) -> &[f32] {
-        &self.pcm
+        self.audio.samples()
     }
     /// Take ownership of the PCM allocation.
     pub fn into_pcm(self) -> Vec<f32> {
-        self.pcm
+        self.audio.into_samples()
+    }
+    /// Owned PCM with explicit sample rate, channel count, and frame count.
+    pub fn audio(&self) -> &Audio {
+        &self.audio
+    }
+    /// Take the audio allocation independently of text/planning metadata.
+    pub fn into_audio(self) -> Audio {
+        self.audio
     }
     /// Original/normalized text and exact model tokens/mask.
     pub fn text(&self) -> &EncodedText {
@@ -330,7 +339,7 @@ impl Pipeline {
         }
         Ok((
             SynthesisOutput {
-                pcm,
+                audio: Audio::mono(pcm, 44100)?,
                 text: encoded,
                 plan,
             },

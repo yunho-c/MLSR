@@ -12,7 +12,8 @@ The Cargo workspace shares version metadata, a lockfile, and build outputs.
 tool and is not a runtime dependency. Portable model loading uses Serde, YAML/JSON
 parsers, and SHA-256. JSON reads the upstream tokenizer/configuration/voice assets;
 model manifests and qualification reports remain YAML. The optional Apple-only
-`coreml` feature adds pinned cidre bindings.
+`coreml` feature adds pinned cidre bindings. The portable frontend and noise
+preparation use pinned Unicode normalization and random-generation crates.
 
 ## Rust modules
 
@@ -26,13 +27,14 @@ model manifests and qualification reports remain YAML. The optional Apple-only
 | `models` | Model-specific tokenization, tensor preparation, inference sequence, and voice formats |
 | `runtime` | Executing networks and integrating optional platform backends |
 
-Version queries, [verified Supertonic bundles](supertonic3.md), and the
-[Core ML tensor runtime](coreml-runtime.md) are implemented.
-Its sessions own native models/tensors on one worker and expose portable owned
-data and opaque handles. Native bindings stay private; a separate system-binding
-crate is unnecessary. Model/tokenization orchestration remains a subsequent
-integration step. The pinned Supertonic bundle and saved-tensor replay tools
-qualify runtime outputs independently of that future text-to-PCM implementation.
+[Supertonic text-to-PCM synthesis](supertonic3.md) is implemented, including local
+asset verification, frontend, duration/bucket planning, model sequencing, and
+owned audio. `Engine` exposes a synchronous Rust interface. Its
+[Core ML session](coreml-runtime.md) owns native models/tensors on one worker;
+native bindings stay private. The pinned reference tools qualify every input,
+intermediate, shape decision, and PCM result from original text with saved noise.
+Jobs, cancellation, long-text segmentation, and the synthesis C ABI remain future
+work; the module table also describes those intended responsibilities.
 
 Keep model architecture separate from the inference backend: a model pipeline
 specifies what to execute, while a runtime supplies execution. Split modules into
@@ -74,5 +76,7 @@ library dependencies, and tests of installed packages. The present scaffold only
 has local builds, a Python wrapper wheel, and configurable external native
 libraries. It does not publish packages or ship prebuilt runtime bundles.
 
-An optional `mlsr-cli` crate can be added when a synthesis command has useful
-behavior. Until then, `cargo run -p mlsr --example version` exercises the Rust API.
+`mlsr-cli` verifies local bundles and synthesizes complete Float32 WAV files
+through the public Rust engine. It owns argument parsing and WAV serialization;
+neither is a dependency of the `mlsr` library. No Python code executes in the
+production synthesis path.

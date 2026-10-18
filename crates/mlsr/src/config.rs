@@ -1,6 +1,26 @@
 //! Validated synthesis options shared by every host language.
 use crate::error::{Error, Result};
 
+/// Maximum raw UTF-8 bytes in a single synthesis request, before normalization.
+pub const MAX_TEXT_BYTES: usize = 64 * 1024;
+
+/// Persistent Core ML engine settings. Model/text policy stays in Rust.
+#[derive(Clone, Copy, Debug)]
+pub struct EngineOptions {
+    /// Devices Core ML is permitted to use; this is not a placement guarantee.
+    pub compute_policy: crate::runtime::ComputePolicy,
+    /// Offer alternating VE output buffers; consume actual outputs if declined.
+    pub reuse_output_buffers: bool,
+}
+impl Default for EngineOptions {
+    fn default() -> Self {
+        Self {
+            compute_policy: crate::runtime::ComputePolicy::CpuAndNeuralEngine,
+            reuse_output_buffers: true,
+        }
+    }
+}
+
 /// Options for one Supertonic synthesis. Defaults: eight steps, speed 1.05,
 /// deterministic seed zero. Randomness belongs to the request, not the engine.
 #[derive(Clone, Copy, Debug, PartialEq)]

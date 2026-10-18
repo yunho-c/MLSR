@@ -133,5 +133,63 @@ checks recovery after bad inputs/noise, repeated requests, moving the pipeline
 between threads, option effects, stable tensor counts, and output lifetime.
 It requires the `coreml` feature and `MLSR_TEST_BUNDLE`, and runs with `--ignored`.
 
-The top-level engine API and WAV CLI are the next implementation step. The
-public C ABI and language bindings currently expose version queries.
+## Rust engine and WAV CLI
+
+`Engine::load(manifest_path, bundle_directory, EngineOptions::default())`
+verifies and loads once. Reuse the engine for `synthesize(SynthesisRequest {
+text, language, voice, options })` calls. Defaults permit CPU+ANE and offer
+output-buffer reuse. A request borrows its input strings only for the synchronous
+call; its result owns normalized/original text, shape decisions, and `Audio`.
+Audio exposes samples, sample rate, channels, frame count, and duration. Samples
+are finite Float32 values with no clipping or loudness normalization. They remain
+valid after engine shutdown, destruction, or subsequent synthesis.
+
+The example in `engine.rs` is compiled as a Rust documentation test. The opt-in
+`engine_reuses_models_and_returns_independent_audio` test executes English/Korean
+requests through this API and checks model reuse and audio lifetime.
+
+```sh
+MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release \
+  -p mlsr-cli --features coreml
+
+target/release/mlsr verify --manifest model-manifests/supertonic3-coreml.yaml \
+  --bundle /path/to/model-bundle
+
+target/release/mlsr synthesize --manifest model-manifests/supertonic3-coreml.yaml \
+  --bundle /path/to/model-bundle --text "Hello from MLSR." \
+  --language en --voice M1 --steps 8 --speed 1.05 --seed 1729 --output hello.wav
+```
+
+Use `--text-file input.txt` for UTF-8 input instead of `--text`. The CLI writes
+mono 44,100 Hz Float32 WAV using Hound. It finalizes a temporary file in the
+destination directory, then publishes it without overwriting any existing path.
+Failures do not leave a partial output WAV. The destination directory must exist.
+`--compute-policy cpu-only` and `--no-output-reuse` support controlled comparisons;
+they do not alter preprocessing or model math. The CLI and Rust engine need no
+Python interpreter and never download assets.
+
+The public C ABI and language bindings still expose version queries. Streaming,
+jobs/cancellation, long-text splitting, playback, physical iOS qualification,
+additional runtimes, and performance/quality studies are subsequent milestones.
+
+## Recorded qualification
+
+The compact [synthesis qualification record](../tests/fixtures/supertonic3/synthesis-summary.yaml)
+identifies the host, toolchains, source/binary hashes, full-pipeline parity,
+native packaging checks, and CLI WAV receipts. Large reports and audio remain
+in an external cache. Numerical equivalence is to the pinned Core ML baseline;
+it does not establish parity with an unquantized model or broad perceptual quality.
+
+To check the CLI against a passing synthesis replay and preserve four listenable
+English/Korean samples in a new directory:
+
+```sh
+python3 -m tools.supertonic3.cli_smoke \
+  --bundle /path/to/model-bundle --reference /path/to/reference-capture \
+  --replay-report /path/to/synthesis-backings.yaml --output-dir /path/to/new/cli-check
+```
+
+This runs the standalone Rust executable outside the checkout, checks WAV
+format/PCM bytes with an independent RIFF reader, tests all five input failures,
+and verifies that existing outputs are preserved. Python is used only by this
+development verifier, not by the executable being tested.

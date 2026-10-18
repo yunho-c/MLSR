@@ -1,12 +1,13 @@
 # Platform status
 
 Cross-platform support requires both a portable API and a working inference
-runtime on each target. Core ML tensor execution is implemented; the Supertonic
-text-to-PCM pipeline and public synthesis ABI are subsequent integration work.
+runtime on each target. Supertonic text-to-PCM synthesis is implemented through
+Core ML and qualified on macOS arm64. The public synthesis ABI and other
+inference backends are subsequent work.
 
 | Target | Scaffold configuration | Validation |
 | --- | --- | --- |
-| macOS arm64 | Shared/static libraries; optional Core ML | Local Rust runtime replay, C static/shared and ctypes inference smoke; existing language version checks |
+| macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML | Full text-to-PCM parity, English/Korean WAV CLI; C static/shared and ctypes runtime smoke; language version checks |
 | macOS x64 | Host builds; optional Core ML | Cross-compiled/linked locally; inference not executed |
 | Linux x64, glibc | Native host builds; CI job configured | Awaiting CI run |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
@@ -44,7 +45,8 @@ and release artifacts must be documented alongside each implemented backend.
 `cargo build -p mlsr-ffi --features coreml` enables the pinned `cidre` bindings
 on macOS/iOS. Default builds and non-Apple targets do not depend on Apple
 frameworks. Both shared and static C libraries are built. The Rust runtime
-executes supplied tensor graphs; this feature alone does not provide synthesis.
+executes supplied tensor graphs; the Rust `Engine` assembles the Supertonic
+pipeline. Enabling this feature does not yet expose synthesis through the C ABI.
 
 Use `MACOSX_DEPLOYMENT_TARGET=15.0` and `IPHONEOS_DEPLOYMENT_TARGET=18.0` for
 Core ML builds, matching the pinned model manifest. iOS device and simulator

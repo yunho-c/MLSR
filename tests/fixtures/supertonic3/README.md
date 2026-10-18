@@ -17,6 +17,10 @@
 - `planning.yaml`: raw duration, speed, and resulting duration Float32 bits plus
   frame/latent/bucket decisions extracted from the saved capture. This tests
   Rust's planning arithmetic on every real case without executing Core ML.
+- `synthesis-summary.yaml`: complete Rust text-to-PCM qualification with saved
+  noise, both allocation modes, input rejections, seeded normal/diagnostic
+  comparisons, and standalone CLI WAV receipts. Runtime and synthesis records
+  retain their own source hashes; the earlier runtime record is historical.
 
 The six boundary probes target true latent lengths 127/128/129 and 255/256/257.
 The harness predicts duration, then calibrates speaking rate to the middle of

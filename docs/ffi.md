@@ -3,7 +3,8 @@
 `include/mlsr.h` is generated from `crates/mlsr-ffi` and is the shared contract
 for Dart, Go, Python, and direct C consumers. The Rust crate builds a `cdylib`:
 `libmlsr_ffi.dylib` on macOS, `libmlsr_ffi.so` on Linux, and `mlsr_ffi.dll` on
-Windows. Static library output can be added when a target requires it.
+Windows. It also builds a static library (`.a` or `.lib`). Static native consumers
+must link the required system libraries/frameworks; see the Core ML build tool.
 The macOS build uses an `@rpath` install name and reserves Mach-O header space
 so app packagers can relocate the library and rewrite its load commands.
 
@@ -42,5 +43,6 @@ version and binding updates. Version 1 currently promises only these queries.
   storage or define explicit ownership transfer. Respect cgo's pointer retention
   rules and each language's garbage collector.
 
-These are design constraints, not implemented engine features. Add ABI and
-installed-package tests as each part of the interface is introduced.
+These are constraints for future synthesis FFI. The synchronous Rust engine
+already produces owned PCM, but no engine/job/audio symbols are exported in this
+C ABI yet. Add ABI and installed-package tests as that interface is introduced.

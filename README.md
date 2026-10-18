@@ -3,21 +3,24 @@
 A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
-**Status:** the Rust library has an optional persistent Core ML tensor runtime,
-with validated buffers, native tensor forwarding, and output-buffer reuse.
-The Supertonic text-to-PCM pipeline is the next integration step. The public C
-ABI and Dart/Go/Python bindings currently expose version queries. Streaming and
-playback are not implemented. Builds never download model weights.
+**Status:** complete Supertonic 3 text-to-PCM synthesis is implemented in Rust,
+with verified YAML bundles, a persistent Core ML runtime, and a WAV CLI. The
+first qualified target is macOS arm64, English/Korean, voices M1/F1. The public
+C ABI and Dart/Go/Python bindings currently expose version queries. Streaming,
+cancellation, playback, and additional inference backends are subsequent work.
+Builds never download model weights.
 
 A pinned Supertonic 3 Core ML reference bundle and development-only
 [capture/replay tools](tools/supertonic3/README.md) establish the baseline for
-the first Rust synthesis implementation. The model manifest uses YAML.
-See the [Core ML runtime](docs/coreml-runtime.md) for its API and qualification.
+the Rust synthesis implementation. The model manifest uses YAML.
+See [Supertonic synthesis](docs/supertonic3.md) for the Rust API, CLI, and evidence,
+and the [Core ML runtime](docs/coreml-runtime.md) for its ownership contract.
 
 ## Layout
 
 ```text
 crates/mlsr/          Public Rust API and TTS implementation modules
+crates/mlsr-cli/      Local bundle verification and text-to-WAV CLI
 crates/mlsr-ffi/      Shared C ABI adapter
 include/mlsr.h       Generated C header
 bindings/dart/       Dart package, generated FFI, and native build hook
@@ -50,6 +53,12 @@ python3 tools/dev.py build
 
 # Query the Rust API directly.
 cargo run -p mlsr --example version
+
+# Synthesize on macOS using an already prepared local bundle (no Python needed).
+MACOSX_DEPLOYMENT_TARGET=15.0 cargo run --release -p mlsr-cli --features coreml -- \
+  synthesize --manifest model-manifests/supertonic3-coreml.yaml \
+  --bundle /path/to/model-bundle --text "Hello from MLSR." \
+  --language en --voice M1 --output hello.wav
 
 # Format/lint checks, Rust tests, C ABI smoke, and all three bindings.
 python3 tools/dev.py check

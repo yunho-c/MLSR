@@ -54,8 +54,14 @@ def main():
                 f"Unexpected deployment metadata for {library}: {fields}"
             )
 
-    rust("test", "-p", "mlsr", "-p", "mlsr-ffi", "--features", "coreml")
-    rust("build", "--release", "-p", "mlsr-ffi", "--features", "coreml")
+    rust(
+        "test", "-p", "mlsr", "-p", "mlsr-ffi", "-p", "mlsr-cli", "--features", "coreml"
+    )
+    rust(
+        "build", "--release", "-p", "mlsr-ffi", "-p", "mlsr-cli", "--features", "coreml"
+    )
+    run(str(TARGET / "release/mlsr"), "--help")
+    check_deployment(TARGET / "release/mlsr", "MACOS", "15.0")
     rust(
         "build",
         "--release",

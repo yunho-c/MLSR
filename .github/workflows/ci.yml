@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.88.0
-      - run: cargo +1.88.0 check --locked -p mlsr -p mlsr-ffi --all-features
+      - run: cargo +1.88.0 check --locked -p mlsr -p mlsr-ffi -p mlsr-cli --all-features
 
   coreml:
     name: Core ML (${{ matrix.rust }})
@@ -100,6 +100,6 @@ jobs:
           python-version: '3.13'
       - name: Lint the enabled backend
         if: matrix.rust == 'stable'
-        run: cargo clippy --locked -p mlsr -p mlsr-ffi --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked -p mlsr -p mlsr-ffi -p mlsr-cli --all-targets --all-features -- -D warnings
       - name: Test runtime, foreign callers, static/shared libraries, and Apple targets
         run: python tools/check_coreml.py --toolchain ${{ matrix.rust }} --cross

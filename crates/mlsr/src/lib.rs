@@ -1,7 +1,8 @@
 //! MLSR's public Rust API and text-to-speech implementation.
 //!
-//! Version information and a persistent, optional Core ML tensor runtime are
-//! available. The Supertonic text-to-PCM pipeline is the next integration step.
+//! Supertonic synthesis runs from original text to owned Float32 PCM, using
+//! verified local assets and an optional persistent Core ML runtime. Language
+//! bindings currently expose version queries; synthesis FFI is subsequent work.
 
 #![deny(unsafe_code)]
 

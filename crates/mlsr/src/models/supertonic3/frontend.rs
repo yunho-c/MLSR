@@ -1,6 +1,7 @@
 // Normalization adapted from Supertone's MIT-licensed py/helper.py at
 // 1e9799e964ea4c0dad7cde993b65c3c813a7b373. See crates/mlsr/THIRD_PARTY_NOTICES.md.
 use super::Bundle;
+use crate::config::MAX_TEXT_BYTES as MAX_INPUT_BYTES;
 use crate::{
     error::{Error, InputErrorKind as Kind, Result},
     runtime::{HostTensor, TensorData},
@@ -11,7 +12,6 @@ const LANGUAGES: &[&str] = &[
     "en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
     "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "vi",
 ];
-const MAX_INPUT_BYTES: usize = 64 * 1024;
 const TOKEN_LIMIT: usize = 128;
 
 /// Original/normalized text and validated, padded model inputs.

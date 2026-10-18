@@ -30,3 +30,6 @@ It compiles the tiny affine model with Xcode, runs Rust tests, builds static/sha
 native artifacts, and executes real inference from C and Python ctypes callers.
 `--cross` additionally links Intel macOS and iOS device/simulator artifacts.
 It requires installed targets/toolchains and never installs them automatically.
+The same command tests/builds the Core ML CLI. Full Supertonic synthesis replay
+uses opt-in external assets via `python3 -m tools.supertonic3.synthesis_replay`;
+see the [synthesis documentation](../docs/supertonic3.md).
