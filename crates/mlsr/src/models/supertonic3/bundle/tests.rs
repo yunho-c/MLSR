@@ -1,6 +1,81 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn variants_pin_baseline_weights_interfaces_and_safe_paths() {
+    let manifest: VariantManifest = serde_yaml_ng::from_str(VARIANTS).unwrap();
+    let baseline: Manifest = serde_yaml_ng::from_str(BASELINE).unwrap();
+    assert_eq!(
+        manifest.base_manifest_sha256,
+        format!("{:x}", Sha256::digest(BASELINE.as_bytes()))
+    );
+    assert_eq!(
+        manifest
+            .artifacts
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["ve_fused8_128", "vocoder_30", "vocoder_32"]
+    );
+    let mut paths = BTreeSet::new();
+    for (name, artifact) in &manifest.artifacts {
+        relative(&artifact.path).unwrap();
+        assert_eq!(artifact.kind, "coreml_compiled");
+        assert!(
+            artifact.path.starts_with("ExecutionVariants/") && artifact.path.ends_with(".mlmodelc")
+        );
+        for file in &artifact.files {
+            relative(&file.path).unwrap();
+            assert!(file.path.starts_with(&(artifact.path.clone() + "/")));
+            assert!(paths.insert(&file.path));
+            assert!(hex(&file.sha256, 64) && file.size_bytes > 0);
+        }
+        let reference = &baseline.artifacts[if name.starts_with("ve_") {
+            "ve_128"
+        } else {
+            "vocoder"
+        }];
+        let weight = |a: &Artifact| {
+            a.files
+                .iter()
+                .find(|f| f.path.ends_with("/weights/weight.bin"))
+                .unwrap()
+                .sha256
+                .clone()
+        };
+        assert_eq!(weight(artifact), weight(reference));
+        let mut expected_inputs = reference.inputs.clone();
+        let mut expected_outputs = reference.outputs.clone();
+        if name.starts_with("ve_") {
+            expected_inputs
+                .as_object_mut()
+                .unwrap()
+                .remove("current_step");
+            expected_inputs
+                .as_object_mut()
+                .unwrap()
+                .remove("total_step");
+        } else {
+            let length = if name == "vocoder_30" { 30 } else { 32 };
+            expected_inputs["latent"]["shape"] = json!([1, 144, length]);
+            expected_outputs["wav"]["shape"] = json!([1, 3072 * length]);
+        }
+        assert_eq!(artifact.inputs, expected_inputs);
+        assert_eq!(artifact.outputs, expected_outputs);
+    }
+    let bundle = Fixture::new().load().unwrap();
+    assert!(
+        bundle
+            .variant_models(crate::config::ExecutionVariant::Baseline)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(matches!(
+        bundle.variant_models(crate::config::ExecutionVariant::Fused8),
+        Err(Error::Manifest(_))
+    ));
+}
+
 // Deliberately tiny graph payloads test integrity only; never used for inference.
 struct Fixture {
     directory: tempfile::TempDir,

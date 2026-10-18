@@ -64,6 +64,66 @@ fn request(text: &str) -> SynthesisRequest<'_> {
         options: SynthesisOptions::default(),
     }
 }
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_VARIANT_BUNDLE with all three pinned optimized graphs"]
+fn optimized_engines_cancel_recover_and_retain_a_bounded_model_set() {
+    use crate::config::ExecutionVariant;
+    let root = std::env::var_os("MLSR_TEST_VARIANT_BUNDLE").expect("MLSR_TEST_VARIANT_BUNDLE");
+    let manifest =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../model-manifests/supertonic3-coreml.yaml");
+    for (variant, loads) in [
+        (ExecutionVariant::Fused8, 7),
+        (ExecutionVariant::Fused8ExperimentalVocoder, 9),
+    ] {
+        let engine = Engine::load(
+            &manifest,
+            &root,
+            EngineOptions {
+                execution_variant: variant,
+                ..EngineOptions::default()
+            },
+        )
+        .unwrap();
+        let first = engine.synthesize(request("Hello from MLSR.")).unwrap();
+        assert!(first.route().fused_ve);
+        let fallback = engine
+            .synthesize(SynthesisRequest {
+                options: SynthesisOptions::new(7, 1.05, 0).unwrap(),
+                ..request("Hello from MLSR.")
+            })
+            .unwrap();
+        assert!(!fallback.route().fused_ve);
+        let job = engine
+            .start(
+                request("Hello from MLSR.\nAnother paragraph follows."),
+                JobOptions::new(1, 1, 44100 * 20).unwrap(),
+            )
+            .unwrap();
+        assert!(matches!(job.poll(Duration::from_secs(30)), Poll::Event(_)));
+        assert!(matches!(
+            engine.start(request("Busy."), JobOptions::default()),
+            Err(Error::Busy)
+        ));
+        job.cancel();
+        assert!(job.wait(Duration::from_secs(30)));
+        assert!(matches!(terminal(&job).outcome, Outcome::Cancelled));
+        let last = engine
+            .synthesize(SynthesisRequest {
+                text: "안녕하세요.",
+                language: "ko",
+                ..request("")
+            })
+            .unwrap();
+        assert!(last.route().fused_ve);
+        let stats = engine.runtime_stats().unwrap();
+        assert_eq!(stats.model_loads, loads);
+        assert_eq!(stats.live_tensors, 12);
+        engine.shutdown().unwrap();
+        assert!(first.pcm().iter().any(|v| v.abs() > 0.001));
+    }
+}
 fn fake() -> (Engine, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let engine = Engine::with_backend(Box::new(Fake {

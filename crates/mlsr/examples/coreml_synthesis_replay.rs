@@ -2,7 +2,7 @@
 //! Requests supply original text/options and optionally actual saved noise;
 //! production Rust computes tokens, masks, durations, shapes, and PCM trimming.
 use mlsr::{
-    config::SynthesisOptions,
+    config::{ExecutionVariant, SynthesisOptions},
     models::supertonic3::{Bundle, Pipeline},
     runtime::{ComputePolicy, HostTensor, TensorData},
 };
@@ -61,6 +61,7 @@ fn run(pipeline: &mut Pipeline, job: &Value) -> Result<Value> {
     };
     let mut tensors;
     let reused;
+    let started = std::time::Instant::now();
     let result = if diagnostic {
         let (result, trace) = pipeline.synthesize_with_diagnostics(
             field(job, "text")?,
@@ -82,6 +83,7 @@ fn run(pipeline: &mut Pipeline, job: &Value) -> Result<Value> {
             options,
         )?
     };
+    let synthesis_ms = started.elapsed().as_secs_f64() * 1000.;
     if !diagnostic {
         tensors.insert(
             "pcm".into(),
@@ -112,13 +114,13 @@ fn run(pipeline: &mut Pipeline, job: &Value) -> Result<Value> {
         descriptors.insert(name,json!({"shape":tensor.shape(),"dtype":dtype,"offset":offset,"length":bytes.len()-offset}));
     }
     std::fs::write(field(job, "output")?, bytes)?;
-    Ok(
-        json!({"tensors":descriptors,"ve_backing_reused":reused,"metadata":{
-            "normalized_text":result.text().normalized(),"tokens":result.text().token_count(),
-            "requested_frames":result.plan().requested_frames(),"latent_length":result.plan().latent_length(),
-            "latent_bucket":result.plan().latent_bucket(),"pcm_frames":result.pcm().len()
-        }}),
-    )
+    Ok(json!({"tensors":descriptors,"ve_backing_reused":reused,
+      "synthesis_ms": synthesis_ms,
+      "route":{"fused_ve":result.route().fused_ve,"fixed_vocoder":result.route().fixed_vocoder},"metadata":{
+        "normalized_text":result.text().normalized(),"tokens":result.text().token_count(),
+        "requested_frames":result.plan().requested_frames(),"latent_length":result.plan().latent_length(),
+        "latent_bucket":result.plan().latent_bucket(),"pcm_frames":result.pcm().len()
+    }}))
 }
 fn main() -> Result<()> {
     let mut pipeline: Option<Pipeline> = None;
@@ -133,12 +135,20 @@ fn main() -> Result<()> {
                         "cpu_and_neural_engine" => ComputePolicy::CpuAndNeuralEngine,
                         _ => return Err("unsupported compute policy".into()),
                     };
-                    pipeline = Some(Pipeline::load(
+                    let variant = match job["execution_variant"].as_str().unwrap_or("baseline") {
+                        "baseline" => ExecutionVariant::Baseline,
+                        "fused8" => ExecutionVariant::Fused8,
+                        "fused8_fixed_vocoder" => ExecutionVariant::Fused8ExperimentalVocoder,
+                        _ => return Err("unknown execution variant".into()),
+                    };
+                    let started = std::time::Instant::now();
+                    pipeline = Some(Pipeline::load_variant(
                         Bundle::load(field(&job, "manifest")?, field(&job, "bundle")?)?,
                         policy,
                         boolean(&job, "output_backings")?,
+                        variant,
                     )?);
-                    json!({"loaded":true})
+                    json!({"loaded":true,"initialization_ms":started.elapsed().as_secs_f64()*1000.})
                 }
                 "run" => run(pipeline.as_mut().ok_or("not loaded")?, &job)?,
                 "stats" => json!({}),

@@ -22,6 +22,10 @@ must equal the current layout's size. Reserved fields must be zero. Read views
 with their exact `sizeof` value. Future incompatible layouts require new types
 and entry points or an ABI change, rather than reading past an older struct.
 
+`execution_variant` selects `0` baseline, `1` fused eight-step L128 VE with
+fallback, or `2` fused VE plus **experimental** exact L30/L32 vocoders. Value 2
+changes PCM and has no perceptual qualification. See [execution variants](execution-variants.md).
+
 ## Handles and ownership
 
 `MlsrHandle` is a non-reused 64-bit registry ID, not an address. Zero is null.

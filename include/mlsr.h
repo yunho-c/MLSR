@@ -31,7 +31,8 @@ typedef struct {
    */
   uint32_t reuse_output_buffers;
   /**
-   * Execution variant; zero is the baseline. Other values are reserved.
+   * 0: baseline, 1: prefer fused eight-step L128, 2: experimental L30/L32
+   * vocoders too (PCM differs from baseline; perceptual quality unqualified).
    */
   uint32_t execution_variant;
 } MlsrEngineOptions;

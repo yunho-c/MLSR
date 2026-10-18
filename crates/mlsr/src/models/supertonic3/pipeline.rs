@@ -1,7 +1,7 @@
 use super::{Bundle, EncodedText, SynthesisPlan};
 use crate::{
     audio::Audio,
-    config::SynthesisOptions,
+    config::{ExecutionRoute, ExecutionVariant, SynthesisOptions},
     error::{Error, Result},
     runtime::{
         ComputePolicy, DType, HostTensor, Model, OutputBuffer, Session, SessionStats, Tensor,
@@ -37,6 +37,7 @@ pub struct Pipeline {
     backings: BTreeMap<usize, [OutputBuffer; 2]>,
     current_step: Tensor,
     total_step: Tensor,
+    variant: ExecutionVariant,
 }
 
 /// Owned synthesis output, independent of model/session lifetime.
@@ -45,6 +46,7 @@ pub struct SynthesisOutput {
     audio: Audio,
     text: EncodedText,
     plan: SynthesisPlan,
+    route: ExecutionRoute,
 }
 impl SynthesisOutput {
     /// Mono 44,100 Hz Float32 samples; finite, not clipped or normalized.
@@ -70,6 +72,10 @@ impl SynthesisOutput {
     /// Duration and shape decisions computed by Rust from the model prediction.
     pub fn plan(&self) -> &SynthesisPlan {
         &self.plan
+    }
+    /// Actual graph choices; unsupported optimized shapes use the baseline.
+    pub fn route(&self) -> ExecutionRoute {
+        self.route
     }
 }
 
@@ -101,6 +107,22 @@ impl Pipeline {
     /// Load all six graphs once and upload both voices. Reuse allocates two
     /// dedicated output buffers per VE bucket; Core ML may decline to use them.
     pub fn load(bundle: Bundle, policy: ComputePolicy, reuse_output_buffers: bool) -> Result<Self> {
+        Self::load_variant(
+            bundle,
+            policy,
+            reuse_output_buffers,
+            ExecutionVariant::Baseline,
+        )
+    }
+    /// Verify and retain an explicit graph set. Extra graphs must be present and
+    /// match the compiled-in YAML pins; baseline loading needs no extra assets.
+    pub fn load_variant(
+        bundle: Bundle,
+        policy: ComputePolicy,
+        reuse_output_buffers: bool,
+        variant: ExecutionVariant,
+    ) -> Result<Self> {
+        let additional = bundle.variant_models(variant)?;
         let session = Session::coreml(policy)?;
         let mut models = BTreeMap::new();
         for name in [
@@ -112,6 +134,9 @@ impl Pipeline {
             "vocoder",
         ] {
             models.insert(name.into(), session.load(bundle.model_path(name)?)?);
+        }
+        for (name, path) in additional {
+            models.insert(name, session.load(path)?);
         }
         let mut voices = BTreeMap::new();
         for id in bundle.voices() {
@@ -146,6 +171,7 @@ impl Pipeline {
             backings,
             current_step,
             total_step,
+            variant,
         })
     }
     /// Synthesize original text using request-local seeded noise. Native TE/VE
@@ -320,46 +346,68 @@ impl Pipeline {
             );
         }
         let bucket = plan.latent_bucket();
+        let route = self
+            .variant
+            .route(options.steps(), bucket, plan.latent_length());
         let model = &self.models[&format!("ve_{bucket}")];
-        for step in 0..options.steps() {
+        if route.fused_ve {
             observer.checkpoint()?;
-            self.session
-                .write(&mut self.current_step, scalar(step as f32)?)?;
-            let inputs = [
-                ("noisy_latent", &latent),
-                ("text_emb", &embedding),
-                ("style_ttl", &native_voice.ttl),
-                ("latent_mask", &latent_mask),
-                ("text_mask", &text_mask),
-                ("current_step", &self.current_step),
-                ("total_step", &self.total_step),
-            ];
-            let mut outputs = if let Some(buffers) = self.backings.get(&bucket) {
-                self.session.predict_with_backings(
-                    model,
-                    &inputs,
-                    &["denoised_latent"],
-                    &[("denoised_latent", &buffers[step as usize % 2])],
-                )?
-            } else {
-                self.session.predict(model, &inputs, &["denoised_latent"])?
-            };
-            observer.checkpoint()?;
-            // This export returns the updated state, including integration.
-            // No extra Euler update or guidance operation belongs in Rust.
-            latent = outputs
-                .pop()
-                .ok_or_else(|| Error::Synthesis("missing VE state".into()))?;
-            tensor_shape(&latent, &[1, 144, bucket], "VE state")?;
-            if diagnostic {
-                trace.backing_reused.push(latent.output_backing_reused());
-            }
-            self.snapshot(
-                diagnostic,
-                &mut trace,
-                &format!("ve_step_{step:02}"),
-                &latent,
+            latent = self.predict(
+                "ve_fused8_128",
+                &[
+                    ("noisy_latent", &latent),
+                    ("text_emb", &embedding),
+                    ("style_ttl", &native_voice.ttl),
+                    ("latent_mask", &latent_mask),
+                    ("text_mask", &text_mask),
+                ],
+                "denoised_latent",
+                &[1, 144, 128],
             )?;
+            observer.checkpoint()?;
+            // Internal steps are not observable. Never fabricate their snapshots.
+            self.snapshot(diagnostic, &mut trace, "ve_step_07", &latent)?;
+        } else {
+            for step in 0..options.steps() {
+                observer.checkpoint()?;
+                self.session
+                    .write(&mut self.current_step, scalar(step as f32)?)?;
+                let inputs = [
+                    ("noisy_latent", &latent),
+                    ("text_emb", &embedding),
+                    ("style_ttl", &native_voice.ttl),
+                    ("latent_mask", &latent_mask),
+                    ("text_mask", &text_mask),
+                    ("current_step", &self.current_step),
+                    ("total_step", &self.total_step),
+                ];
+                let mut outputs = if let Some(buffers) = self.backings.get(&bucket) {
+                    self.session.predict_with_backings(
+                        model,
+                        &inputs,
+                        &["denoised_latent"],
+                        &[("denoised_latent", &buffers[step as usize % 2])],
+                    )?
+                } else {
+                    self.session.predict(model, &inputs, &["denoised_latent"])?
+                };
+                observer.checkpoint()?;
+                // This export returns the updated state, including integration.
+                // No extra Euler update or guidance operation belongs in Rust.
+                latent = outputs
+                    .pop()
+                    .ok_or_else(|| Error::Synthesis("missing VE state".into()))?;
+                tensor_shape(&latent, &[1, 144, bucket], "VE state")?;
+                if diagnostic {
+                    trace.backing_reused.push(latent.output_backing_reused());
+                }
+                self.snapshot(
+                    diagnostic,
+                    &mut trace,
+                    &format!("ve_step_{step:02}"),
+                    &latent,
+                )?;
+            }
         }
         let last = self.session.read(&latent)?;
         let values = floats(&last, "final latent")?;
@@ -372,8 +420,11 @@ impl Pipeline {
         trace.record(diagnostic, "vocoder_input", &vocoder_host);
         let vocoder_input = self.session.upload(vocoder_host)?;
         observer.checkpoint()?;
+        let vocoder = route
+            .fixed_vocoder
+            .map_or_else(|| "vocoder".into(), |length| format!("vocoder_{length}"));
         let wav = self.predict(
-            "vocoder",
+            &vocoder,
             &[("latent", &vocoder_input)],
             "wav",
             &[1, length * 3072],
@@ -395,6 +446,7 @@ impl Pipeline {
                 audio: Audio::mono(pcm, 44100)?,
                 text: encoded,
                 plan,
+                route,
             },
             trace,
         ))

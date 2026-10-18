@@ -1,0 +1,224 @@
+schema_version: 1
+kind: execution_variant_qualification_summary
+passed: true
+selected_default: baseline
+decision: Keep six models and shorter cancellation checkpoints by default. Fused8
+  is opt-in and exact on this corpus. Fixed vocoders remain experimental; PCM differs
+  and perceptual quality is unqualified.
+replay:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-variants-v2/report.yaml
+  sha256: 2d435a4d3d1a7e21b9fea5e142ac469937ba81baf26bda0ac377eab351e8834b
+  cases_per_variant: 29
+  passes: 2
+  variant_results:
+    baseline:
+      bit_exact: true
+      status: required exact parity
+    fused8:
+      bit_exact: true
+      status: required exact parity
+    fused8_fixed_vocoder:
+      bit_exact: false
+      status: experimental; PCM differs; perceptual quality unqualified
+  rejections: 15
+  original_all_variant_exact_gate:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-variants-v1/report.yaml
+    passed: false
+    reason: Fixed L30/L32 vocoder PCM differs in eight cases; no tolerances were relaxed.
+benchmark:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-benchmark-v1/report.yaml
+  sha256: 3c6b3f9935d8e4987fa3c933284acecbff26ad501bc1fa9f2a24951fb0ef343c
+  environment:
+    platform: macOS-27.0.1-arm64-arm-64bit-Mach-O
+    hardware: Apple M4 Pro
+    power: "Now drawing from 'AC Power'\n -InternalBattery-0 (id=35782755)\t90%; AC\
+      \ attached; not charging present: true"
+    power_settings: "Battery Power:\n Sleep On Power Button 1\n powermode        \
+      \    0\n standby              1\n ttyskeepawake        1\n hibernatemode   \
+      \     3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n\
+      \ displaysleep         10\n womp                 0\n networkoversleep     0\n\
+      \ sleep                1\n lessbright           1\n tcpkeepalive         1\n\
+      \ disksleep            10\nAC Power:\n Sleep On Power Button 1\n powermode \
+      \           0\n standby              1\n ttyskeepawake        1\n hibernatemode\
+      \        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n\
+      \ displaysleep         30\n womp                 1\n networkoversleep     0\n\
+      \ sleep                0\n tcpkeepalive         1\n disksleep            10"
+  timing_boundary: Public C/Python job start through copied first PCM and terminal,
+    excluding playback. Existing OS caches, one sequential process per variant, seven
+    warm passes per case.
+  logical_artifact_bytes:
+    native_library: 1729280
+    baseline_bundle: 169328070
+    optional_graphs: 135134620
+    note: Logical model sizes count shared weight blobs per graph; file symlinks avoid
+      physical duplication in the prepared cache
+  variants:
+  - variant: baseline
+    initialization_ms: 14339.011708
+    peak_process_rss_bytes: 210894848
+    median_first_audio_ms: 39.958396
+    median_total_ms: 41.863896
+    max_real_time_factor: 0.02784390716214529
+    max_cancellation_quiescence_ms: 3.455792
+    handles_after: 0
+    per_case:
+      en_m1_basic:
+        median_total_ms: 81.080958
+        speedup_vs_baseline: 1.0
+      en_f1_basic:
+        median_total_ms: 41.793
+        speedup_vs_baseline: 1.0
+      en_normalization:
+        median_total_ms: 43.524
+        speedup_vs_baseline: 1.0
+      en_punctuation:
+        median_total_ms: 80.428666
+        speedup_vs_baseline: 1.0
+      ko_m1_basic:
+        median_total_ms: 80.5195
+        speedup_vs_baseline: 1.0
+      ko_f1_basic:
+        median_total_ms: 41.421667
+        speedup_vs_baseline: 1.0
+      ko_normalization:
+        median_total_ms: 41.768542
+        speedup_vs_baseline: 1.0
+      ko_decomposed:
+        median_total_ms: 80.642709
+        speedup_vs_baseline: 1.0
+      en_f1_basic_L30:
+        median_total_ms: 40.133667
+        speedup_vs_baseline: 1.0
+      en_f1_basic_L32:
+        median_total_ms: 39.728666
+        speedup_vs_baseline: 1.0
+      ko_f1_basic_L30:
+        median_total_ms: 39.803458
+        speedup_vs_baseline: 1.0
+      ko_f1_basic_L32:
+        median_total_ms: 39.7955
+        speedup_vs_baseline: 1.0
+  - variant: fused8
+    initialization_ms: 25016.705833
+    peak_process_rss_bytes: 242843648
+    median_first_audio_ms: 37.334375
+    median_total_ms: 39.3482705
+    max_real_time_factor: 0.026074037579215184
+    max_cancellation_quiescence_ms: 29.396042
+    handles_after: 0
+    per_case:
+      en_m1_basic:
+        median_total_ms: 75.951542
+        speedup_vs_baseline: 1.0675353767011075
+      en_f1_basic:
+        median_total_ms: 39.335
+        speedup_vs_baseline: 1.0624888775899326
+      en_normalization:
+        median_total_ms: 40.697291
+        speedup_vs_baseline: 1.0694569326493992
+      en_punctuation:
+        median_total_ms: 75.207084
+        speedup_vs_baseline: 1.0694293904547612
+      ko_m1_basic:
+        median_total_ms: 75.164167
+        speedup_vs_baseline: 1.0712484846669024
+      ko_f1_basic:
+        median_total_ms: 39.067
+        speedup_vs_baseline: 1.0602725318043362
+      ko_normalization:
+        median_total_ms: 39.361541
+        speedup_vs_baseline: 1.0611510865390152
+      ko_decomposed:
+        median_total_ms: 75.060708
+        speedup_vs_baseline: 1.0743664847925494
+      en_f1_basic_L30:
+        median_total_ms: 37.42325
+        speedup_vs_baseline: 1.0724260185847034
+      en_f1_basic_L32:
+        median_total_ms: 37.290708
+        speedup_vs_baseline: 1.0653770907219031
+      ko_f1_basic_L30:
+        median_total_ms: 37.574875
+        speedup_vs_baseline: 1.0593104567879468
+      ko_f1_basic_L32:
+        median_total_ms: 37.126667
+        speedup_vs_baseline: 1.0718845297909452
+  - variant: fused8_fixed_vocoder
+    initialization_ms: 1735.034917
+    peak_process_rss_bytes: 175046656
+    median_first_audio_ms: 37.123624500000005
+    median_total_ms: 39.2855415
+    max_real_time_factor: 0.02645918567883121
+    max_cancellation_quiescence_ms: 30.049833
+    handles_after: 0
+    per_case:
+      en_m1_basic:
+        median_total_ms: 76.425042
+        speedup_vs_baseline: 1.0609213404161426
+      en_f1_basic:
+        median_total_ms: 39.045875
+        speedup_vs_baseline: 1.0703563436598615
+      en_normalization:
+        median_total_ms: 40.865958
+        speedup_vs_baseline: 1.065042938672819
+      en_punctuation:
+        median_total_ms: 73.19825
+        speedup_vs_baseline: 1.0987785363721128
+      ko_m1_basic:
+        median_total_ms: 75.085375
+        speedup_vs_baseline: 1.07237261583897
+      ko_f1_basic:
+        median_total_ms: 38.999958
+        speedup_vs_baseline: 1.0620951694358234
+      ko_normalization:
+        median_total_ms: 39.198708
+        speedup_vs_baseline: 1.0655591505720035
+      ko_decomposed:
+        median_total_ms: 75.453041
+        speedup_vs_baseline: 1.0687801039059512
+      en_f1_basic_L30:
+        median_total_ms: 34.644125
+        speedup_vs_baseline: 1.1584552070517007
+      en_f1_basic_L32:
+        median_total_ms: 34.31175
+        speedup_vs_baseline: 1.1578734981456789
+      ko_f1_basic_L30:
+        median_total_ms: 34.363542
+        speedup_vs_baseline: 1.1583048685726285
+      ko_f1_basic_L32:
+        median_total_ms: 34.243584
+        speedup_vs_baseline: 1.1621301088110403
+limitations:
+- The eight new fixed-vocoder probes are calibrated shape tests, not naturalness evaluations.
+- Fixed vocoder errors are recorded in full reports and paired WAVs; bit-exact fusion
+  does not imply fixed vocoder parity.
+- Initialization and peak RSS include process order and OS specialization state; these
+  single process samples do not rank general cold-start costs.
+- One sequential process per variant cannot establish universal performance gains;
+  per-case measurements are preserved.
+- Retained sessions do not prove ANE residency. No W8A8/dense INT8 promotion or perceptual-quality
+  claim.
+validation_logs:
+  task6-build.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-build.log
+    sha256: 3f8a75890db55ceebaa880485effd084c4d53f3e3518ccf9b035b1bd4dc7570b
+  task6-final.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-final.log
+    sha256: cbb69980c9eaf3e84afd1571f382334a43d02c2fd300131b87946e2eb8774de6
+  task6-portability.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-portability.log
+    sha256: d6c1ce3d3afe0dc4d42e538c83d4f4d51e2780028868456428c3ee165ed0cac3
+  task6-replay-v1.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-replay-v1.log
+    sha256: d3c6c425b505ad0ed84f53f30945af616991711cc0fd6e55f5dd4166f7f1c8cc
+  task6-replay-v2.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task6-replay-v2.log
+    sha256: ac4469a2b790fe7f516c384dedcabf3fa1dd9523050b697fbabeda5a2c1bcad5
+validation:
+  strict_all_feature_clippy: passed
+  stable_workspace_tests: passed
+  rust_1_88_production_all_features_tests: passed
+  windows_all_features: typecheck passed; not execution
+  generated_bindings: current
+  real_optimized_engine_lifecycle: passed; bounded 7/9 models, 12 retained tensors,
+    cancel/reuse/shutdown

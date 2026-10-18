@@ -1,5 +1,11 @@
 # Model manifests
 
+`supertonic3-coreml-variants.yaml` pins optional archived fused-eight-step VE
+and exact-length vocoder graphs. It is separate from the baseline/reference
+identity. The Rust library embeds these pins; see
+[execution variants](../docs/execution-variants.md) for preparation and qualification.
+Fixed vocoders are explicitly experimental because their PCM differs.
+
 Use YAML for model manifests. [supertonic3-coreml.yaml](supertonic3-coreml.yaml)
 pins the first development reference: Supertonic 3 v2 Core ML shared stages,
 INT4 VectorEstimators at latent buckets 128/256/512, and M1/F1 preset voices.

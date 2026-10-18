@@ -150,15 +150,22 @@ pub unsafe extern "C" fn mlsr_engine_open(
                 1 => ComputePolicy::CpuAndNeuralEngine,
                 _ => return Err(ApiError::invalid("unknown compute policy")),
             };
-            if settings.reuse_output_buffers > 1 || settings.execution_variant != 0 {
+            if settings.reuse_output_buffers > 1 {
                 return Err(ApiError::invalid("unsupported engine settings"));
             }
+            let execution_variant = match settings.execution_variant {
+                0 => mlsr::config::ExecutionVariant::Baseline,
+                1 => mlsr::config::ExecutionVariant::Fused8,
+                2 => mlsr::config::ExecutionVariant::Fused8ExperimentalVocoder,
+                _ => return Err(ApiError::invalid("unknown execution variant")),
+            };
             let engine = Engine::load(
                 input(manifest, 32768)?,
                 input(bundle, 32768)?,
                 EngineOptions {
                     compute_policy: policy,
                     reuse_output_buffers: settings.reuse_output_buffers != 0,
+                    execution_variant,
                 },
             )?;
             let id = handles::insert(Entry::Engine(engine))?;

@@ -15,6 +15,16 @@ use std::{
 const BASELINE: &str = include_str!("../../../../../model-manifests/supertonic3-coreml.yaml");
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
 const METADATA_LIMIT: u64 = 4 * 1024 * 1024;
+const VARIANTS: &str =
+    include_str!("../../../../../model-manifests/supertonic3-coreml-variants.yaml");
+
+// This description is compiled into the library, not read from untrusted input.
+// Provenance/routing documentation is retained in YAML; code owns routing policy.
+#[derive(Deserialize)]
+struct VariantManifest {
+    base_manifest_sha256: String,
+    artifacts: BTreeMap<String, Artifact>,
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +81,7 @@ pub struct Bundle {
     models: BTreeMap<String, PathBuf>,
     indexer: Vec<i32>,
     voices: BTreeMap<String, Voice>,
+    manifest_sha256: String,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -160,6 +171,7 @@ impl Bundle {
             models,
             indexer,
             voices,
+            manifest_sha256: format!("{:x}", Sha256::digest(&bytes)),
         })
     }
     /// Bundle identifier recorded by the manifest.
@@ -190,6 +202,34 @@ impl Bundle {
             .get(name)
             .map(PathBuf::as_path)
             .ok_or_else(|| asset(name, "unknown graph"))
+    }
+    pub(super) fn variant_models(
+        &self,
+        variant: crate::config::ExecutionVariant,
+    ) -> Result<BTreeMap<String, PathBuf>> {
+        use crate::config::ExecutionVariant;
+        let mut models = BTreeMap::new();
+        if variant == ExecutionVariant::Baseline {
+            return Ok(models);
+        }
+        let manifest: VariantManifest =
+            serde_yaml_ng::from_str(VARIANTS).map_err(|e| Error::Manifest(e.to_string()))?;
+        if self.manifest_sha256 != manifest.base_manifest_sha256 {
+            return Err(Error::Manifest(
+                "execution variants require the exact pinned baseline manifest".into(),
+            ));
+        }
+        for (name, artifact) in manifest.artifacts {
+            if variant == ExecutionVariant::Fused8 && name != "ve_fused8_128" {
+                continue;
+            }
+            for entry in &artifact.files {
+                verify_file(&self.root.join(&entry.path), entry, false)?;
+            }
+            verify_inventory(&self.root, &artifact)?;
+            models.insert(name, self.root.join(artifact.path));
+        }
+        Ok(models)
     }
 }
 

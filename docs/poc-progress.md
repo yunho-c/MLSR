@@ -12,7 +12,7 @@ after this POC; its feasibility has already been confirmed by the project owner.
 | 3. Rust single-segment synthesis and CLI | Implemented; full tensor parity and standalone WAV receipts in `synthesis-summary.yaml`; five commits `7e8b00f` through `7c4ca74` |
 | 4. Segmentation/jobs/cancellation/bounds | Implemented in Rust; see `jobs.md`, portable lifecycle tests and explicit real-model job test |
 | 5. C ABI and Dart/Go/Python synthesis | Implemented; installed synthesis/cancellation/WAV examples outside checkout, cross-language PCM equality and lifecycle checks in `bindings-summary.yaml` |
-| 6. Selectable ANE variants | Pending: integrate available fusion/fixed-vocoder exports, shape gates, parity, lifecycle and measured performance |
+| 6. Selectable ANE variants | Implemented; baseline/fused VE exact across 29 cases; fixed vocoders explicitly experimental due to PCM differences; lifecycle and per-case timing in `variants-summary.yaml`. Baseline remains the default. |
 | 7. Flutter example and qualification | Pending: responsive speak/stop/playback/WAV UI, real Apple suite, timing/memory/artifact records, real-time warm synthesis |
 
 Existing qualification summaries are historical records tied to their recorded

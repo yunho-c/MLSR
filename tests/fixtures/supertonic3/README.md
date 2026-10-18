@@ -26,6 +26,9 @@
 - `bindings-summary.yaml`: C static/shared and installed Python/Go/Dart synthesis,
   cancellation, independent audio ownership, cross-language PCM equality and
   cancel-then-WAV examples executed outside the repository checkout.
+- `variants-summary.yaml`: shape-gated optional fused VE and experimental fixed
+  vocoders, 29-case numerical replay, lifecycle checks and public-job timing.
+  Fixed-vocoder PCM differences are retained; baseline remains the default.
 
 The six boundary probes target true latent lengths 127/128/129 and 255/256/257.
 The harness predicts duration, then calibrates speaking rate to the middle of

@@ -156,10 +156,11 @@ impl Engine {
     }
     /// Load a verified bundle, which must remain immutable while the engine lives.
     pub fn from_bundle(bundle: Bundle, options: EngineOptions) -> Result<Self> {
-        Self::with_backend(Box::new(Pipeline::load(
+        Self::with_backend(Box::new(Pipeline::load_variant(
             bundle,
             options.compute_policy,
             options.reuse_output_buffers,
+            options.execution_variant,
         )?))
     }
     fn with_backend(backend: Box<dyn Backend>) -> Result<Self> {

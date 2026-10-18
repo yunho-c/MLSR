@@ -51,3 +51,10 @@ source/library/model hashes, and saves a YAML report and command log. The output
 directory must not exist. `--no-build` uses an already built release library;
 it is the caller's responsibility to build matching sources first. This is an
 explicit integration test, not a latency benchmark or broad speech-quality study.
+
+`benchmark_synthesis.py` runs the public job API in fresh sequential macOS arm64
+processes. It preserves per-case warm first-audio/total samples, process peak RSS,
+initialization with existing OS caches, and cancellation signal/quiescence times.
+`--variant baseline` needs only the baseline bundle; `--variant all` needs the
+optional graphs. See [execution variants](../docs/execution-variants.md) for
+preparation, parity gates and the experimental fixed-vocoder limitation.

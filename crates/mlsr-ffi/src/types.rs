@@ -51,7 +51,8 @@ pub struct MlsrEngineOptions {
     pub compute_policy: u32,
     /// 0: ordinary outputs, 1: offer reusable native output buffers.
     pub reuse_output_buffers: u32,
-    /// Execution variant; zero is the baseline. Other values are reserved.
+    /// 0: baseline, 1: prefer fused eight-step L128, 2: experimental L30/L32
+    /// vocoders too (PCM differs from baseline; perceptual quality unqualified).
     pub execution_variant: u32,
 }
 impl Default for MlsrEngineOptions {

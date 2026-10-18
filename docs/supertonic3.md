@@ -176,6 +176,10 @@ runtimes, and performance/quality studies are subsequent milestones.
 
 ## Recorded qualification
 
+[Selectable execution variants](execution-variants.md) add fused eight-step VE
+with strict step/bucket fallback. The baseline remains the default; exact-length
+fixed vocoders are explicitly experimental because their PCM differs.
+
 The compact [synthesis qualification record](../tests/fixtures/supertonic3/synthesis-summary.yaml)
 identifies the host, toolchains, source/binary hashes, full-pipeline parity,
 native packaging checks, and CLI WAV receipts. Large reports and audio remain

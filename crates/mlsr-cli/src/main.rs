@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use mlsr::{
-    config::{EngineOptions, MAX_TEXT_BYTES, SynthesisOptions},
+    config::{EngineOptions, ExecutionVariant, MAX_TEXT_BYTES, SynthesisOptions},
     engine::{Engine, SynthesisRequest},
     models::supertonic3::Bundle,
     runtime::ComputePolicy,
@@ -66,6 +66,9 @@ struct Synthesize {
     /// Disable offered VE output buffers for a controlled comparison.
     #[arg(long)]
     no_output_reuse: bool,
+    /// Optimized graph set; requires the additional pinned assets in the bundle.
+    #[arg(long, value_enum, default_value_t=Variant::Baseline)]
+    execution_variant: Variant,
     #[arg(long)]
     output: PathBuf,
 }
@@ -73,6 +76,12 @@ struct Synthesize {
 enum Policy {
     CpuOnly,
     CpuAndNeuralEngine,
+}
+#[derive(Clone, Copy, ValueEnum)]
+enum Variant {
+    Baseline,
+    Fused8,
+    Fused8ExperimentalVocoder,
 }
 
 fn input_text(args: &Synthesize) -> Result<String> {
@@ -145,6 +154,13 @@ fn run(cli: Cli) -> Result<()> {
                         Policy::CpuAndNeuralEngine => ComputePolicy::CpuAndNeuralEngine,
                     },
                     reuse_output_buffers: !args.no_output_reuse,
+                    execution_variant: match args.execution_variant {
+                        Variant::Baseline => ExecutionVariant::Baseline,
+                        Variant::Fused8 => ExecutionVariant::Fused8,
+                        Variant::Fused8ExperimentalVocoder => {
+                            ExecutionVariant::Fused8ExperimentalVocoder
+                        }
+                    },
                 },
             )?;
             let result = engine.synthesize(SynthesisRequest {

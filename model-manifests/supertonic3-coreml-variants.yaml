@@ -1,0 +1,161 @@
+schema_version: 1
+id: supertonic3-coreml-execution-variants-v1
+base_manifest_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+provenance:
+  source_repository: https://github.com/FluidInference/FluidAudio
+  source_revision: e560c6445ffdc42e60c7b282d162aae271f18e2a
+  archive: Scripts/supertonic_ane/archive/fused-ve-study
+  archive_manifest_sha256: 8689d0680010bc3da485c5a368a8167f04d9a6dae137c4d8ac442fe53ec6b90c
+  transformations:
+  - Eight-step VE graph; invariant operations hoisted; seven redundant FP16/FP32 boundary
+    pairs removed
+  - Vocoder specialized to exact latent lengths 30 and 32
+  weights: Byte-identical to the pinned baseline weight blobs; licensing remains the
+    baseline model licensing
+routing:
+  ve_fused8_128:
+    steps: 8
+    latent_bucket: 128
+  vocoder_30:
+    exact_latent_length: 30
+  vocoder_32:
+    exact_latent_length: 32
+  otherwise: Use baseline graphs; never pad to a fixed vocoder length
+evaluation_candidates:
+  w8a8: Research only; separate quality, placement and end-to-end validation required
+  dense_int8: Research only; not interchangeable with the qualified INT4 graph
+artifacts:
+  ve_fused8_128:
+    kind: coreml_compiled
+    path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc
+    precision:
+      weights: 4-bit k-means palettization; some weights remain float16
+      activations: float16
+      interface: float32
+    latent_bucket: 128
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+      text_emb:
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 128
+      style_ttl:
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+      latent_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+    files:
+    - path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc/analytics/coremldata.bin
+      sha256: 3df24b13bdb6ed2e4e6297ffcd9c6e6a40ec755fc795a2ab033295701fefbda6
+      size_bytes: 243
+    - path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc/coremldata.bin
+      sha256: d052785c16b6772e641e09f355cf951c77dc5c9dfdb0ad9f3c4272c129da4f19
+      size_bytes: 699
+    - path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc/metadata.json
+      sha256: 339a4a74534a595735f318bfda81ca3721eccc425dc732731af35747701993ee
+      size_bytes: 3826
+    - path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc/model.mil
+      sha256: 90f4e1e559edf4522cb61a65188142570cd6e44daa10b69146a30462196cf13c
+      size_bytes: 1463696
+    - path: ExecutionVariants/VectorEstimator_L128_S8.mlmodelc/weights/weight.bin
+      sha256: c6173731642fd2eb40f759a970d4cdea459c0368cc37a29d0b4c1d19fd1ca90a
+      size_bytes: 32166112
+  vocoder_30:
+    kind: coreml_compiled
+    path: ExecutionVariants/Vocoder_L30.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    inputs:
+      latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 30
+    outputs:
+      wav:
+        dtype: float32
+        shape:
+        - 1
+        - 92160
+    files:
+    - path: ExecutionVariants/Vocoder_L30.mlmodelc/analytics/coremldata.bin
+      sha256: 3caa93031e1a76d847e4b18c1fbd5f131f0ba66719209514e79aed74cf41e7b7
+      size_bytes: 243
+    - path: ExecutionVariants/Vocoder_L30.mlmodelc/coremldata.bin
+      sha256: 0b09b8b0246745bb4c86ec8ce6f5c54610e5d7b5f510dd6f88c337266d54e048
+      size_bytes: 147
+    - path: ExecutionVariants/Vocoder_L30.mlmodelc/metadata.json
+      sha256: e966f2b60632f8da4993fb55273a97bd0c4e5e705af1af4375ccd9d39975ac8d
+      size_bytes: 1602
+    - path: ExecutionVariants/Vocoder_L30.mlmodelc/model.mil
+      sha256: 8d22e8e26dbe13037d1f07d724b690a8ba6f5ff65e1e61ec9d85f69263d98c82
+      size_bytes: 75518
+    - path: ExecutionVariants/Vocoder_L30.mlmodelc/weights/weight.bin
+      sha256: b45e4c17a45cc4de30dcedae9f662548aa35f8f9763632c342b8bbef3089fcee
+      size_bytes: 50672512
+  vocoder_32:
+    kind: coreml_compiled
+    path: ExecutionVariants/Vocoder_L32.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    inputs:
+      latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 32
+    outputs:
+      wav:
+        dtype: float32
+        shape:
+        - 1
+        - 98304
+    files:
+    - path: ExecutionVariants/Vocoder_L32.mlmodelc/analytics/coremldata.bin
+      sha256: effa62fe3317178534c5914e54201ba0615dcb443aa534c3dbae38039379f00f
+      size_bytes: 243
+    - path: ExecutionVariants/Vocoder_L32.mlmodelc/coremldata.bin
+      sha256: a9f2e38423d0d6c0725473d9b27d38d55bdae5ab1f6c1540dafd2995fae8fa30
+      size_bytes: 147
+    - path: ExecutionVariants/Vocoder_L32.mlmodelc/metadata.json
+      sha256: c85f00a75eaed894e7f315ed19567e5963cf6443e6c7297803b37421093fe31b
+      size_bytes: 1602
+    - path: ExecutionVariants/Vocoder_L32.mlmodelc/model.mil
+      sha256: feb60c16c6bd50366f13beec2572657e9e25e8516e6192dbb3cc63ac467452d1
+      size_bytes: 75518
+    - path: ExecutionVariants/Vocoder_L32.mlmodelc/weights/weight.bin
+      sha256: b45e4c17a45cc4de30dcedae9f662548aa35f8f9763632c342b8bbef3089fcee
+      size_bytes: 50672512
