@@ -15,9 +15,10 @@ compilation passed; no Windows playback or iOS device execution is implied.
 Use `objc2-avf-audio` 0.3.2 for the optional output crate. Its generated player,
 time conversion, completion-type and time-pitch APIs cover the required surface.
 The existing `cidre` Core ML adapter remains unchanged. All native graph ownership
-will stay on an output control thread, with minimal completion callbacks and
-ordered epoch validation on that control thread. Output dependencies are currently
-development-only; a headless MLSR build does not require them.
+stays on an output control thread, with minimal completion callbacks and
+ordered epoch validation on that control thread. Output dependencies are optional;
+a headless MLSR build does not require them. The subsequent
+[reusable adapter](apple-output.md) has its own native qualification.
 
 The probe establishes these boundaries:
 
@@ -40,8 +41,8 @@ The first two local attempts are retained under the qualification directory as
 `step1-playback-v1` and `step1-playback-v2`. They rejected an unavailable paused
 clock and an initially assumed monotonic raw resume clock. Those observations
 drive the explicit clock contract rather than being hidden by a passing build.
-Versions v3/v4 pass with bounded resume checks and reported latency. The reusable
-adapter still needs its own playback/seek/rate/route and SDK acceptance tests.
+Versions v3/v4 pass with bounded resume checks and reported latency. Reader seek
+and public SDK acceptance remain separate from these primitive checks.
 
 Apple API references: [player nodes](https://developer.apple.com/documentation/avfaudio/avaudioplayernode),
 [time pitch](https://developer.apple.com/documentation/avfaudio/avaudiounittimepitch),

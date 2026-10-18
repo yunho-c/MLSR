@@ -37,6 +37,10 @@ struct Device {
     begins: Vec<u64>,
     stale: Option<u64>,
     dropped: bool,
+    enqueue_gate: Option<(
+        std::sync::mpsc::SyncSender<()>,
+        std::sync::mpsc::Receiver<()>,
+    )>,
     drain_gate: Option<(
         std::sync::mpsc::SyncSender<()>,
         std::sync::mpsc::Receiver<()>,
@@ -47,6 +51,12 @@ struct Factory {
     auto: AtomicBool,
     drain: AtomicBool,
     fail_next: AtomicBool,
+    enqueue_gate: Mutex<
+        Option<(
+            std::sync::mpsc::SyncSender<()>,
+            std::sync::mpsc::Receiver<()>,
+        )>,
+    >,
 }
 impl Factory {
     fn new(auto: bool, drain: bool) -> Arc<Self> {
@@ -55,6 +65,7 @@ impl Factory {
             auto: AtomicBool::new(auto),
             drain: AtomicBool::new(drain),
             fail_next: AtomicBool::new(false),
+            enqueue_gate: Mutex::new(None),
         })
     }
     fn device(&self, index: usize) -> Arc<Mutex<Device>> {
@@ -97,6 +108,7 @@ impl OutputFactory for Factory {
             begins: Vec::new(),
             stale: None,
             dropped: false,
+            enqueue_gate: lock(&self.enqueue_gate).take(),
             drain_gate: None,
         }));
         lock(&self.devices).push(device.clone());
@@ -144,6 +156,10 @@ impl AudioOutput for Output {
             return Err(Error::Output("injected enqueue failure".into()));
         }
         let mut state = self.checked(epoch)?;
+        if let Some((entered, release)) = state.enqueue_gate.take() {
+            entered.send(()).unwrap();
+            release.recv_timeout(Duration::from_secs(3)).unwrap();
+        }
         assert!(!state.input_ended);
         assert_eq!(
             start, state.end,
@@ -635,4 +651,42 @@ fn dropping_a_handle_preserves_fire_and_forget_and_late_state() {
         }
     }
     assert!(matches!(states.poll(Duration::ZERO), SpeechStatePoll::End));
+}
+
+#[test]
+fn cancellation_consumed_between_enqueues_keeps_the_healthy_output() {
+    let factory = Factory::new(true, true);
+    let (entered_tx, entered_rx) = std::sync::mpsc::sync_channel(1);
+    let (release_tx, release_rx) = std::sync::mpsc::sync_channel(1);
+    *lock(&factory.enqueue_gate) = Some((entered_tx, release_rx));
+    let tts = owner(factory.clone());
+    let first = tts
+        .speak(
+            request(&tts, "First."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    entered_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+    first.cancel();
+    release_tx.send(()).unwrap();
+    assert!(matches!(
+        first.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Requested
+        }
+    ));
+    let next = tts
+        .speak(
+            request(&tts, "Next."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    assert!(matches!(
+        next.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    assert_eq!(lock(&factory.devices).len(), 1);
+    assert!(!lock(&factory.device(0)).dropped);
 }

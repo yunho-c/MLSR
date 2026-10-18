@@ -7,6 +7,19 @@ use crate::{
 };
 use serde::Serialize;
 
+#[cfg(all(feature = "apple-output", target_os = "macos"))]
+pub mod apple;
+
+pub(crate) fn default_factory() -> Option<(std::sync::Arc<dyn OutputFactory>, AudioPolicy)> {
+    #[cfg(all(feature = "apple-output", target_os = "macos"))]
+    return Some((
+        std::sync::Arc::new(apple::AppleOutputFactory::default()),
+        AudioPolicy::Managed,
+    ));
+    #[cfg(not(all(feature = "apple-output", target_os = "macos")))]
+    None
+}
+
 /// Audio-session ownership. A host-managed adapter must not change the host's
 /// session category, routing policy or activation behind its back.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]

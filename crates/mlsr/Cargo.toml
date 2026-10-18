@@ -11,6 +11,10 @@ publish = false
 [features]
 default = []
 coreml = ["dep:cidre"]
+apple-output = ["dep:mlsr-playback", "mlsr-playback/apple"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mlsr-playback = { path = "../mlsr-playback", optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cidre = { workspace = true, optional = true }

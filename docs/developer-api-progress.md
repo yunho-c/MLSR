@@ -10,7 +10,7 @@ must not be marked complete merely because a subset of tests passes.
 | 2 | Voice catalog/resolution and frozen Unicode segment plans | Complete | [Rust API and validation](voices-and-text-plans.md); SDK translations in step 7 |
 | 3 | Shared render/stream/WAV APIs with state and completion | Complete | [Shared Rust facade and qualification](headless-sdk.md); SDK translations in step 7 |
 | 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
-| 5 | Reusable native Apple playback and host policy adapter | Pending | |
+| 5 | Reusable native Apple playback and host policy adapter | Complete | [Native adapter and qualification](apple-output.md); language wiring in step 7 |
 | 6 | Retention, seeking, reader timeline and navigation | Pending | |
 | 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | Pending | |
 | 8 | Three examples, installed-package and full acceptance qualification | Pending | |
@@ -40,14 +40,14 @@ primitive or the older demonstration already supports part of it.
 | RENDER-03 | Cancellation/disk/quota failures propagate; parity across bindings | Rust failure paths and native PCM parity complete; cross-binding parity pending |
 | SESSION-01 | Immediate per-request Speech handle, immutable outcome exactly once | Rust complete: speech tests including the controlled final-completion race; SDK translation pending |
 | SESSION-02 | Replace scope, enqueue order, bounded queue count/text bytes | Rust complete: synthesis/speech tests including admission failure preservation; SDK translation pending |
-| SESSION-03 | Queued cancellation, old callback rejection, close/join races | Rust deterministic tests complete; native output and SDK integration pending |
-| STATE-01 | Independent synthesis/playback states; buffering is not completion | Rust complete: delayed drain output test; native qualification pending |
+| SESSION-03 | Queued cancellation, old callback rejection, close/join races | Rust deterministic and native tests complete; SDK integration pending |
+| STATE-01 | Independent synthesis/playback states; buffering is not completion | Rust fake-output and real Core ML/native playback tests complete; SDK integration pending |
 | STATE-02 | Late/current snapshot, bounded paused/slow subscribers, retained terminal | Rust complete: revision-only watches and late/drop tests; language async buffering pending |
-| OUTPUT-01 | Optional output dependency and native PCM path for all bindings | Pending |
-| OUTPUT-02 | Bounded enqueue, independent flush/cancel path | Pending |
-| OUTPUT-03 | Pause/resume clock and final played-back completion | Pending |
-| OUTPUT-04 | Volume and independent pitch-preserving playback rate | Pending |
-| OUTPUT-05 | Host-managed policy, route/interruption handling and explicit capabilities | Pending |
+| OUTPUT-01 | Optional output dependency and native PCM path for all bindings | Rust native path complete; language wiring pending |
+| OUTPUT-02 | Bounded enqueue, independent flush/cancel path | Native driver limits/stale callback tests and controller cancellation regression pass |
+| OUTPUT-03 | Pause/resume clock and final played-back completion | Native driver and actual Core ML speech tests pass; acoustic timestamps not claimed |
+| OUTPUT-04 | Volume and independent pitch-preserving playback rate | Native five-rate/live-change tests plus offline pitch probe pass; SDK controls pending |
+| OUTPUT-05 | Host-managed policy, route/interruption handling and explicit capabilities | macOS host policy and synthetic native configuration recovery pass; interruption capability false, physical route/iOS unqualified |
 | STORE-01 | RAM/disk budgets; typed quota failure; cleanup only owned resources | Pending |
 | TIME-01 | Position, bufferedUntil, seekableRanges, estimated/final duration | Pending |
 | TIME-02 | Seek during generation/completion/pause; invalid seek preserves position | Pending |

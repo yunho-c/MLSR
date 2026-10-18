@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "result": "pass",
+  "host": {
+    "machine": "arm64",
+    "macos": "27.0.1",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)"
+  },
+  "native_run_provenance": {
+    "sources": {
+      "Cargo.lock": "495f06e8e746f030b171443fe918066dfbf0c25f46f6a320b6c6fd5c11e0f6ed",
+      "crates/mlsr-playback/src/apple.rs": "0d916302321754c79c5e7adb4cb46c51d30011d762bb5b4337235bccb8e292a6",
+      "crates/mlsr/src/output/apple.rs": "bb89c3dd7c34d24333328f186157db45fdf678a8f48fae3e5099721b0f30ae88",
+      "crates/mlsr/src/speech/worker.rs": "ac12f224bcbe08825ea12db770d62deef30865a1872e4a4ba194bccf1a233a22",
+      "crates/mlsr/src/speech/tests.rs": "1f9b5258d263b98476dbc80b08318fdff675f76bca69bab79e7cb867a18e32f9"
+    }
+  },
+  "playback": {
+    "configuration_change": "synthetic native notification; physical route change unqualified",
+    "flush_boundary": "native flush return, not acoustic silence or inference quiescence",
+    "flush_native_call_seconds": 0.010813,
+    "format": "mono_float32_44100",
+    "memory_boundary": "owned native PCM buffers, not physical driver allocation or RSS",
+    "muted": true,
+    "owned_native_buffer_allocations": 15,
+    "owned_native_buffer_final": 0,
+    "owned_native_buffer_peak": 4,
+    "owned_native_frame_capacity_peak": 44100,
+    "pause_observation_ms": 160,
+    "rates": [
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 1.016004584,
+        "rate": 0.5,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.621933834,
+        "rate": 1.0,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.538737083,
+        "rate": 1.25,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.474888625,
+        "rate": 1.5,
+        "source_seconds": 0.4
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "enqueue_to_drain_seconds": 0.37575775,
+        "rate": 2.0,
+        "source_seconds": 0.4
+      }
+    ],
+    "result": "pass",
+    "starvation_observation_ms": 140,
+    "starvation_stops": 1
+  },
+  "speech": {
+    "active_replace": "replaced",
+    "cases": [
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "frames": 160493,
+        "language": "en",
+        "resume_to_done_seconds": 2.862495542,
+        "resume_to_source_progress_seconds": 0.223787083,
+        "voice": "supertonic3:M1"
+      },
+      {
+        "downstream_latency_seconds": 0.08484183673469388,
+        "frames": 162011,
+        "language": "ko",
+        "resume_to_done_seconds": 2.881921292,
+        "resume_to_source_progress_seconds": 0.203535958,
+        "voice": "supertonic3:F1"
+      }
+    ],
+    "muted": true,
+    "native_graph_opens": 1,
+    "policy": "host_managed",
+    "queued_cancel": "requested",
+    "replace_to_old_completion_seconds": 0.0014045,
+    "result": "pass",
+    "timing_boundary": "controller observations include polling; not acoustic timing or a benchmark"
+  },
+  "validation": {
+    "workspace_all_features_all_targets": "69 core, 7 CLI and 4 FFI tests passed; opt-in external/native tests skipped in ordinary suite",
+    "native_tests": "both explicitly passed",
+    "msrv_1_88": "workspace all-features/all-targets check passed",
+    "windows_compile": "core all-features/all-targets check passed",
+    "clippy": "workspace all-features/all-targets with -D warnings passed"
+  },
+  "post_run_source_changes": "Native callback observer removal simplified by clippy; added unsafe safety comment. No semantic native change.",
+  "external_logs": "/Users/yunhocho/.cache/mlsr/qualification/developer-api-v0/step5-native-v2",
+  "prior_attempt": {
+    "path": "step5-native-v1",
+    "result": "failed",
+    "reason": "cancellation between enqueues retired a healthy graph; repaired and regression tested"
+  }
+}

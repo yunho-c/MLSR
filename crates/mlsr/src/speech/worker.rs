@@ -68,9 +68,20 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
             Ok(()) => {}
             Err(error) => {
                 control.job.cancel();
-                // A broken output cannot be reused. Drop it on its owning thread
-                // before reporting failure, then open a fresh adapter next time.
-                if let Some(mut old) = output.take()
+                let cancelled = lock(&control.state).snapshot.cancellation;
+                // Cancellation can race with claiming the synthesis consumer.
+                // It does not imply a broken native graph. Flush that graph and
+                // keep it; actual output failures still retire it on this thread.
+                let healthy_cancel = matches!(error, Error::Cancelled) && cancelled.is_some();
+                if healthy_cancel {
+                    if let Some(current) = output.as_mut()
+                        && advance(&mut epoch)
+                            .and_then(|next| current.flush(next))
+                            .is_err()
+                    {
+                        output.take();
+                    }
+                } else if let Some(mut old) = output.take()
                     && let Ok(next) = advance(&mut epoch)
                 {
                     let _ = old.flush(next);
@@ -167,7 +178,10 @@ fn play(
                             playback.ended_input = true;
                             output.finish_input(current_epoch)?;
                         }
-                        Outcome::Cancelled { .. } => return Err(Error::Cancelled),
+                        Outcome::Cancelled { reason } => {
+                            control.cancel(reason);
+                            break;
+                        }
                         Outcome::Failed { error } => return Err(Error::OperationFailed(error)),
                     },
                     AudioPoll::Timeout => break,
@@ -188,6 +202,11 @@ fn play(
             } else {
                 break;
             }
+        }
+        if lock(&control.state).snapshot.cancellation.is_some() {
+            // Do not poll/drain an epoch after consuming its cancellation. The
+            // loop's independent cancellation path flushes before joining work.
+            continue;
         }
         let snapshot = output.snapshot()?;
         if snapshot

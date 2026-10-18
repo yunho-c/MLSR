@@ -1,5 +1,8 @@
 //! Optional platform audio output for MLSR.
 //!
-//! The Apple development probe qualifies the playback clock, pause, flush,
-//! played-back completion and independent time stretching before the shared
-//! speech controller depends on them. No production output is exposed yet.
+//! Native output contains no synthesis/session policy or language bindings.
+//! Apple graph objects are confined to their creating control thread. Completion
+//! and configuration callbacks touch only atomics and never invoke user code.
+
+#[cfg(all(feature = "apple", target_os = "macos"))]
+pub mod apple;

@@ -8,8 +8,23 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
-# The initial dependency set is development-only for the required playback
-# feasibility probe. Production adapters will opt into their platform bindings.
+[features]
+default = []
+apple = ["dep:objc2", "dep:block2", "dep:objc2-avf-audio", "dep:objc2-foundation"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "=0.6.4", optional = true }
+block2 = { version = "=0.6.2", optional = true }
+objc2-foundation = { version = "=0.3.2", optional = true, default-features = false, features = ["std", "block2", "NSNotification", "NSOperation", "NSString"] }
+objc2-avf-audio = { version = "=0.3.2", optional = true, default-features = false, features = [
+    "std", "block2", "objc2-core-audio-types", "AVAudioEngine", "AVAudioNode",
+    "AVAudioPlayerNode", "AVAudioBuffer", "AVAudioFormat", "AVAudioTime",
+    "AVAudioTypes", "AVAudioMixerNode", "AVAudioMixing", "AVAudioUnit",
+    "AVAudioUnitTimeEffect", "AVAudioUnitTimePitch",
+] }
+
+# The standalone spike still builds without opting the production library into
+# output. These development dependencies do not enter headless MLSR builds.
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 objc2 = "=0.6.4"
 block2 = "=0.6.2"

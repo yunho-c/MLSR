@@ -82,7 +82,8 @@ impl Tts {
         Self::new(Engine::from_model(model, engine_options)?, queue_options)
     }
     /// Take ownership of an already loaded engine, reusing its verified model
-    /// lease. This constructor is headless and opens no audio device.
+    /// lease. Opens no audio device; speech uses optional native output when
+    /// compiled for a supported host (currently `apple-output` on macOS).
     pub fn new(engine: Engine, options: QueueOptions) -> Result<Self> {
         Ok(Self {
             queue: Queue::new(engine, options)?,
@@ -91,7 +92,7 @@ impl Tts {
                 changed: Condvar::new(),
             },
             close: Mutex::new(()),
-            output: None,
+            output: crate::output::default_factory(),
             controllers: Mutex::new(Controllers {
                 closed: false,
                 default: None,
