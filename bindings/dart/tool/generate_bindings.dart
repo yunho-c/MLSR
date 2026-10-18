@@ -33,7 +33,12 @@ Future<void> main(List<String> args) async {
       include: (header) => header.pathSegments.last == 'mlsr.h',
     ),
     visitors: [
-      Visitor(func: (node) => node.isIncluded = node.name.startsWith('mlsr_')),
+      Visitor(
+        func: (node) => node.isIncluded = node.name.startsWith('mlsr_'),
+        struct: (node) => node.isIncluded = node.name.startsWith('Mlsr'),
+        macroConstant: (node) =>
+            node.isIncluded = node.name.startsWith('MLSR_'),
+      ),
     ],
   ).generate();
 

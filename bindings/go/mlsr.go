@@ -1,5 +1,5 @@
 // Package mlsr provides Go bindings to the MLSR Rust text-to-speech library.
-// This scaffold exposes version queries; synthesis is not implemented yet.
+// Synthesis uses a persistent Rust engine and bounded pull-based jobs.
 package mlsr
 
 import "fmt"

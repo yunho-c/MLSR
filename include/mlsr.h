@@ -8,6 +8,197 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * Success, timeout/end, or failure. On failure read/release the error handle.
+ */
+typedef int32_t MlsrStatus;
+
+/**
+ * Engine settings. Initialize with mlsr_engine_options_default. This v1 layout
+ * is fixed; struct_size rejects incompatible callers before reading fields.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrEngineOptions).
+   */
+  uint32_t struct_size;
+  /**
+   * 0: CPU only, 1: CPU and Neural Engine permitted.
+   */
+  uint32_t compute_policy;
+  /**
+   * 0: ordinary outputs, 1: offer reusable native output buffers.
+   */
+  uint32_t reuse_output_buffers;
+  /**
+   * Execution variant; zero is the baseline. Other values are reserved.
+   */
+  uint32_t execution_variant;
+} MlsrEngineOptions;
+
+/**
+ * Per-job options. All bounds are in mono PCM frames, never bytes.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrJobOptions).
+   */
+  uint32_t struct_size;
+  /**
+   * Denoising steps, 1..=64.
+   */
+  uint32_t steps;
+  /**
+   * Finite positive speaking-rate multiplier.
+   */
+  float speed;
+  /**
+   * Must be zero.
+   */
+  uint32_t reserved;
+  /**
+   * Segment n uses seed.wrapping_add(n).
+   */
+  uint64_t seed;
+  /**
+   * Queue frame budget, 1..=2,646,000.
+   */
+  uint32_t queue_frames;
+  /**
+   * Maximum chunk frames, 1..=min(queue_frames,65,536).
+   */
+  uint32_t chunk_frames;
+  /**
+   * Segment allocation limit, 1..=1,572,864.
+   */
+  uint32_t max_segment_frames;
+  /**
+   * Must be zero.
+   */
+  uint32_t reserved2;
+} MlsrJobOptions;
+
+/**
+ * UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
+ * before asynchronous use. Output views live until their owning handle release.
+ */
+typedef struct {
+  /**
+   * Readable bytes, or null only when len is zero.
+   */
+  const uint8_t *data;
+  /**
+   * Byte length, excluding any terminator.
+   */
+  uintptr_t len;
+} MlsrString;
+
+/**
+ * Opaque library-owned handle. Zero is null; IDs are never reused.
+ */
+typedef uint64_t MlsrHandle;
+
+/**
+ * Borrowed diagnostic. Copy before releasing its error handle.
+ */
+typedef struct {
+  /**
+   * Stable category such as engine_busy, cancelled or unsupported_character.
+   */
+  MlsrString code;
+  /**
+   * Human-readable UTF-8 diagnostic.
+   */
+  MlsrString message;
+} MlsrErrorInfo;
+
+/**
+ * Borrowed event view. All pointers remain valid until event_release. Copy audio
+ * before releasing; never free these pointers with the caller's allocator.
+ */
+typedef struct {
+  /**
+   * 1: prediction, 2: audio, 3: completed, 4: cancelled, 5: failed.
+   */
+  uint32_t kind;
+  /**
+   * PCM frames per second.
+   */
+  uint32_t sample_rate;
+  /**
+   * PCM channels, one in this POC.
+   */
+  uint32_t channels;
+  /**
+   * Zero-based segment identifier; zero for a terminal event.
+   */
+  uint32_t segment_id;
+  /**
+   * Engine-local job ID for stale-result rejection.
+   */
+  uint64_t job_id;
+  /**
+   * Original input's UTF-8 byte start, inclusive.
+   */
+  uint64_t text_start;
+  /**
+   * Original input's UTF-8 byte end, exclusive.
+   */
+  uint64_t text_end;
+  /**
+   * Frame offset of this chunk/segment in job audio.
+   */
+  uint64_t start_frame;
+  /**
+   * Prediction, chunk, or final published frame count according to kind.
+   */
+  uint64_t frames;
+  /**
+   * Segment's prediction, retained on audio events.
+   */
+  uint64_t predicted_frames;
+  /**
+   * Completely published segments, for terminal events.
+   */
+  uint32_t completed_segments;
+  /**
+   * Reserved, always zero.
+   */
+  uint32_t reserved;
+  /**
+   * Borrowed finite Float32 PCM for audio events; otherwise null.
+   */
+  const float *samples;
+  /**
+   * Scalar sample count, not bytes.
+   */
+  uintptr_t sample_count;
+  /**
+   * Diagnostic for failed terminal events; empty otherwise.
+   */
+  MlsrErrorInfo error;
+} MlsrEventInfo;
+
+/**
+ * Operation succeeded; a pull returned an event.
+ */
+#define MLSR_OK 0
+
+/**
+ * A timed pull/wait reached its deadline.
+ */
+#define MLSR_TIMEOUT 1
+
+/**
+ * The terminal event has already been consumed.
+ */
+#define MLSR_END 2
+
+/**
+ * Failure; optional error output owns its diagnostic.
+ */
+#define MLSR_ERROR -1
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -15,7 +206,7 @@ extern "C" {
 /**
  * Returns the C ABI compatibility version. Bindings must check it before use.
  *
- * Version 1 currently contains only library and ABI version queries.
+ * Version 1 preserves the original queries and adds the synthesis job API.
  */
 uint32_t mlsr_abi_version(void);
 
@@ -26,6 +217,139 @@ uint32_t mlsr_abi_version(void);
  * it. This function is thread-safe and never returns a null pointer.
  */
 const char *mlsr_version(void);
+
+/**
+ * Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+ */
+uint32_t mlsr_features(void);
+
+/**
+ * Number of registry handles, for leak diagnostics; not a memory measurement.
+ */
+uint64_t mlsr_live_handles(void);
+
+/**
+ * Initialize engine options. Null output returns MLSR_ERROR.
+ * # Safety
+ * A non-null output must point to aligned writable MlsrEngineOptions storage.
+ */
+MlsrStatus mlsr_engine_options_default(MlsrEngineOptions *output);
+
+/**
+ * Initialize job options. Null output returns MLSR_ERROR.
+ * # Safety
+ * A non-null output must point to aligned writable MlsrJobOptions storage.
+ */
+MlsrStatus mlsr_job_options_default(MlsrJobOptions *output);
+
+/**
+ * Verify/load local assets. Blocking: call off UI threads. options may be null
+ * for defaults. On failure output is zero; error optionally owns a diagnostic.
+ * # Safety
+ * Strings must be readable UTF-8 byte ranges. Options must be aligned/readable
+ * for their declared size. Non-null output/error must be writable and disjoint.
+ */
+MlsrStatus mlsr_engine_open(MlsrString manifest,
+                            MlsrString bundle,
+                            const MlsrEngineOptions *settings,
+                            MlsrHandle *output,
+                            MlsrHandle *error);
+
+/**
+ * Cancel/join an engine's work, without releasing its handle. Idempotent.
+ * # Safety
+ * A non-null error output must be writable/aligned for one handle.
+ */
+MlsrStatus mlsr_engine_shutdown(MlsrHandle engine, MlsrHandle *error);
+
+/**
+ * Release an engine, cancelling and waiting for native work. Zero is a no-op.
+ * Concurrent calls that already acquired the handle retain safe ownership.
+ */
+MlsrStatus mlsr_engine_release(MlsrHandle engine);
+
+/**
+ * Copy input and start one streaming job. Returns engine_busy if occupied.
+ * Input validation/inference failures after submission arrive as terminal events.
+ * # Safety
+ * Strings/options must be valid readable ranges; non-null output/error pointers
+ * must be aligned, writable and disjoint. Strings are never retained by address.
+ */
+MlsrStatus mlsr_job_start(MlsrHandle engine,
+                          MlsrString text,
+                          MlsrString language,
+                          MlsrString voice,
+                          const MlsrJobOptions *settings,
+                          MlsrHandle *output,
+                          MlsrHandle *error);
+
+/**
+ * Engine-local job ID, or zero for an invalid/released/wrong-kind handle.
+ */
+uint64_t mlsr_job_id(MlsrHandle job);
+
+/**
+ * Timed pull. OK owns an event; TIMEOUT/END leave output zero. Call off UI
+ * threads. Keep one consumer; adapter queues must remain bounded.
+ * # Safety
+ * Non-null output/error pointers must be writable, aligned and disjoint.
+ */
+MlsrStatus mlsr_job_poll(MlsrHandle job,
+                         uint32_t timeout_ms,
+                         MlsrHandle *output,
+                         MlsrHandle *error);
+
+/**
+ * Cancel immediately, wake producers and discard queued events. Does not wait
+ * for an in-flight native call; job_wait or job_release observes quiescence.
+ * # Safety
+ * A non-null error output must be writable/aligned.
+ */
+MlsrStatus mlsr_job_cancel(MlsrHandle job, MlsrHandle *error);
+
+/**
+ * Wait for quiescence without consuming events. OK = quiescent, TIMEOUT = still
+ * active. A backpressured job requires a consumer or cancellation to finish.
+ * # Safety
+ * A non-null error output must be writable/aligned.
+ */
+MlsrStatus mlsr_job_wait(MlsrHandle job, uint32_t timeout_ms, MlsrHandle *error);
+
+/**
+ * Cancel, wait and release a job. Never requires a consumer. Zero is a no-op.
+ */
+MlsrStatus mlsr_job_release(MlsrHandle job);
+
+/**
+ * Borrow an event's data. info_size must equal sizeof(MlsrEventInfo). Copy
+ * strings/audio before event_release; do not release concurrently with a view.
+ * # Safety
+ * Output must be writable/aligned for info_size bytes. Optional error output
+ * must be writable and disjoint. The event remains owned by the caller.
+ */
+MlsrStatus mlsr_event_read(MlsrHandle event,
+                           MlsrEventInfo *output,
+                           uintptr_t info_size,
+                           MlsrHandle *error);
+
+/**
+ * Release an event and its Rust-owned PCM/diagnostic buffers. Zero is a no-op.
+ */
+MlsrStatus mlsr_event_release(MlsrHandle event);
+
+/**
+ * Borrow an error diagnostic until error_release. Null/size mismatch returns
+ * MLSR_ERROR without creating another diagnostic.
+ * # Safety
+ * Output must be writable/aligned for info_size bytes. Do not concurrently
+ * release the error while borrowing its view.
+ */
+MlsrStatus mlsr_error_read(MlsrHandle error, MlsrErrorInfo *output, uintptr_t info_size);
+
+/**
+ * Release an owned error diagnostic. Zero is a no-op.
+ */
+MlsrStatus mlsr_error_release(MlsrHandle error);
 
 #ifdef __cplusplus
 }  // extern "C"

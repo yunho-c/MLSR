@@ -1,0 +1,88 @@
+schema_version: 1
+kind: installed_synthesis_bindings_summary
+passed: true
+scope: C static/shared synthesis plus installed or relocated Python, Go and Dart packages
+  outside checkout
+environment:
+  platform: macOS-27.0.1-arm64-arm-64bit-Mach-O
+  python: 3.14.8
+  rust: rustc 1.95.0 (59807616e 2026-04-14)
+  xcode: 'Xcode 27.1
+
+    Build version 27A9275'
+manifest_sha256: 4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c
+library_sha256: 61d76bb18e31547fbfc5c25aa0f13691a56d4d3e307bdcf63d3e6852dc34fbeb
+full_report:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task5-installed-v2/report.yaml
+  sha256: f92db2da232e16df18161806fac938fc29d48bb83e3759bdb6ec1ba9617228a4
+commands:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task5-installed-v2/commands.log
+  sha256: 7c53eeacce82f4d7e01700491c53f634452a0d128c2e46947a73b1804cbe6869
+packages:
+  python: installed wheel; tests and cancel/reuse/WAV example passed
+  go: relocated module; race tests and cancel/reuse/WAV example passed
+  dart: relocated package/native asset; isolate stream/cancel tests and WAV example
+    passed
+pcm:
+  en_M1:
+    frames: 70669
+    sha256: 8b6c2c6384af482e79356b55865226db9b74a3dc543b0980799342359606f311
+    three_bindings_byte_exact: true
+  en_F1:
+    frames: 70792
+    sha256: 2c4de2d4506c7b28f45b9ffc52d9fbc6e4de3df7c25312914106d35a3d467d53
+    three_bindings_byte_exact: true
+  ko_M1:
+    frames: 126287
+    sha256: 6114543b59173748b13821a3b12c11235c635b0eb14d92ae238b2113d65ba303
+    three_bindings_byte_exact: true
+  ko_F1:
+    frames: 126533
+    sha256: 5c9eb0db13b23f8f400e99d7b73a0e5fd594d6835ee39922ace316b39a774352
+    three_bindings_byte_exact: true
+examples:
+  python:
+    wav_sha256: 89d7939c22a84e4a537ed55183ee9c46386b59a3bc27f5e6eacc185cf34b54c0
+    frames: 70669
+    pcm_byte_exact: true
+  go:
+    wav_sha256: 89d7939c22a84e4a537ed55183ee9c46386b59a3bc27f5e6eacc185cf34b54c0
+    frames: 70669
+    pcm_byte_exact: true
+  dart:
+    wav_sha256: 89d7939c22a84e4a537ed55183ee9c46386b59a3bc27f5e6eacc185cf34b54c0
+    frames: 70669
+    pcm_byte_exact: true
+validation:
+  portable_check: passed
+  generated_bindings: current
+  rust_1_88_ffi_coreml: passed
+  windows_all_features: typecheck passed; not runtime execution
+  go_race: passed
+  live_handles: returned to baseline after cleanup
+  c_lifetime: retained event audio valid after job and engine release
+logs:
+  task5-ffi-build.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task5-ffi-build.log
+    sha256: fca5ed22cc1bc16a69e4f8c506fceb74869c158258e59f748721ffe6971c6b28
+  task5-portable.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task5-portable.log
+    sha256: 979950b0bd02a4db4c756f7efcc0a23b0dd5a972d295ecc95d48cb877a74bfe5
+  task5-portable-v2.log:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task5-portable-v2.log
+    sha256: 3876b4e8191a4e08dbfb105a7ff71c506f9ac78c4df484d997f92b175cf62fda
+notes:
+- Initial portable run passed Rust/MSRV/Windows checks, then failed host C compilation
+  because IPHONEOS_DEPLOYMENT_TARGET was set. The corrected host-only rerun passed
+  the full portable suite and generation checks.
+- PCM equality uses shared seeded Rust synthesis for four English/Korean M1/F1 cases.
+  It is not an independent speech quality evaluation.
+- All three examples cancel a job, reuse the engine and export byte-identical Float32
+  mono 44100 Hz WAVs.
+- Performance, ANE placement/residency and physical iOS execution are not qualified
+  by this record.
+post_qualification_changes:
+  crates/mlsr-ffi/cbindgen.toml:
+    before_sha256: 77da81b1f5c3d969ab2f6bd97670e83cb7c66d467717a4b63aa098d7497ac168
+    after_sha256: 8fe4bf932f10ec0f2787dd7e5f0fc4aeb34b0eb79d33de4854e9b0e081dd62b1
+    reason: Removed a trailing blank line only; generated header check passed unchanged.

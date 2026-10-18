@@ -2,7 +2,7 @@
 //!
 //! Supertonic synthesis runs from original text to owned Float32 PCM, using
 //! verified local assets and an optional persistent Core ML runtime. Language
-//! bindings currently expose version queries; synthesis FFI is subsequent work.
+//! bindings expose bounded synthesis jobs through the shared C ABI.
 
 #![deny(unsafe_code)]
 

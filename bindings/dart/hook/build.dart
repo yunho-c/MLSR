@@ -7,6 +7,13 @@ Future<void> main(List<String> args) async {
   await build(args, (input, output) async {
     if (!input.config.buildCodeAssets) return;
     final config = input.config.code;
+    final coreml = input.userDefines['coreml'] ?? false;
+    if (coreml is! bool) {
+      throw FormatException('MLSR coreml must be true or false.');
+    }
+    if (coreml && config.targetOS != OS.macOS) {
+      throw UnsupportedError('The current Core ML build hook supports macOS.');
+    }
     if (config.linkModePreference == LinkModePreference.static) {
       throw UnsupportedError('MLSR currently bundles a shared library.');
     }
@@ -57,6 +64,7 @@ Future<void> main(List<String> args) async {
           '--release',
           '--package',
           'mlsr-ffi',
+          if (coreml) ...['--features', 'coreml'],
           '--target',
           target,
           '--target-dir',
@@ -65,7 +73,10 @@ Future<void> main(List<String> args) async {
         workingDirectory: root.toFilePath(),
         environment: {
           if (config.targetOS == OS.macOS)
-            'MACOSX_DEPLOYMENT_TARGET': '${config.macOS.targetVersion}.0',
+            'MACOSX_DEPLOYMENT_TARGET':
+                coreml && config.macOS.targetVersion < 15
+                ? '15.0'
+                : '${config.macOS.targetVersion}.0',
         },
       );
       if (result.exitCode != 0) {

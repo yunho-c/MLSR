@@ -10,9 +10,177 @@ import 'dart:ffi' as ffi;
 
 /// Returns the C ABI compatibility version. Bindings must check it before use.
 ///
-/// Version 1 currently contains only library and ABI version queries.
+/// Version 1 preserves the original queries and adds the synthesis job API.
 @ffi.Native<ffi.Uint32 Function()>()
 external int mlsr_abi_version();
+
+/// Verify/load local assets. Blocking: call off UI threads. options may be null
+/// for defaults. On failure output is zero; error optionally owns a diagnostic.
+/// # Safety
+/// Strings must be readable UTF-8 byte ranges. Options must be aligned/readable
+/// for their declared size. Non-null output/error must be writable and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    MlsrString,
+    ffi.Pointer<MlsrEngineOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_engine_open(
+  MlsrString manifest,
+  MlsrString bundle,
+  ffi.Pointer<MlsrEngineOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Initialize engine options. Null output returns MLSR_ERROR.
+/// # Safety
+/// A non-null output must point to aligned writable MlsrEngineOptions storage.
+@ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrEngineOptions>)>()
+external int mlsr_engine_options_default(ffi.Pointer<MlsrEngineOptions> output);
+
+/// Release an engine, cancelling and waiting for native work. Zero is a no-op.
+/// Concurrent calls that already acquired the handle retain safe ownership.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_engine_release(int engine);
+
+/// Cancel/join an engine's work, without releasing its handle. Idempotent.
+/// # Safety
+/// A non-null error output must be writable/aligned for one handle.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64, ffi.Pointer<ffi.Uint64>)>()
+external int mlsr_engine_shutdown(int engine, ffi.Pointer<ffi.Uint64> error);
+
+/// Borrow an error diagnostic until error_release. Null/size mismatch returns
+/// MLSR_ERROR without creating another diagnostic.
+/// # Safety
+/// Output must be writable/aligned for info_size bytes. Do not concurrently
+/// release the error while borrowing its view.
+@ffi.Native<
+  ffi.Int32 Function(ffi.Uint64, ffi.Pointer<MlsrErrorInfo>, ffi.UintPtr)
+>()
+external int mlsr_error_read(
+  int error,
+  ffi.Pointer<MlsrErrorInfo> output,
+  int info_size,
+);
+
+/// Release an owned error diagnostic. Zero is a no-op.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_error_release(int error);
+
+/// Borrow an event's data. info_size must equal sizeof(MlsrEventInfo). Copy
+/// strings/audio before event_release; do not release concurrently with a view.
+/// # Safety
+/// Output must be writable/aligned for info_size bytes. Optional error output
+/// must be writable and disjoint. The event remains owned by the caller.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrEventInfo>,
+    ffi.UintPtr,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_event_read(
+  int event,
+  ffi.Pointer<MlsrEventInfo> output,
+  int info_size,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Release an event and its Rust-owned PCM/diagnostic buffers. Zero is a no-op.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_event_release(int event);
+
+/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+@ffi.Native<ffi.Uint32 Function()>()
+external int mlsr_features();
+
+/// Cancel immediately, wake producers and discard queued events. Does not wait
+/// for an in-flight native call; job_wait or job_release observes quiescence.
+/// # Safety
+/// A non-null error output must be writable/aligned.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64, ffi.Pointer<ffi.Uint64>)>()
+external int mlsr_job_cancel(int job, ffi.Pointer<ffi.Uint64> error);
+
+/// Engine-local job ID, or zero for an invalid/released/wrong-kind handle.
+@ffi.Native<ffi.Uint64 Function(ffi.Uint64)>()
+external int mlsr_job_id(int job);
+
+/// Initialize job options. Null output returns MLSR_ERROR.
+/// # Safety
+/// A non-null output must point to aligned writable MlsrJobOptions storage.
+@ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrJobOptions>)>()
+external int mlsr_job_options_default(ffi.Pointer<MlsrJobOptions> output);
+
+/// Timed pull. OK owns an event; TIMEOUT/END leave output zero. Call off UI
+/// threads. Keep one consumer; adapter queues must remain bounded.
+/// # Safety
+/// Non-null output/error pointers must be writable, aligned and disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Uint32,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_job_poll(
+  int job,
+  int timeout_ms,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Cancel, wait and release a job. Never requires a consumer. Zero is a no-op.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_job_release(int job);
+
+/// Copy input and start one streaming job. Returns engine_busy if occupied.
+/// Input validation/inference failures after submission arrive as terminal events.
+/// # Safety
+/// Strings/options must be valid readable ranges; non-null output/error pointers
+/// must be aligned, writable and disjoint. Strings are never retained by address.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    MlsrString,
+    MlsrString,
+    MlsrString,
+    ffi.Pointer<MlsrJobOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_job_start(
+  int engine,
+  MlsrString text,
+  MlsrString language,
+  MlsrString voice,
+  ffi.Pointer<MlsrJobOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Wait for quiescence without consuming events. OK = quiescent, TIMEOUT = still
+/// active. A backpressured job requires a consumer or cancellation to finish.
+/// # Safety
+/// A non-null error output must be writable/aligned.
+@ffi.Native<
+  ffi.Int32 Function(ffi.Uint64, ffi.Uint32, ffi.Pointer<ffi.Uint64>)
+>()
+external int mlsr_job_wait(
+  int job,
+  int timeout_ms,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Number of registry handles, for leak diagnostics; not a memory measurement.
+@ffi.Native<ffi.Uint64 Function()>()
+external int mlsr_live_handles();
 
 /// Returns the library version as a borrowed, NUL-terminated UTF-8 string.
 ///
@@ -20,3 +188,194 @@ external int mlsr_abi_version();
 /// it. This function is thread-safe and never returns a null pointer.
 @ffi.Native<ffi.Pointer<ffi.Char> Function()>()
 external ffi.Pointer<ffi.Char> mlsr_version();
+
+const int MLSR_END = 2;
+
+const int MLSR_ERROR = -1;
+
+const int MLSR_OK = 0;
+
+const int MLSR_TIMEOUT = 1;
+
+/// Engine settings. Initialize with mlsr_engine_options_default. This v1 layout
+/// is fixed; struct_size rejects incompatible callers before reading fields.
+final class MlsrEngineOptions extends ffi.Struct {
+  /// Must equal sizeof(MlsrEngineOptions).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// 0: CPU only, 1: CPU and Neural Engine permitted.
+  @ffi.Uint32()
+  external int compute_policy;
+
+  /// 0: ordinary outputs, 1: offer reusable native output buffers.
+  @ffi.Uint32()
+  external int reuse_output_buffers;
+
+  /// Execution variant; zero is the baseline. Other values are reserved.
+  @ffi.Uint32()
+  external int execution_variant;
+
+  static ffi.Pointer<MlsrEngineOptions> $allocate(
+    ffi.Allocator $allocator, {
+    required int struct_size,
+    required int compute_policy,
+    required int reuse_output_buffers,
+    required int execution_variant,
+  }) => $allocator<MlsrEngineOptions>()
+    ..ref.struct_size = struct_size
+    ..ref.compute_policy = compute_policy
+    ..ref.reuse_output_buffers = reuse_output_buffers
+    ..ref.execution_variant = execution_variant;
+}
+
+/// Borrowed diagnostic. Copy before releasing its error handle.
+final class MlsrErrorInfo extends ffi.Struct {
+  /// Stable category such as engine_busy, cancelled or unsupported_character.
+  external MlsrString code;
+
+  /// Human-readable UTF-8 diagnostic.
+  external MlsrString message;
+}
+
+/// Borrowed event view. All pointers remain valid until event_release. Copy audio
+/// before releasing; never free these pointers with the caller's allocator.
+final class MlsrEventInfo extends ffi.Struct {
+  /// 1: prediction, 2: audio, 3: completed, 4: cancelled, 5: failed.
+  @ffi.Uint32()
+  external int kind;
+
+  /// PCM frames per second.
+  @ffi.Uint32()
+  external int sample_rate;
+
+  /// PCM channels, one in this POC.
+  @ffi.Uint32()
+  external int channels;
+
+  /// Zero-based segment identifier; zero for a terminal event.
+  @ffi.Uint32()
+  external int segment_id;
+
+  /// Engine-local job ID for stale-result rejection.
+  @ffi.Uint64()
+  external int job_id;
+
+  /// Original input's UTF-8 byte start, inclusive.
+  @ffi.Uint64()
+  external int text_start;
+
+  /// Original input's UTF-8 byte end, exclusive.
+  @ffi.Uint64()
+  external int text_end;
+
+  /// Frame offset of this chunk/segment in job audio.
+  @ffi.Uint64()
+  external int start_frame;
+
+  /// Prediction, chunk, or final published frame count according to kind.
+  @ffi.Uint64()
+  external int frames;
+
+  /// Segment's prediction, retained on audio events.
+  @ffi.Uint64()
+  external int predicted_frames;
+
+  /// Completely published segments, for terminal events.
+  @ffi.Uint32()
+  external int completed_segments;
+
+  /// Reserved, always zero.
+  @ffi.Uint32()
+  external int reserved;
+
+  /// Borrowed finite Float32 PCM for audio events; otherwise null.
+  external ffi.Pointer<ffi.Float> samples;
+
+  /// Scalar sample count, not bytes.
+  @ffi.UintPtr()
+  external int sample_count;
+
+  /// Diagnostic for failed terminal events; empty otherwise.
+  external MlsrErrorInfo error;
+}
+
+/// Per-job options. All bounds are in mono PCM frames, never bytes.
+final class MlsrJobOptions extends ffi.Struct {
+  /// Must equal sizeof(MlsrJobOptions).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// Denoising steps, 1..=64.
+  @ffi.Uint32()
+  external int steps;
+
+  /// Finite positive speaking-rate multiplier.
+  @ffi.Float()
+  external double speed;
+
+  /// Must be zero.
+  @ffi.Uint32()
+  external int reserved;
+
+  /// Segment n uses seed.wrapping_add(n).
+  @ffi.Uint64()
+  external int seed;
+
+  /// Queue frame budget, 1..=2,646,000.
+  @ffi.Uint32()
+  external int queue_frames;
+
+  /// Maximum chunk frames, 1..=min(queue_frames,65,536).
+  @ffi.Uint32()
+  external int chunk_frames;
+
+  /// Segment allocation limit, 1..=1,572,864.
+  @ffi.Uint32()
+  external int max_segment_frames;
+
+  /// Must be zero.
+  @ffi.Uint32()
+  external int reserved2;
+
+  static ffi.Pointer<MlsrJobOptions> $allocate(
+    ffi.Allocator $allocator, {
+    required int struct_size,
+    required int steps,
+    required double speed,
+    required int reserved,
+    required int seed,
+    required int queue_frames,
+    required int chunk_frames,
+    required int max_segment_frames,
+    required int reserved2,
+  }) => $allocator<MlsrJobOptions>()
+    ..ref.struct_size = struct_size
+    ..ref.steps = steps
+    ..ref.speed = speed
+    ..ref.reserved = reserved
+    ..ref.seed = seed
+    ..ref.queue_frames = queue_frames
+    ..ref.chunk_frames = chunk_frames
+    ..ref.max_segment_frames = max_segment_frames
+    ..ref.reserved2 = reserved2;
+}
+
+/// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
+/// before asynchronous use. Output views live until their owning handle release.
+final class MlsrString extends ffi.Struct {
+  /// Readable bytes, or null only when len is zero.
+  external ffi.Pointer<ffi.Uint8> data;
+
+  /// Byte length, excluding any terminator.
+  @ffi.UintPtr()
+  external int len;
+
+  static ffi.Pointer<MlsrString> $allocate(
+    ffi.Allocator $allocator, {
+    required ffi.Pointer<ffi.Uint8> data,
+    required int len,
+  }) => $allocator<MlsrString>()
+    ..ref.data = data
+    ..ref.len = len;
+}

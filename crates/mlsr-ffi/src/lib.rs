@@ -1,10 +1,14 @@
 //! C ABI adapter for the MLSR Rust library.
 //!
 //! Regenerate `include/mlsr.h` with `cargo run -p mlsr-codegen` after changing
-//! exports. The current functions allocate nothing and cannot unwind.
+//! exports. Version queries allocate nothing. Synthesis uses owned registry
+//! handles, explicit release, and panic-contained C entry points.
 
+mod api;
 mod handles;
 mod types;
+pub use api::*;
+pub use types::*;
 
 use std::ffi::c_char;
 
@@ -14,7 +18,7 @@ const VERSION_C: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
 
 /// Returns the C ABI compatibility version. Bindings must check it before use.
 ///
-/// Version 1 currently contains only library and ABI version queries.
+/// Version 1 preserves the original queries and adds the synthesis job API.
 // SAFETY: The exported symbol is unique and its signature uses the C ABI.
 #[unsafe(no_mangle)]
 pub extern "C" fn mlsr_abi_version() -> u32 {

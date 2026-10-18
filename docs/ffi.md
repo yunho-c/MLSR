@@ -8,41 +8,87 @@ must link the required system libraries/frameworks; see the Core ML build tool.
 The macOS build uses an `@rpath` install name and reserves Mach-O header space
 so app packagers can relocate the library and rewrite its load commands.
 
-## Current API
+## Compatibility and capabilities
 
-| Function | Contract |
-| --- | --- |
-| `uint32_t mlsr_abi_version(void)` | Returns compatibility version `1` |
-| `const char *mlsr_version(void)` | Returns a borrowed, non-null, NUL-terminated UTF-8 version string |
+`mlsr_abi_version()` still returns `1`; `mlsr_version()` returns a borrowed,
+NUL-terminated UTF-8 string valid while the library is loaded. These original
+queries are unchanged. Bindings check the ABI before interpreting layouts.
+`mlsr_features()` reports bit 1 for the job API and bit 2 for an Apple build
+with Core ML enabled. Building the portable API does not supply a TTS backend.
 
-Both functions are thread-safe, allocate nothing, and cannot unwind. The version
-string remains valid while the native library is loaded. Callers must not modify
-or free it. The bindings copy its contents into their own string types.
+All options and event/error views have fixed C layouts. Initialize options with
+`mlsr_engine_options_default` / `mlsr_job_options_default`; their `struct_size`
+must equal the current layout's size. Reserved fields must be zero. Read views
+with their exact `sizeof` value. Future incompatible layouts require new types
+and entry points or an ABI change, rather than reading past an older struct.
 
-Bindings check the ABI version before interpreting the rest of the interface.
-It is independent of the package's semantic version. Preserve existing symbols
-and signatures for compatible additions; breaking ABI changes require a new ABI
-version and binding updates. Version 1 currently promises only these queries.
+## Handles and ownership
 
-## Rules for future engine APIs
+`MlsrHandle` is a non-reused 64-bit registry ID, not an address. Zero is null.
+Stale IDs and wrong handle kinds fail with `invalid_handle`. Releasing zero is a
+successful no-op; releasing a nonzero handle twice is an error. All successful
+engine/job/event/error acquisitions require their matching release function.
+Failure and timeout/end outputs are zeroed. A non-null error output owns a
+diagnostic on failure; read and release it even when no other handle was returned.
 
-- Represent engines, jobs, and owned audio with opaque handles and matching
-  release functions. Define null handling and failure outputs for every call.
-- Explicitly document lifetime, mutation, thread affinity, concurrent calls,
-  cancellation, and whether destruction waits for running work.
-- Keep allocation and deallocation in the same library. Never require callers
-  to use their allocator to free Rust-owned memory.
-- Use C-compatible layouts and explicit lengths. Do not export Rust strings,
-  vectors, references, `Result`, futures, or trait objects.
-- Translate failures into status codes with owned diagnostics. Keep panic
-  unwinding within Rust; recovery from a caught panic must not reuse potentially
-  inconsistent engine state. An abort cannot be recovered by a binding.
-- Transfer audio in chunks. A pull-based job/chunk API is the initial design
-  direction; add callback APIs only with defined thread and lifetime contracts.
-- For operations retaining data after return, copy caller data into Rust-owned
-  storage or define explicit ownership transfer. Respect cgo's pointer retention
-  rules and each language's garbage collector.
+`MlsrString` is a UTF-8 pointer plus byte length, without a required terminator.
+Input strings are borrowed during the call and copied before asynchronous use.
+Output strings and PCM are borrowed views owned by an event or error handle.
+Copy them before releasing that owner; never pass them to the caller's allocator.
+An event remains valid after job or engine destruction. Bindings copy PCM into
+language-owned storage before releasing events.
 
-These are constraints for future synthesis FFI. The synchronous Rust engine
-already produces owned PCM, but no engine/job/audio symbols are exported in this
-C ABI yet. Add ABI and installed-package tests as that interface is introduced.
+Callers must supply aligned, valid readable/writable ranges, and disjoint output
+pointers. Null checks and length validation cannot make arbitrary invalid C
+pointers safe. Do not release an event/error concurrently with reading or using
+its borrowed views. An in-flight engine/job operation retains internal ownership
+when another thread releases the handle; subsequent lookups fail safely.
+
+## Job lifecycle
+
+1. `mlsr_engine_open` verifies the local YAML bundle and loads persistent models.
+   It blocks; call it off UI/event-loop threads. No assets are downloaded.
+2. `mlsr_job_start` copies text, language, voice and options. One active job is
+   permitted per engine; another submission reports `engine_busy`. Validation
+   after submission and inference errors arrive as failed terminal events.
+3. `mlsr_job_poll` waits for at most the supplied milliseconds. `MLSR_OK` owns
+   an event; `MLSR_TIMEOUT` owns nothing; `MLSR_END` means the terminal event was
+   already consumed. Keep one consumer per job.
+4. `mlsr_event_read` borrows prediction, audio, or terminal metadata. Release
+   every event after use. Exactly one terminal outcome is delivered: completed,
+   cancelled, or failed. Engine-local job IDs support stale-result rejection;
+   combine them with engine identity when using multiple engines.
+5. `mlsr_job_cancel` immediately sets cancellation, discards queued data and
+   wakes blocked producers. It does not wait for an in-flight Core ML prediction.
+   `mlsr_job_wait` observes quiescence without consuming events; a stopped
+   consumer must cancel or resume consuming for a blocked producer to finish.
+6. `mlsr_job_release` cancels and waits. `mlsr_engine_shutdown` cancels and joins
+   its workers; `mlsr_engine_release` also drops the registry handle. These calls
+   can block and belong off UI threads. Existing job/event handles remain owned
+   by their callers and must still be released.
+
+Cancellation may run concurrently with polling. Polling, release, model loading,
+and worker joins never hold the global registry lock while waiting for native
+work. C entry points contain Rust unwinding; an abort or invalid foreign pointer
+cannot be recovered this way. A panicked orchestration worker retires its engine.
+
+## Audio, spans and bounds
+
+Audio is mono, finite Float32 PCM at 44,100 Hz. Frame positions are relative to
+the job's generated audio. Segment spans are half-open **UTF-8 byte ranges in the
+original input**, not normalized text offsets, Python character indices, or Dart
+UTF-16 indices. Prediction events precede their segment's audio. Terminal frame
+counts record frames published, including frames that cancellation may discard.
+Synthesis completion is independent of a host player's playback completion.
+
+Default limits are 44,100 queued frames, 4,096 frames per chunk, and 1,572,864
+frames per segment. Queue and segment allocation bounds are separate. Adapters
+must preserve pull backpressure; retaining events or copying audio into an
+unbounded host queue defeats the application's memory bound. See [jobs](jobs.md)
+for segmentation, limits and cancellation semantics.
+
+`mlsr_live_handles()` counts registry entries for leak diagnostics; it is not a
+memory or ANE-residency measurement. The public C tests exercise shared/static
+libraries, concurrent cancellation, errors, retained audio and complete cleanup.
+`tools/check_synthesis_bindings.py` additionally qualifies installed/relocated
+Python, Go and Dart packages with real models outside the checkout.

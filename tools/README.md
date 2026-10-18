@@ -33,3 +33,21 @@ It requires installed targets/toolchains and never installs them automatically.
 The same command tests/builds the Core ML CLI. Full Supertonic synthesis replay
 uses opt-in external assets via `python3 -m tools.supertonic3.synthesis_replay`;
 see the [synthesis documentation](../docs/supertonic3.md).
+
+`check_synthesis_bindings.py` explicitly qualifies real synthesis on macOS arm64:
+
+```sh
+python3 tools/check_synthesis_bindings.py --bundle /path/to/verified-bundle \
+  --output-dir /path/to/new/qualification
+```
+
+It builds the release Core ML library, checks C callers linked both ways, installs
+a Python wheel into a temporary directory (no venv), and relocates Go/Dart
+packages, headers and native assets outside the checkout. All three run real
+English/Korean M1/F1 synthesis, cancellation/backpressure/cleanup tests and their
+cancel-then-WAV example. Go tests use the race detector. The verifier compares
+PCM bytes across languages, validates WAVs independently with `afinfo`, checks
+source/library/model hashes, and saves a YAML report and command log. The output
+directory must not exist. `--no-build` uses an already built release library;
+it is the caller's responsibility to build matching sources first. This is an
+explicit integration test, not a latency benchmark or broad speech-quality study.

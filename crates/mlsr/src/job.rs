@@ -123,6 +123,19 @@ impl Job {
     pub fn cancel(&self) {
         self.control.cancel();
     }
+    /// Cancel and wait without consuming events. Safe for deterministic foreign
+    /// handle release, including a producer blocked by backpressure.
+    pub fn cancel_and_wait(&self) {
+        self.control.cancel();
+        let mut state = lock(&self.control.state);
+        while state.report.is_none() {
+            state = self
+                .control
+                .changed
+                .wait(state)
+                .unwrap_or_else(|p| p.into_inner());
+        }
+    }
     /// Pull one event, respecting consumer backpressure. Concurrent pulls are
     /// serialized; use one consumer to preserve application-level ordering.
     pub fn poll(&self, timeout: Duration) -> Poll {
@@ -145,15 +158,7 @@ impl Job {
 }
 impl Drop for Job {
     fn drop(&mut self) {
-        self.control.cancel();
-        let mut state = lock(&self.control.state);
-        while state.report.is_none() {
-            state = self
-                .control
-                .changed
-                .wait(state)
-                .unwrap_or_else(|p| p.into_inner());
-        }
+        self.cancel_and_wait();
     }
 }
 

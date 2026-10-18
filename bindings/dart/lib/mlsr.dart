@@ -4,6 +4,7 @@ library;
 import 'package:ffi/ffi.dart';
 
 import 'src/bindings.g.dart' as native;
+export 'src/synthesis.dart';
 
 /// C ABI version supported by this package.
 const supportedAbiVersion = 1;

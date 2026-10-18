@@ -34,8 +34,8 @@ owned audio. `Engine` exposes a synchronous Rust interface. Its
 native bindings stay private. The pinned reference tools qualify every input,
 intermediate, shape decision, and PCM result from original text with saved noise.
 [Jobs, cancellation and long-text segmentation](jobs.md) run on a dedicated
-orchestration worker with bounded pull output. The synthesis C ABI remains the
-next integration step.
+orchestration worker with bounded pull output. The [synthesis C ABI](ffi.md)
+exposes that contract through checked handles, owned events and explicit release.
 
 Keep model architecture separate from the inference backend: a model pipeline
 specifies what to execute, while a runtime supplies execution. Split modules into
@@ -50,8 +50,10 @@ Dart uses [dart:ffi](https://dart.dev/interop/c-interop), generated declarations
 and a [build hook](https://dart.dev/tools/hooks) to bundle the native library.
 Go uses [cgo](https://pkg.go.dev/cmd/cgo) and an externally available native
 header/library. Python uses [ctypes](https://docs.python.org/3/library/ctypes.html)
-with lazy loading of the native library. Package APIs provide idiomatic cleanup,
-exceptions, and concurrency integration as those capabilities are implemented.
+with lazy loading of the native library. Dart runs blocking calls on an adapter
+isolate and exposes a pull-driven stream; Go provides context cancellation and
+`Close`; Python provides context-managed iteration. Each adapter copies returned
+PCM into language-owned storage and preserves Rust's bounded output.
 
 Text normalization, model policy, inference scheduling, and synthesis stay in
 Rust. Host-language integrations should not reimplement them. Audio playback is

@@ -96,8 +96,8 @@ and waveform. TE and intermediate VE tensors stay native. Synthesis requires
 `&mut self`, so two requests cannot alias the reusable buffers concurrently;
 the pipeline can move between caller threads. Errors drop per-request tensors.
 `shutdown` joins the worker, and owned output PCM remains valid after shutdown
-or destruction. In-flight native calls are synchronous; cancellation belongs
-to the subsequent job API.
+or destruction. In-flight native calls are synchronous; the [job API](jobs.md)
+checks cancellation before/after predictions and between denoising steps.
 
 `synthesize_with_diagnostics` runs the same logic with optional captured noise
 and records host snapshots of every input/intermediate. This is a qualification
@@ -170,8 +170,8 @@ Python interpreter and never download assets.
 
 The synchronous API remains a single-segment operation. For paragraphs and
 cancellation, use the [Rust job API](jobs.md), which streams bounded PCM and
-preserves original UTF-8 source ranges. The public C ABI and language bindings
-still expose version queries. Playback, physical iOS qualification, additional
+preserves original UTF-8 source ranges. The public [C ABI](ffi.md) and Dart, Go,
+Python bindings expose the same job contract. Playback, physical iOS qualification, additional
 runtimes, and performance/quality studies are subsequent milestones.
 
 ## Recorded qualification

@@ -2,12 +2,12 @@
 
 Cross-platform support requires both a portable API and a working inference
 runtime on each target. Supertonic text-to-PCM synthesis is implemented through
-Core ML and qualified on macOS arm64. The public synthesis ABI and other
-inference backends are subsequent work.
+Core ML and qualified on macOS arm64, including the public C ABI and installed
+Dart/Go/Python synthesis packages. Additional inference backends are future work.
 
 | Target | Scaffold configuration | Validation |
 | --- | --- | --- |
-| macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML | Full text-to-PCM parity, English/Korean WAV CLI; C static/shared and ctypes runtime smoke; language version checks |
+| macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML | Full text-to-PCM parity, English/Korean WAV CLI; C static/shared synthesis; installed Dart/Go/Python cancel/reuse/WAV tests |
 | macOS x64 | Host builds; optional Core ML | Cross-compiled/linked locally; inference not executed |
 | Linux x64, glibc | Native host builds; CI job configured | Awaiting CI run |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
@@ -19,8 +19,9 @@ inference backends are subsequent work.
 
 The CI workflow checks Rust, the C header/ABI, all three bindings, and a Python
 wrapper wheel on macOS, Linux, and Windows. Configuring a CI job does not establish
-that it has passed. Public language-package tests exercise version queries;
-separate development C/ctypes probes execute real Core ML through Rust.
+that it has passed. Ordinary package tests exercise version queries and portable
+ABI failures. Explicit model tests exercise synthesis, cancellation and cleanup;
+`tools/check_synthesis_bindings.py` runs them outside the checkout on Apple Silicon.
 
 ## Toolchains
 
@@ -46,10 +47,12 @@ and release artifacts must be documented alongside each implemented backend.
 on macOS/iOS. Default builds and non-Apple targets do not depend on Apple
 frameworks. Both shared and static C libraries are built. The Rust runtime
 executes supplied tensor graphs; the Rust `Engine` assembles the Supertonic
-pipeline. Enabling this feature does not yet expose synthesis through the C ABI.
+pipeline and exposes jobs through the shared C ABI.
 
-Use `MACOSX_DEPLOYMENT_TARGET=15.0` and `IPHONEOS_DEPLOYMENT_TARGET=18.0` for
-Core ML builds, matching the pinned model manifest. iOS device and simulator
+Use `MACOSX_DEPLOYMENT_TARGET=15.0` for macOS or
+`IPHONEOS_DEPLOYMENT_TARGET=18.0` for iOS Core ML builds, matching the pinned
+model manifest. Avoid setting the iOS variable for host C compiler checks.
+iOS device and simulator
 compile/link jobs are configured separately from actual device qualification.
 Rust 1.88 is the minimum declared by cidre 0.29.0. Debug stripping is explicitly
 disabled because affected Rust/LLVM toolchains produce dylibs rejected by the

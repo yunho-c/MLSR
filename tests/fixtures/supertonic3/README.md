@@ -21,6 +21,11 @@
   noise, both allocation modes, input rejections, seeded normal/diagnostic
   comparisons, and standalone CLI WAV receipts. Runtime and synthesis records
   retain their own source hashes; the earlier runtime record is historical.
+- `jobs-summary.yaml`: bounded paragraph jobs, cancellation and lifetime tests,
+  including a real model run and repeated full-pipeline parity.
+- `bindings-summary.yaml`: C static/shared and installed Python/Go/Dart synthesis,
+  cancellation, independent audio ownership, cross-language PCM equality and
+  cancel-then-WAV examples executed outside the repository checkout.
 
 The six boundary probes target true latent lengths 127/128/129 and 255/256/257.
 The harness predicts duration, then calibrates speaking rate to the middle of

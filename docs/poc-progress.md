@@ -11,7 +11,7 @@ after this POC; its feasibility has already been confirmed by the project owner.
 | 2. Persistent Core ML runtime | Implemented with cidre; saved-stage parity, native ownership/reuse, C static/shared callers and Apple cross-build records in `runtime-summary.yaml` |
 | 3. Rust single-segment synthesis and CLI | Implemented; full tensor parity and standalone WAV receipts in `synthesis-summary.yaml`; five commits `7e8b00f` through `7c4ca74` |
 | 4. Segmentation/jobs/cancellation/bounds | Implemented in Rust; see `jobs.md`, portable lifecycle tests and explicit real-model job test |
-| 5. C ABI and Dart/Go/Python synthesis | Pending: installed synthesis/cancellation examples outside checkout |
+| 5. C ABI and Dart/Go/Python synthesis | Implemented; installed synthesis/cancellation/WAV examples outside checkout, cross-language PCM equality and lifecycle checks in `bindings-summary.yaml` |
 | 6. Selectable ANE variants | Pending: integrate available fusion/fixed-vocoder exports, shape gates, parity, lifecycle and measured performance |
 | 7. Flutter example and qualification | Pending: responsive speak/stop/playback/WAV UI, real Apple suite, timing/memory/artifact records, real-time warm synthesis |
 
