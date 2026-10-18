@@ -12,7 +12,7 @@ must not be marked complete merely because a subset of tests passes.
 | 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
 | 5 | Reusable native Apple playback and host policy adapter | Complete | [Native adapter and qualification](apple-output.md); language wiring in step 7 |
 | 6 | Retention, seeking, reader timeline and navigation | Complete | [Reader API, storage limits and native qualification](reader-api.md); SDK translation pending |
-| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | In progress | Additive C ownership/metadata surface, then idiomatic language adapters and Flutter migration |
+| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | In progress | [Additive C ABI](developer-c-api.md) and Python synchronous/asyncio facade pass portable and real Core ML/native playback tests; Go/Dart/Flutter pending |
 | 8 | Three examples, installed-package and full acceptance qualification | Pending | |
 
 ## Requirement checklist
@@ -25,7 +25,7 @@ primitive or the older demonstration already supports part of it.
 | --- | --- | --- |
 | API-01 | Installed public facade: open, speak, render, renderToFile, synthesize, dispose | Pending |
 | API-02 | Same shared behavior through Rust, C, Dart, Go and Python; idiomatic async adapters | Pending |
-| API-03 | Additive ABI; old functions/layouts/offset meanings preserved | Pending |
+| API-03 | Additive ABI; old functions/layouts/offset meanings preserved | C header regenerated with feature/schema gates; old API unchanged; old/new Python synthesis tests pass; remaining binding/package checks pending |
 | VOICE-01 | Stable IDs, metadata, supported languages/capabilities | Rust complete: `voice::tests`; SDK translation pending |
 | VOICE-02 | Catalog/verified-assets/loaded-engine readiness distinction | Rust complete: voice and engine tests; SDK translation pending |
 | VOICE-03 | Explicit locale resolution/fallback, missing voice errors | Rust complete: `explicit_fallback_never_silently_changes_language_or_voice`; SDK translation pending |
