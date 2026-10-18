@@ -329,8 +329,76 @@ impl NativeModel {
         };
         drop(output_guard);
         drop(guards);
-        // Retain even after an execution error: Module may retain input views.
+        // Success may retain input views. On error the bridge destroys the
+        // failed module before either generation's views/storage can be dropped.
         self.retained_inputs = inputs;
         status(code, &error, "execute QNN graph")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    #[test]
+    #[ignore = "requires external QNN bundle and physical X2 Elite"]
+    fn native_failure_destroys_borrowed_views_before_reloading() {
+        let bundle = super::super::tests::bundle();
+        let mut model =
+            NativeModel::load(bundle.model_path("duration_predictor").unwrap()).unwrap();
+        let storage = |value| Rc::new(RefCell::new(value));
+        let inputs = vec![
+            (
+                "text_ids".into(),
+                storage(zeros(&[1, 128], DType::I64).unwrap()),
+            ),
+            (
+                "style_dp".into(),
+                storage(bundle.voice("M1").unwrap().style_dp().clone()),
+            ),
+            (
+                "text_mask".into(),
+                storage(HostTensor::new(vec![1, 1, 128], TensorData::F32(vec![1.; 128])).unwrap()),
+            ),
+        ];
+        let output = storage(model.output().unwrap());
+        model.predict(&inputs, &output).unwrap();
+        let expected = output.borrow().clone();
+        let view = input_view(&inputs[0].1.borrow()).unwrap();
+        let mut result = output_view(&mut output.borrow_mut()).unwrap();
+        let mut error = [0; 4096];
+        // SAFETY: Live unique model, correctly typed owned views and error buffer.
+        // Deliberately wrong input count is checked before any input is read.
+        let code = unsafe {
+            mlsr_qnn_execute(
+                model.handle.pointer.as_ptr(),
+                &view,
+                1,
+                &mut result,
+                error.as_mut_ptr(),
+                error.len(),
+            )
+        };
+        assert_ne!(code, 0);
+        model.retained_inputs.clear();
+        // Release the old generation entirely, as a failed caller may do.
+        drop(inputs);
+        let next = vec![
+            (
+                "text_ids".into(),
+                storage(zeros(&[1, 128], DType::I64).unwrap()),
+            ),
+            (
+                "style_dp".into(),
+                storage(bundle.voice("M1").unwrap().style_dp().clone()),
+            ),
+            (
+                "text_mask".into(),
+                storage(HostTensor::new(vec![1, 1, 128], TensorData::F32(vec![1.; 128])).unwrap()),
+            ),
+        ];
+        model.predict(&next, &output).unwrap();
+        assert_eq!(*output.borrow(), expected);
     }
 }

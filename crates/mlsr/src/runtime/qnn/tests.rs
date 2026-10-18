@@ -5,7 +5,7 @@ use crate::{
 };
 use std::path::Path;
 
-fn bundle() -> Bundle {
+pub(super) fn bundle() -> Bundle {
     let root = std::env::var_os("MLSR_QNN_TEST_BUNDLE").expect("MLSR_QNN_TEST_BUNDLE");
     Bundle::load(
         Path::new(env!("CARGO_MANIFEST_DIR"))

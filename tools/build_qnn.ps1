@@ -4,6 +4,7 @@ param(
     [int]$Jobs = 2
 )
 $ErrorActionPreference = 'Stop'
+$ExecuTorchPrefix = (Resolve-Path -LiteralPath $ExecuTorchPrefix).Path
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $qnnBuild = Join-Path $projectRoot 'target/qnn-native'
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'

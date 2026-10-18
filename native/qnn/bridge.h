@@ -17,6 +17,9 @@ typedef struct MlsrQnnTensor {
 } MlsrQnnTensor;
 
 __declspec(dllexport) uint32_t mlsr_qnn_bridge_version(void);
+// Diagnostic sequence: odd during forward, even after completion. Lock-free
+// observation allows tests to prove cancellation happened within a native call.
+__declspec(dllexport) uint64_t mlsr_qnn_activity(void);
 __declspec(dllexport) int mlsr_qnn_open(const char* utf8_path, void** model,
                                       uint32_t* input_count, char* error, size_t capacity);
 __declspec(dllexport) int mlsr_qnn_info(void* model, uint32_t input,

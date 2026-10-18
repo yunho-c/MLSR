@@ -5,6 +5,7 @@
 #include <executorch/runtime/backend/interface.h>
 #include <executorch/runtime/platform/runtime.h>
 #include <algorithm>
+#include <atomic>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -26,12 +27,17 @@ using executorch::runtime::Error;
 
 // Export from the pinned Windows ExecuTorch QNN backend build. Windows DLLs
 // have separate static registries; registration must target this bridge's
-// executorch_core instance. See supertonic-npu's prepare_executorch.py patch.
+// executorch_core instance. See the pinned upstream QnnExecuTorch.h export.
 extern "C" __declspec(dllimport) void QnnExecuTorchBackendRegister(void* register_fn);
 
 namespace {
 std::mutex runtime_mutex;
 std::once_flag runtime_once;
+std::atomic<uint64_t> activity{0};
+struct Activity {
+  Activity() { activity.fetch_add(1); }
+  ~Activity() { activity.fetch_add(1); }
+};
 void require(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
 }
@@ -80,6 +86,7 @@ struct Model {
   // Reverse destruction order: module/context first, then borrowed view
   // descriptors and finally the aligned program bytes used by its data loader.
   std::unique_ptr<void, AlignedFree> program;
+  size_t program_bytes = 0;
   std::vector<TensorPtr> inputs;
   std::unique_ptr<Module> module;
 
@@ -94,15 +101,23 @@ struct Model {
     file.seekg(0);
     file.read(static_cast<char*>(program.get()), size);
     require(file.good(), "Cannot read complete PTE file");
-    module = std::make_unique<Module>(
-        std::make_unique<BufferDataLoader>(program.get(), static_cast<size_t>(size)));
-    checked(module->load_forward(), "load forward");
-    auto meta = module->method_meta("forward");
+    program_bytes = static_cast<size_t>(size);
+    load();
+  }
+
+  void load() {
+    if (module) return;
+    auto replacement = std::make_unique<Module>(
+        std::make_unique<BufferDataLoader>(program.get(), program_bytes));
+    checked(replacement->load_forward(), "load forward");
+    auto meta = replacement->method_meta("forward");
     require(meta.ok() && meta->num_outputs() == 1 && meta->num_inputs() <= 32,
             "Expected one forward tensor output and at most 32 inputs");
+    module = std::move(replacement);
   }
 
   MlsrQnnTensor info(bool input, uint32_t index) {
+    load();
     auto meta = module->method_meta("forward");
     require(meta.ok(), "Missing forward metadata");
     auto result = input ? meta->input_tensor_meta(index) : meta->output_tensor_meta(index);
@@ -121,6 +136,19 @@ struct Model {
     return value;
   }
 };
+struct ResetOnFailure {
+  Model& model;
+  bool success = false;
+  ~ResetOnFailure() {
+    if (!success) {
+      // A partial set_inputs / allocation / execution failure may leave either
+      // old or new borrowed inputs in Module. Tear it down while BOTH generations
+      // of descriptors and Rust allocations are still alive. Reload on next use.
+      model.module.reset();
+      model.inputs.clear();
+    }
+  }
+};
 void validate(const MlsrQnnTensor& supplied, const MlsrQnnTensor& expected) {
   require(supplied.data && supplied.rank == expected.rank && supplied.dtype == expected.dtype &&
           supplied.bytes == expected.bytes, "Tensor dtype, rank or byte count mismatch");
@@ -133,6 +161,7 @@ void validate(const MlsrQnnTensor& supplied, const MlsrQnnTensor& expected) {
 } // namespace
 
 uint32_t mlsr_qnn_bridge_version() { return 1; }
+uint64_t mlsr_qnn_activity() { return activity.load(); }
 int mlsr_qnn_open(const char* path, void** output, uint32_t* count, char* error, size_t capacity) {
   if (output) *output = nullptr;
   return guarded(error, capacity, [&] {
@@ -161,11 +190,15 @@ int mlsr_qnn_execute(void* ptr, const MlsrQnnTensor* inputs, uint32_t count,
     std::lock_guard<std::mutex> lock(runtime_mutex);
     require(ptr && inputs && output, "Null execution argument");
     auto& model = *static_cast<Model*>(ptr);
+    std::vector<TensorPtr> views;
+    std::vector<TensorPtr> previous_views;
+    std::vector<EValue> values;
+    // Declared after descriptors: this guard destroys the failed module FIRST.
+    ResetOnFailure reset{model};
+    model.load();
     auto meta = model.module->method_meta("forward");
     require(meta.ok() && meta->num_inputs() == count, "Input count mismatch");
     validate(*output, model.info(false, 0));
-    std::vector<TensorPtr> views;
-    std::vector<EValue> values;
     for (uint32_t i = 0; i < count; ++i) {
       validate(inputs[i], model.info(true, i));
       const auto a = reinterpret_cast<uintptr_t>(inputs[i].data);
@@ -178,9 +211,12 @@ int mlsr_qnn_execute(void* ptr, const MlsrQnnTensor* inputs, uint32_t count,
     }
     // Rust retains the corresponding owned input allocations with this model.
     // Old descriptors remain alive until forward has replaced all inputs.
-    auto previous_views = std::move(model.inputs);
+    previous_views = std::move(model.inputs);
     model.inputs = std::move(views);
-    auto result = model.module->forward(values);
+    auto result = [&] {
+      Activity executing;
+      return model.module->forward(values);
+    }();
     checked(result.error(), "forward");
     require(result->size() == 1 && result->at(0).isTensor(), "Expected one tensor output");
     const auto& tensor = result->at(0).toTensor();
@@ -195,6 +231,7 @@ int mlsr_qnn_execute(void* ptr, const MlsrQnnTensor* inputs, uint32_t count,
     // Explicit adapter copy. The output must survive subsequent forward calls.
     // Reusable output allocations are owned by the Rust worker, not the module.
     std::memcpy(output->data, tensor.const_data_ptr(), static_cast<size_t>(output->bytes));
+    reset.success = true;
   });
 }
 void mlsr_qnn_close(void* ptr) {
