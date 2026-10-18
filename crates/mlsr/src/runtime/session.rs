@@ -9,7 +9,8 @@ use std::{
     thread::JoinHandle,
 };
 
-/// Devices that Core ML is permitted to use. This does not promise placement.
+/// Native execution selection. Core ML policies permit devices without
+/// promising placement; QnnHtp selects the pinned Qualcomm HTP backend.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ComputePolicy {
     /// CPU execution, useful for diagnostics and small unit tests.
@@ -17,6 +18,8 @@ pub enum ComputePolicy {
     /// Permit CPU and Neural Engine; exclude GPU.
     #[default]
     CpuAndNeuralEngine,
+    /// Qualcomm HTP through the optional Windows ARM64 QNN adapter.
+    QnnHtp,
 }
 
 /// Counters collected on the worker, without reading host-wide memory/utilization.
@@ -145,6 +148,11 @@ pub(super) struct Envelope {
 impl Session {
     /// Start an idle worker; models are loaded only by explicit `load` calls.
     pub fn coreml(policy: ComputePolicy) -> Result<Self> {
+        if policy == ComputePolicy::QnnHtp {
+            return Err(Error::InvalidModel(
+                "QNN policy cannot select a Core ML session".into(),
+            ));
+        }
         #[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]
         {
             let (sender, receiver) = mpsc::sync_channel(32);
@@ -163,6 +171,30 @@ impl Session {
         #[cfg(not(all(feature = "coreml", any(target_os = "macos", target_os = "ios"))))]
         {
             let _ = policy;
+            Err(Error::BackendUnavailable)
+        }
+    }
+
+    /// Start a persistent ExecuTorch/QNN worker for the pinned Windows ARM64
+    /// target. No models load until `load`; unsupported builds return an error.
+    pub fn qnn() -> Result<Self> {
+        #[cfg(all(feature = "qnn", target_os = "windows", target_arch = "aarch64"))]
+        {
+            let (sender, receiver) = mpsc::sync_channel(32);
+            let join = std::thread::Builder::new()
+                .name("mlsr-qnn".into())
+                .spawn(move || super::qnn::run(receiver))
+                .map_err(|e| Error::Worker(e.to_string()))?;
+            Ok(Self {
+                inner: Arc::new(Inner {
+                    sender,
+                    join: Mutex::new(Some(join)),
+                    closed: AtomicBool::new(false),
+                }),
+            })
+        }
+        #[cfg(not(all(feature = "qnn", target_os = "windows", target_arch = "aarch64")))]
+        {
             Err(Error::BackendUnavailable)
         }
     }

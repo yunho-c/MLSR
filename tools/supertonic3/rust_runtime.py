@@ -91,6 +91,7 @@ class Worker:
             stdout=subprocess.PIPE,
             stderr=log,
             text=True,
+            encoding="utf-8",
             bufsize=1,
         )
         self.lines = queue.Queue()

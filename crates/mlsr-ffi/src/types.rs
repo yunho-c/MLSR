@@ -47,7 +47,7 @@ impl MlsrString {
 pub struct MlsrEngineOptions {
     /// Must equal sizeof(MlsrEngineOptions).
     pub struct_size: u32,
-    /// 0: CPU only, 1: CPU and Neural Engine permitted.
+    /// 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
     pub compute_policy: u32,
     /// 0: ordinary outputs, 1: offer reusable native output buffers.
     pub reuse_output_buffers: u32,

@@ -84,7 +84,7 @@ fn release(handle: MlsrHandle, kind: Kind) -> MlsrStatus {
     }
 }
 
-/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+/// Feature bits: 1 = job API, 2 = Core ML, 4 = QNN HTP built for this target.
 #[unsafe(no_mangle)]
 pub extern "C" fn mlsr_features() -> u32 {
     1 | if cfg!(all(
@@ -92,6 +92,14 @@ pub extern "C" fn mlsr_features() -> u32 {
         any(target_os = "macos", target_os = "ios")
     )) {
         2
+    } else {
+        0
+    } | if cfg!(all(
+        feature = "qnn",
+        target_os = "windows",
+        target_arch = "aarch64"
+    )) {
+        4
     } else {
         0
     }
@@ -148,6 +156,7 @@ pub unsafe extern "C" fn mlsr_engine_open(
             let policy = match settings.compute_policy {
                 0 => ComputePolicy::CpuOnly,
                 1 => ComputePolicy::CpuAndNeuralEngine,
+                2 => ComputePolicy::QnnHtp,
                 _ => return Err(ApiError::invalid("unknown compute policy")),
             };
             if settings.reuse_output_buffers > 1 {

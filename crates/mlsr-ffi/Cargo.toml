@@ -14,6 +14,7 @@ crate-type = ["cdylib", "staticlib"]
 [features]
 default = []
 coreml = ["mlsr/coreml"]
+qnn = ["mlsr/qnn"]
 
 [dependencies]
 mlsr.workspace = true

@@ -11,6 +11,7 @@ publish = false
 [features]
 default = []
 coreml = ["mlsr/coreml"]
+qnn = ["mlsr/qnn"]
 
 [dependencies]
 mlsr.workspace = true

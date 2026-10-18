@@ -11,6 +11,7 @@ publish = false
 [features]
 default = []
 coreml = ["dep:cidre"]
+qnn = []
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 cidre = { workspace = true, optional = true }
@@ -40,6 +41,10 @@ required-features = ["coreml"]
 [[example]]
 name = "coreml_trace"
 required-features = ["coreml"]
+
+[[example]]
+name = "qnn_synthesis_replay"
+required-features = ["qnn"]
 
 [[example]]
 name = "coreml_ffi_probe"

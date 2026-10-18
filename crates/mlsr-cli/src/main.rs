@@ -76,6 +76,7 @@ struct Synthesize {
 enum Policy {
     CpuOnly,
     CpuAndNeuralEngine,
+    QnnHtp,
 }
 #[derive(Clone, Copy, ValueEnum)]
 enum Variant {
@@ -152,6 +153,7 @@ fn run(cli: Cli) -> Result<()> {
                     compute_policy: match args.compute_policy {
                         Policy::CpuOnly => ComputePolicy::CpuOnly,
                         Policy::CpuAndNeuralEngine => ComputePolicy::CpuAndNeuralEngine,
+                        Policy::QnnHtp => ComputePolicy::QnnHtp,
                     },
                     reuse_output_buffers: !args.no_output_reuse,
                     execution_variant: match args.execution_variant {

@@ -23,7 +23,7 @@ typedef struct {
    */
   uint32_t struct_size;
   /**
-   * 0: CPU only, 1: CPU and Neural Engine permitted.
+   * 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
    */
   uint32_t compute_policy;
   /**
@@ -220,7 +220,7 @@ uint32_t mlsr_abi_version(void);
 const char *mlsr_version(void);
 
 /**
- * Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+ * Feature bits: 1 = job API, 2 = Core ML, 4 = QNN HTP built for this target.
  */
 uint32_t mlsr_features(void);
 

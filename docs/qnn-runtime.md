@@ -67,12 +67,51 @@ Core ML's crop-before-vocoder path remains a separate contract. Qualification
 must compare this fixed vocoder with canonical unpadded inference, including
 short sequences and the upper shape boundary.
 
+## Native build and ownership
+
+Use the ARM64 ExecuTorch installation prepared by the pinned `supertonic-npu`
+checkout. Its Windows backend registration patch is required: a stock backend
+DLL has a different registration boundary. Ordinary Cargo builds never build
+ExecuTorch or download the SDK.
+
+```powershell
+./tools/build_qnn.ps1 -ExecuTorchPrefix ../supertonic-npu/build/executorch-arm64/install
+. ./tools/qnn_env.ps1
+cargo build --locked --release -p mlsr-cli -p mlsr-ffi --features qnn
+cargo test --locked --release -p mlsr --features qnn runtime::qnn::tests -- --ignored --test-threads=1
+```
+
+`qnn_env.ps1` selects the installed SDK, V81 skeleton and FastRPC driver, adds
+runtime DLL directories to this shell's PATH, and sets `MLSR_QNN_BRIDGE_DIR` for
+Cargo. The bridge and backend DLLs must remain loadable for every native host.
+Select `ComputePolicy::QnnHtp`, CLI `--compute-policy qnn-htp`, or C ABI compute
+policy `2`. Feature bit `4` reports the compiled QNN capability. The ABI layout
+and default Core ML selection are unchanged.
+
+One Rust worker owns persistent ExecuTorch modules, their contexts, typed host
+allocations and cached tensor handles. The narrow C++ bridge validates PTE
+tensor metadata, wraps borrowed input allocations and copies each synchronous
+result into an owned Rust destination. Optional VE backings reuse that
+destination; this is not direct HTP output binding or zero-copy execution.
+ExecuTorch owns accelerator transfers and memory registration. Program bytes
+use 128-byte-aligned retained allocations. Public data needs natural Float32/
+Int64 alignment; the backend performs its own transfer staging.
+
+Input allocations and descriptors outlive each native call and remain retained
+until replaced or the module is destroyed. Modules are destroyed before their
+inputs and program bytes. Readback returns an independent owned snapshot.
+`live_tensors` counts client handles, not the bounded last-input references
+retained by modules. Native operations are serialized across sessions because
+the pinned delegate shares backend resources. Cancellation bypasses this queue
+but waits for an in-flight graph to return before discarding its output.
+
 ## Qualification status
 
 Asset verification and portable contract tests are independent of execution.
-The native adapter, stage replay, public job/C ABI tests and device qualification
-are the next integration milestones. The initial feasibility smoke evidence
-does not qualify MLSR's QNN runtime or lifecycle.
+The persistent adapter has passed real-device model reuse, buffer ownership,
+alias rejection, metadata failure recovery and Unicode-path checks. Full stage
+replay, public job/C ABI checks and device qualification remain separate checks;
+the initial feasibility smoke does not establish their results.
 
 The job contract remains [the current Rust contract](jobs.md): one active job,
 bounded output, UTF-8 byte source offsets and cancellation independent of the

@@ -7,6 +7,16 @@ pub enum DType {
     F32,
     /// Signed 32-bit integer.
     I32,
+    /// Signed 64-bit integer, required by ExecuTorch text inputs.
+    I64,
+}
+impl DType {
+    pub(crate) fn element_size(self) -> usize {
+        match self {
+            Self::F32 | Self::I32 => 4,
+            Self::I64 => 8,
+        }
+    }
 }
 
 /// Owned contiguous row-major elements.
@@ -16,6 +26,8 @@ pub enum TensorData {
     F32(Vec<f32>),
     /// Integer elements.
     I32(Vec<i32>),
+    /// Signed 64-bit integer elements.
+    I64(Vec<i64>),
 }
 
 /// A validated, owned host tensor. Native tensors use separate opaque handles.
@@ -29,9 +41,18 @@ impl HostTensor {
     /// Validate positive dimensions and the number of supplied elements.
     pub fn new(shape: Vec<usize>, data: TensorData) -> Result<Self> {
         let count = element_count(&shape)?;
+        let dtype = match &data {
+            TensorData::F32(_) => DType::F32,
+            TensorData::I32(_) => DType::I32,
+            TensorData::I64(_) => DType::I64,
+        };
+        if count > isize::MAX as usize / dtype.element_size() {
+            return Err(Error::InvalidTensor("tensor byte count overflows".into()));
+        }
         let supplied = match &data {
             TensorData::F32(v) => v.len(),
             TensorData::I32(v) => v.len(),
+            TensorData::I64(v) => v.len(),
         };
         if count != supplied {
             return Err(Error::InvalidTensor(format!(
@@ -51,12 +72,18 @@ impl HostTensor {
         match self.data {
             TensorData::F32(_) => DType::F32,
             TensorData::I32(_) => DType::I32,
+            TensorData::I64(_) => DType::I64,
         }
     }
 
     /// Borrow the elements without changing tensor invariants.
     pub fn data(&self) -> &TensorData {
         &self.data
+    }
+
+    #[cfg(all(feature = "qnn", target_os = "windows", target_arch = "aarch64"))]
+    pub(super) fn data_mut(&mut self) -> &mut TensorData {
+        &mut self.data
     }
 
     /// Take ownership of the elements.

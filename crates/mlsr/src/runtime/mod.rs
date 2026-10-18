@@ -24,3 +24,7 @@ pub enum BackendKind {
 #[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]
 #[allow(unsafe_code)] // Audited scoped buffer copies live only in this module.
 mod coreml;
+
+#[cfg(all(feature = "qnn", target_os = "windows", target_arch = "aarch64"))]
+#[allow(unsafe_code)] // Private, synchronous C boundary; storage stays on one worker.
+mod qnn;
