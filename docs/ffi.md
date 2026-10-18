@@ -14,7 +14,11 @@ so app packagers can relocate the library and rewrite its load commands.
 NUL-terminated UTF-8 string valid while the library is loaded. These original
 queries are unchanged. Bindings check the ABI before interpreting layouts.
 `mlsr_features()` reports bit 1 for the job API and bit 2 for an Apple build
-with Core ML enabled. Building the portable API does not supply a TTS backend.
+with Core ML enabled, and bit 4 for Windows ARM64 with QNN enabled. Building the
+portable API does not supply a TTS backend. `compute_policy` selects `0` Core ML
+CPU, `1` Core ML CPU/Neural Engine, or `2` QNN HTP. ABI version and layouts remain
+unchanged. QNN accepts only execution variant `0` with its separately pinned
+Superfast manifest; Core ML's optimized variants cannot select QNN graphs.
 
 All options and event/error views have fixed C layouts. Initialize options with
 `mlsr_engine_options_default` / `mlsr_job_options_default`; their `struct_size`
@@ -63,7 +67,7 @@ when another thread releases the handle; subsequent lookups fail safely.
    cancelled, or failed. Engine-local job IDs support stale-result rejection;
    combine them with engine identity when using multiple engines.
 5. `mlsr_job_cancel` immediately sets cancellation, discards queued data and
-   wakes blocked producers. It does not wait for an in-flight Core ML prediction.
+   wakes blocked producers. It does not wait for an in-flight native prediction.
    `mlsr_job_wait` observes quiescence without consuming events; a stopped
    consumer must cancel or resume consuming for a blocked producer to finish.
 6. `mlsr_job_release` cancels and waits. `mlsr_engine_shutdown` cancels and joins

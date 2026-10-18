@@ -26,7 +26,9 @@ class SynthesisTests(unittest.TestCase):
         if output:
             Path(output).mkdir(parents=True, exist_ok=False)
         with Engine(
-            os.environ["MLSR_TEST_MANIFEST"], os.environ["MLSR_TEST_BUNDLE"]
+            os.environ["MLSR_TEST_MANIFEST"],
+            os.environ["MLSR_TEST_BUNDLE"],
+            compute_policy=os.environ.get("MLSR_TEST_POLICY", "cpu_and_neural_engine"),
         ) as engine:
             with engine.start(
                 "Hello from MLSR. Another sentence.", queue_frames=1, chunk_frames=1

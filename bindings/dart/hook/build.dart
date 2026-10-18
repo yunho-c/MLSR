@@ -8,8 +8,19 @@ Future<void> main(List<String> args) async {
     if (!input.config.buildCodeAssets) return;
     final config = input.config.code;
     final coreml = input.userDefines['coreml'] ?? false;
+    final qnn = input.userDefines['qnn'] ?? false;
     if (coreml is! bool) {
       throw FormatException('MLSR coreml must be true or false.');
+    }
+    if (qnn is! bool) {
+      throw FormatException('MLSR qnn must be true or false.');
+    }
+    if (qnn &&
+        (config.targetOS != OS.windows ||
+            config.targetArchitecture != Architecture.arm64)) {
+      throw UnsupportedError(
+        'QNN requires Windows ARM64 and prepared native dependencies.',
+      );
     }
     if (coreml && config.targetOS != OS.macOS) {
       throw UnsupportedError('The current Core ML build hook supports macOS.');
@@ -59,6 +70,32 @@ Future<void> main(List<String> args) async {
       }
       final cargoOutput = input.outputDirectory.resolve('cargo/');
       final cargoEnvironment = Map<String, String>.of(Platform.environment);
+      if (qnn) {
+        // Hooks intentionally filter environment variables. Resolve this build
+        // dependency explicitly and track it so replacing the bridge rebuilds
+        // the asset. The SDK/FastRPC DLLs remain runtime prerequisites.
+        final suppliedBridge = input.userDefines['qnn-bridge-directory'];
+        if (suppliedBridge != null && suppliedBridge is! String) {
+          throw FormatException('MLSR qnn-bridge-directory must be a path.');
+        }
+        final bridge =
+            suppliedBridge is String && Directory(suppliedBridge).isAbsolute
+            ? Directory(suppliedBridge).uri
+            : input.userDefines.path('qnn-bridge-directory') ??
+                  root.resolve('target/qnn-native/Release/');
+        final bridgeDirectory = Directory.fromUri(bridge).absolute;
+        final importLibrary = File(
+          '${bridgeDirectory.path}${Platform.pathSeparator}mlsr_qnn_bridge.lib',
+        );
+        if (!importLibrary.existsSync()) {
+          throw StateError(
+            'Build tools/build_qnn.ps1 first or supply '
+            'qnn-bridge-directory containing mlsr_qnn_bridge.lib.',
+          );
+        }
+        cargoEnvironment['MLSR_QNN_BRIDGE_DIR'] = bridgeDirectory.path;
+        output.dependencies.add(importLibrary.uri);
+      }
       if (config.targetOS == OS.macOS) {
         // Xcode puts its toolchain ahead of /usr/bin. A bare `cc` can then
         // bypass Apple's SDK-selecting wrapper, leaving cidre without headers.
@@ -103,6 +140,7 @@ Future<void> main(List<String> args) async {
           '--package',
           'mlsr-ffi',
           if (coreml) ...['--features', 'coreml'],
+          if (qnn) ...['--features', 'qnn'],
           '--target',
           target,
           '--target-dir',

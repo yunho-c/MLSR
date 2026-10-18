@@ -56,7 +56,7 @@ class Engine:
         self._lib = ffi.library()
         settings = ffi.EngineOptions()
         self._lib.mlsr_engine_options_default(C.byref(settings))
-        policies = {"cpu_only": 0, "cpu_and_neural_engine": 1}
+        policies = {"cpu_only": 0, "cpu_and_neural_engine": 1, "qnn_htp": 2}
         if compute_policy not in policies:
             raise ValueError("unsupported compute_policy")
         settings.compute_policy = policies[compute_policy]

@@ -8,7 +8,7 @@ import 'synthesis_native.dart';
 typedef SynthesisException = NativeFailure;
 
 /// Permitted compute devices, not a placement/residency guarantee.
-enum ComputePolicy { cpuOnly, cpuAndNeuralEngine }
+enum ComputePolicy { cpuOnly, cpuAndNeuralEngine, qnnHtp }
 
 /// Per-job inference and memory limits. Queue/chunk/segment sizes are PCM frames.
 class SynthesisOptions {

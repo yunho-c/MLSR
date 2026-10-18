@@ -95,7 +95,7 @@ external int mlsr_event_read(
 @ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
 external int mlsr_event_release(int event);
 
-/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+/// Feature bits: 1 = job API, 2 = Core ML, 4 = QNN HTP built for this target.
 @ffi.Native<ffi.Uint32 Function()>()
 external int mlsr_features();
 
@@ -204,7 +204,7 @@ final class MlsrEngineOptions extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
 
-  /// 0: CPU only, 1: CPU and Neural Engine permitted.
+  /// 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
   @ffi.Uint32()
   external int compute_policy;
 

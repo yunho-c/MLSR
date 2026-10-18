@@ -2,7 +2,8 @@
 
 `dart:ffi` bindings to MLSR's Rust library, generated with `ffigen`. Requires
 Dart 3.11+. Persistent engines expose bounded PCM streams, cancellation and
-explicit cleanup. Real synthesis currently requires macOS arm64 and Core ML.
+explicit cleanup. Synthesis supports macOS arm64/Core ML and experimental
+Windows ARM64/QNN.
 
 ```dart
 final engine = await Engine.load(manifest: manifestPath, bundle: bundlePath);
@@ -62,6 +63,24 @@ This opts into a macOS 15+ Core ML build. The default hook build supplies the
 portable ABI without a synthesis backend. `coreml` is currently a macOS host
 build option; it does not configure iOS packaging.
 
+For Windows ARM64, prepare [the QNN bridge and dependencies](../../docs/qnn-runtime.md),
+use ARM64 Dart and dot-source `tools/qnn_env.ps1` before running the application.
+The consuming package opts into QNN as follows:
+
+```yaml
+hooks:
+  user_defines:
+    mlsr:
+      qnn: true
+      # Optional; defaults to target/qnn-native/Release inside the checkout.
+      qnn-bridge-directory: C:/path/to/MLSR/target/qnn-native/Release
+```
+
+Select `computePolicy: ComputePolicy.qnnHtp` in `Engine.load` with the QNN
+manifest and its verified bundle. The hook tracks the bridge import library;
+the prepared bridge/SDK/FastRPC DLLs must also be loadable at runtime. The preset
+has [open model-quality failures](../../docs/qnn-qualification.md).
+
 The [Flutter speak/stop example](../../examples/flutter_speak/README.md) uses this
 hook with Flutter 3.41.4. Supported hook/code-assets ranges allow that SDK's pinned
 dependencies as well as the newer versions in the standalone Dart lockfile. On
@@ -94,5 +113,8 @@ Regenerate bindings from the repository root with
 `python3 tools/dev.py generate`. `tool/generate_bindings.dart` uses ffigen's
 programmatic API; its older YAML configuration format is deprecated upstream.
 Normal builds use the checked-in generated Dart file and do not need libclang.
+If automatic discovery fails, set `LIBCLANG_PATH` to the full libclang shared
+library path before running the generator (for example, ARM64 `libclang.dll`
+from Visual Studio's LLVM installation).
 
 Licensed under Apache-2.0; see `LICENSE`.

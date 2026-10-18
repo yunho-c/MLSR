@@ -19,5 +19,6 @@ if (!$FastRpcDirectory) {
 }
 if (!(Test-Path -LiteralPath (Join-Path $FastRpcDirectory 'libcdsprpc.dll'))) { throw 'Missing ARM64 FastRPC driver' }
 $env:MLSR_QNN_BRIDGE_DIR = (Resolve-Path -LiteralPath $BridgeDirectory).Path
-$env:PATH = "$env:MLSR_QNN_BRIDGE_DIR;$(Join-Path $SdkRoot 'lib/aarch64-windows-msvc');$FastRpcDirectory;$env:PATH"
+$env:MLSR_DLL_DIRECTORIES = "$env:MLSR_QNN_BRIDGE_DIR;$(Join-Path $SdkRoot 'lib/aarch64-windows-msvc');$FastRpcDirectory"
+$env:PATH = "$env:MLSR_DLL_DIRECTORIES;$env:PATH"
 $env:ADSP_LIBRARY_PATH = Join-Path $SdkRoot 'lib/hexagon-v81/unsigned'

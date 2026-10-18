@@ -26,6 +26,9 @@ void main() {
       final engine = await Engine.load(
         manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
         bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        computePolicy: Platform.environment['MLSR_TEST_POLICY'] == 'qnn_htp'
+            ? ComputePolicy.qnnHtp
+            : ComputePolicy.cpuAndNeuralEngine,
       );
       final output = Platform.environment['MLSR_TEST_OUTPUT'];
       if (output != null) {

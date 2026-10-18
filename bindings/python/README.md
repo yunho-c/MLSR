@@ -2,7 +2,7 @@
 
 A `ctypes` binding to MLSR's Rust implementation. Persistent engines expose
 bounded segment jobs, cancellation, owned Float32 audio, and structured errors.
-Real synthesis currently requires macOS arm64 and a Core ML native build.
+Synthesis supports macOS arm64/Core ML and experimental Windows ARM64/QNN.
 
 Requires Python 3.10+ and a separately built MLSR shared library. Importing `mlsr`
 does not load native code. The first API call loads `MLSR_LIBRARY_PATH` if set,
@@ -41,6 +41,21 @@ MLSR_LIBRARY_PATH="$PWD/target/release/libmlsr_ffi.dylib" \
 
 `--cancel-first` demonstrates cancellation and reuse before exporting speech.
 The output must be a new path; model weights are never downloaded implicitly.
+
+For Windows ARM64, follow [QNN setup](../../docs/qnn-runtime.md), build
+`mlsr-ffi --features qnn`, and run ARM64 Python with the prepared DLLs:
+
+```powershell
+. ./tools/qnn_env.ps1
+$env:MLSR_LIBRARY_PATH = "$PWD/target/release/mlsr_ffi.dll"
+$env:PYTHONPATH = "$PWD/bindings/python/src"
+```
+
+Select `compute_policy="qnn_htp"` when constructing `Engine` with
+`model-manifests/supertonic3-qnn-superfast.yaml` and its verified bundle. The
+helper sets `MLSR_DLL_DIRECTORIES`; the binding registers those semicolon-separated
+directories with Python's Windows DLL loader and keeps them alive with the library.
+The preset has [open model-quality failures](../../docs/qnn-qualification.md).
 
 From a repository checkout, run `python3 tools/dev.py test-python` at the root.
 `python3 tools/dev.py package-python` builds a wheel and tests an installed copy
