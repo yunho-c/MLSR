@@ -8,9 +8,11 @@ environment:
   sdk: '>=3.11.0 <4.0.0'
 
 dependencies:
-  code_assets: ^2.1.0
+  # 1.2.1 also supports Flutter 3.41's pinned meta; 2.x is qualified by the
+  # standalone Dart lockfile. The hook uses the shared API surface.
+  code_assets: '>=1.2.1 <3.0.0'
   ffi: ^2.2.0
-  hooks: ^2.2.0
+  hooks: ^2.0.0
 
 dev_dependencies:
   ffigen: 23.0.0

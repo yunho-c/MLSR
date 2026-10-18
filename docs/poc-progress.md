@@ -13,9 +13,10 @@ after this POC; its feasibility has already been confirmed by the project owner.
 | 4. Segmentation/jobs/cancellation/bounds | Implemented in Rust; see `jobs.md`, portable lifecycle tests and explicit real-model job test |
 | 5. C ABI and Dart/Go/Python synthesis | Implemented; installed synthesis/cancellation/WAV examples outside checkout, cross-language PCM equality and lifecycle checks in `bindings-summary.yaml` |
 | 6. Selectable ANE variants | Implemented; baseline/fused VE exact across 29 cases; fixed vocoders explicitly experimental due to PCM differences; lifecycle and per-case timing in `variants-summary.yaml`. Baseline remains the default. |
-| 7. Flutter example and qualification | Pending: responsive speak/stop/playback/WAV UI, real Apple suite, timing/memory/artifact records, real-time warm synthesis |
+| 7. Flutter example and qualification | Implemented; full Apple suite, responsive Flutter speak/stop/playback/export, release app build/signature checks, timing/memory/artifact receipts, placement plans and runtime traces in `poc-summary.yaml`. All 84 warm baseline requests were faster than playback on M4 Pro. See `poc-qualification.md` for scope and remaining platform/release gates. |
 
 Existing qualification summaries are historical records tied to their recorded
 source hashes. They do not automatically qualify later changes. Each new task
-adds relevant validation; the final POC qualification must exercise the combined
-implementation and report its actual host, artifacts and measured boundaries.
+adds relevant validation. The [final POC qualification](poc-qualification.md)
+exercises the combined implementation and reports its actual host, artifacts
+and measured boundaries. QNN integration is the next implementation milestone.

@@ -1,0 +1,332 @@
+schema_version: 1
+kind: macos_arm64_first_poc_qualification
+passed: true
+scope: Seven-task Core ML slice on the named host; platform and release-distribution limitations remain
+selected_default: baseline
+environment:
+  hardware: Apple M4 Pro
+  os: macOS 27.0.1 (26A434)
+  power: AC; powermode=0; battery 90%
+  rust: 1.95.0
+  rust_msrv_checked: 1.88.0
+  xcode: 27.1 (27A9275)
+  macos_sdk: '27.0'
+  ios_sdk: '27.1'
+  flutter: 3.41.4
+  dart: 3.11.1
+  python: 3.14.8
+  go: 1.27.1
+model_identity:
+  manifest_canonical_sha256: 4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c
+  manifest_file_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+  reference_sha256: 5cfddc36a2dcba682a3c6f32d44d649583d3e3c71479849eadd8dea8b1581e71
+combined_suite:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/report.yaml
+  sha256: 9ba73f114d99bd41585074bd92e955f30f5bd4385005e84297ddbe469a89dbbf
+  full_poc: true
+  commands_passed: 16
+  source_files: 175
+  source_map_sha256: 285a340b5f3961ed695fc743ded51b375face179e0312435ee5ca57c01964ced
+  source_scope: 175 non-Markdown files unchanged across the full suite and artifact check; this summary
+    and qualification Markdown added afterward
+  evidence:
+    synthesis:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/synthesis.yaml
+      sha256: 12aee5825ef86280d505d89585911b58f056942c1b4ec9286fcfd297231ed182
+      passed: true
+    cli:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/cli/report.yaml
+      sha256: af5c910808639154af39efd4b49e193affea84f997f7248e792d62f461c9fff8
+      passed: true
+    bindings:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/bindings/report.yaml
+      sha256: 09ee499bfe7f123808a8c9a69e14d5550bf33e596d07dfd303d0028c5d779df8
+      passed: true
+    variants:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/variants/report.yaml
+      sha256: c0509d7d945497ef99ba20e989d69b06446067da2f1cf82ad2108e378bf0310b
+      passed: true
+    flutter:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/flutter/report.json
+      sha256: ee8eab0531638b4aa269cdeb4d3b3e7a220ea7b833adff5a55bb2f6313b789f0
+      passed: true
+correctness:
+  reference_cases: 14
+  reference_passes: 2
+  tensor_comparisons: 672
+  all_tensors_exact: true
+  absolute_tolerance: 0.0
+  relative_tolerance: 0.0
+  invalid_input_checks: 5
+  seeded_production_checks: 4
+  variant_runs: 174
+  variant_rejections: 15
+  variant_results:
+    baseline:
+      bit_exact: true
+      status: required exact parity
+    fused8:
+      bit_exact: true
+      status: required exact parity
+    fused8_fixed_vocoder:
+      bit_exact: false
+      status: experimental; PCM differs; perceptual quality unqualified
+flutter:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/flutter/report.json
+  sha256: ee8eab0531638b4aa269cdeb4d3b3e7a220ea7b833adff5a55bb2f6313b789f0
+  passed: true
+  muted: true
+  playing:
+    pendingFrames: 4096
+    active: true
+    queuedFrames: 20480
+    playedFrames: 0
+    peakQueuedFrames: 20480
+    epoch: 3
+    renderSampleTime: 4239
+    nodePlaying: true
+    engineRunning: true
+  stop_to_playback_flush_ms: 12.035
+  stop_to_controller_idle_ms: 73.896
+  stopped:
+    pendingFrames: 0
+    active: false
+    queuedFrames: 0
+    playedFrames: 0
+    peakQueuedFrames: 20480
+    epoch: 4
+    renderSampleTime: -1
+    nodePlaying: false
+    engineRunning: false
+  generation_finished_while_playing: true
+  wav_frames: 70669
+  handles_before: 0
+  handles_after: 0
+  heartbeat_ticks: 1288
+  heartbeat_max_gap_ms: 46.175
+  scope: Real synthesis and muted native playback in debug UI integration; not a listening evaluation
+export_and_release:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-artifacts-v1/report.yaml
+  sha256: d6f63856b6f2f48cad4c7c46b0656e2d7aaac2fc8caf8b1ede2e348d673157b0
+  flutter_wavs:
+    hello:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/flutter/hello.wav
+      wav_sha256: 2e531ccb505d74a524338131a424f61fba853efcbffd2dacaee380b0112245d3
+      frames: 70669
+      pcm_sha256: 1a4e3d62292e843bed979c680e7227b7d35f677770c9aea8ea138d3aee83ae3d
+      request:
+        text: Hello from MLSR.
+        language: en
+        voice: M1
+        steps: 8
+        speed: 1.05
+        seed: 0
+      python_pcm_byte_exact: true
+    korean:
+      path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-suite-v1/flutter/korean.wav
+      wav_sha256: cb75390773f1248a1eb21f9634e935d0c11aa5e075ba45e599f3a54f813c16a5
+      frames: 126533
+      pcm_sha256: e73fe4ec4fccc0aaefdbbc0d32a0a10cf29f14b02f20fceb964e844fdbfcd8fb
+      request:
+        text: 안녕하세요. 반갑습니다.
+        language: ko
+        voice: F1
+        steps: 8
+        speed: 1.05
+        seed: 0
+      python_pcm_byte_exact: true
+  release_app_logical_bytes: 22835652
+  release_app_real_files: 29
+  release_build: passed; arm64; minOS 15.0; strict recursive signature verification passed
+  release_manual_gui: unqualified; CUA could not attach a window
+benchmark:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-benchmark-v1/report.yaml
+  sha256: dfd2b9917d941186171ca228636c9451519a3b21c66147744867bfe7ccd1e96c
+  variant: baseline
+  compute_policy: cpu_and_neural_engine
+  timing_boundary: Python Engine.start through copied audio / terminal event over public C ABI; no
+    playback
+  initialization_definition: new process and Engine; precompiled models and existing OS specialization/file
+    caches
+  initialization_ms: 480.753125
+  first_request:
+    id: en_m1_basic
+    first_audio_ms: 177.217292
+    total_ms: 221.145334
+    frames: 178868
+    audio_seconds: 4.055963718820862
+    real_time_factor: 0.054523499057405465
+    pcm_sha256: e4b564afd8aceeb60b0e1a3f35d67b8fbcef05c05c8b1fd9155707ad6f812bae
+  warm_cases: 12
+  warm_repetitions_per_case: 7
+  warm_samples: 84
+  median_first_audio_ms: 40.202332999999996
+  maximum_first_audio_ms: 43.699333
+  median_total_ms: 41.927125000000004
+  maximum_total_ms: 81.880208
+  maximum_real_time_factor: 0.027862908448318922
+  all_warm_samples_faster_than_playback: true
+  cancellation_checks: 12
+  maximum_cancellation_quiescence_ms: 3.5435
+  peak_process_rss_bytes: 154189824
+  peak_memory_scope: macOS time -l child process maximum RSS, including Python and loaded Core ML;
+    not ANE memory
+  handles_before: 0
+  handles_after: 0
+  per_case_median_total_ms:
+    en_m1_basic: 81.261458
+    en_f1_basic: 41.662208
+    en_normalization: 43.715
+    en_punctuation: 80.708875
+    ko_m1_basic: 80.794584
+    ko_f1_basic: 41.763208
+    ko_normalization: 42.039333
+    ko_decomposed: 80.8415
+    en_f1_basic_L30: 40.283333
+    en_f1_basic_L32: 39.999416
+    ko_f1_basic_L30: 40.352333
+    ko_f1_basic_L32: 40.086084
+artifacts:
+  mlsr:
+    sha256: 936478eb8fb5b7c5af0bf6640d765245ddbd4f2a0e20150bd2783f9c67323dde
+    bytes: 2386296
+  libmlsr_ffi.dylib:
+    sha256: eab2ebd102bb77ea37e2ab2d299f1a5d449ea9a823c8e84e8ab9ec027c3fe1a1
+    bytes: 1729280
+  libmlsr_ffi.a:
+    sha256: 18610c7c4726deea2b2dc4b013f382b20adf705febd560ba0918d345becd22d8
+    bytes: 21111824
+  examples/coreml_trace:
+    sha256: 6d5b256ebc6c8eefb33d3697909225865a025b889eca78e33443ea901d417b14
+    bytes: 1874944
+baseline_model_payload_bytes: 169328070
+placement:
+  path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-placement-v1/report.yaml
+  sha256: 5176e1468fede6b2a7592b5bc46495effb2fa66f818e4ce10030e1eaff2309f2
+  scope: Preferred placement and estimated costs; not execution, utilization or residency
+  mobius_revision: 26f5fa8059d5ab3d34449adce6ff6ed86734e522
+  preferred_operation_counts:
+    duration_predictor:
+      cpu: 7
+      ane: 223
+    text_encoder:
+      cpu: 7
+      ane: 336
+    ve_128:
+      unknown: 126
+      ane: 829
+    ve_256:
+      unknown: 126
+      ane: 829
+    ve_512:
+      unknown: 126
+      ane: 829
+    vocoder:
+      ane: 107
+    ve_fused8_128:
+      unknown: 135
+      ane: 5839
+runtime_trace:
+  capture:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-traces-v4/capture.yaml
+    sha256: b6689c692df2ff3d05c152d759bf8383d752429d5b1c64c4cf76df84e2b51715
+  analysis:
+    path: /Users/yunhocho/.cache/mlsr/qualification/poc-v1/task7-traces-v4/analysis-v2.yaml
+    sha256: e30fec2d7ed60d21b2c33d759c37ad22a4f785458fa5f9afae9376b4236214ad
+  scope: Hardware intervals nested in both the workload PID's ANE calls and Rust job markers; attached
+    traces can omit model names; no utilization or physical-residency claim
+  capture_mode: attach after model initialization; Darwin notification gates requests until recording
+    starts
+  trace_binary_matches_combined_suite: true
+  conditions:
+  - name: baseline-ane
+    process_id: 27965
+    requests: 13
+    native_predictions: 143
+    process_ane_evaluations: 130
+    attributed_hardware_predictions:
+      unlabeled: 130
+    excluded_system_intervals: 0
+    coreml_activity_rows: 0
+    vocoder_hardware_execution_observed: false
+    model_labels_available: false
+  - name: baseline-cpu
+    process_id: 28388
+    requests: 4
+    native_predictions: 44
+    process_ane_evaluations: 0
+    attributed_hardware_predictions: {}
+    excluded_system_intervals: 0
+    coreml_activity_rows: 0
+    vocoder_hardware_execution_observed: false
+    model_labels_available: false
+  - name: fused8-ane
+    process_id: 28630
+    requests: 13
+    native_predictions: 52
+    process_ane_evaluations: 39
+    attributed_hardware_predictions:
+      unlabeled: 39
+    excluded_system_intervals: 1
+    coreml_activity_rows: 0
+    vocoder_hardware_execution_observed: false
+    model_labels_available: false
+additional_checks:
+- log: /Users/yunhocho/GitHub/MLSR/target/poc-checks/task7-portable.log
+  sha256: c535a2bddee8d36359b2cc7733c1d308430aeb6040c3ce11042e77d770524631
+  passed: true
+  scope: Portable aggregate, strict Clippy, Rust 1.88 all-target/all-feature check, generated bindings
+- log: /Users/yunhocho/GitHub/MLSR/target/poc-checks/task7-coreml-cross.log
+  sha256: 7a69ddc77c36e486a95c40a1dac05a5cc83a4252aa8af823f4c5ef72e22ab6b4
+  passed: true
+  scope: Core ML host Rust/C/static/shared/ctypes execution and Intel macOS/iOS device/simulator cross-link/deployment
+    metadata
+- log: /Users/yunhocho/GitHub/MLSR/target/poc-checks/task7-windows-check.log
+  sha256: 744c2b6e3d9ee2516428f81cf86e684f53be32a1a48f8b683135f68a265490a0
+  passed: true
+  scope: Windows MSVC Rust all-target/all-feature type-check only
+- log: /Users/yunhocho/GitHub/MLSR/target/poc-checks/task7-model-tools-final.log
+  sha256: dfb6170e146e39234b1228be5c691c64fa56ec1f7b3ffa18304925aa6dad22c9
+  passed: true
+  scope: 45 portable model and trace-analysis tests
+- log: /Users/yunhocho/GitHub/MLSR/target/poc-checks/task7-flutter-release.log
+  sha256: c4a0189c7f1bf360e8d4e9d5dc3d193b747c4d5e9519bd7505c2e4714cf6d4d7
+  passed: true
+  scope: Flutter macOS release build
+retained_diagnostics:
+- paths:
+  - task7-flutter-v1
+  - task7-flutter-v2
+  - task7-flutter-v3
+  - task7-flutter-v4
+  outcome: Failed UI tests retained. Cached EditableText focus prevented replacement of the long passage;
+    explicit refocus and input assertion fixed the test. v5 and combined suite passed.
+- paths:
+  - task7-traces-v1
+  - task7-traces-v2
+  - task7-traces-v3
+  outcome: Initial signpost-instrument omission and launch-profiled fused loading timeouts preserved.
+    v4 attaches after unprofiled model initialization.
+- paths:
+  - task7-traces-v4/analysis.yaml
+  outcome: Initial analysis required model names absent from attached traces. analysis-v2 records
+    generic labels and enforces PID/job interval attribution, exact execution counts and the CPU-only
+    control.
+- paths:
+  - task7-artifacts-v1/report.yaml
+  outcome: An initial ad-hoc WAV comparison used mismatched seeds (0 versus 1729); receipt records
+    that diagnostic and the passing matched-seed comparison.
+limitations:
+- One named macOS host; actual macOS 15/iOS 18 execution and physical iOS/Qualcomm devices unqualified.
+- Windows check and Apple cross-link checks are not target runtime execution. Remote CI not verified.
+- Warm timing excludes playback; new-process initialization uses existing OS caches and is not a pristine-install
+  measurement.
+- Peak process RSS is not ANE memory; artifact sizes are logical bytes, not APFS private allocation.
+- Attached traces omit model labels; no individual model placement, vocoder hardware execution, utilization
+  or physical ANE residency claim.
+- Muted debug UI integration and release build/signature checks do not qualify release GUI interaction,
+  perceptual quality, notarization or distribution.
+- Fixed vocoders remain experimental; W8A8/dense INT8 were not promoted.
+next_milestone: Integrate the confirmed QNN execution path beneath the existing YAML model and bounded
+  Rust job contracts, then qualify Android packaging/playback on a physical device before broader
+  LiteRT/XNNPACK coverage.

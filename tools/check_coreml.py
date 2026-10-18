@@ -23,17 +23,29 @@ def main():
     args = parser.parse_args()
     if sys.platform != "darwin":
         raise SystemExit("Core ML checks require macOS and Xcode")
-    env = dict(
-        os.environ, MACOSX_DEPLOYMENT_TARGET="15.0", IPHONEOS_DEPLOYMENT_TARGET="18.0"
-    )
+    env = dict(os.environ, MACOSX_DEPLOYMENT_TARGET="15.0")
+    env.pop("IPHONEOS_DEPLOYMENT_TARGET", None)
     cargo = ["cargo"] + (["+" + args.toolchain] if args.toolchain else [])
 
-    def run(*command):
+    def run(*command, environment=env):
         print("+", *command, flush=True)
-        subprocess.run(command, cwd=ROOT, env=env, check=True)
+        subprocess.run(command, cwd=ROOT, env=environment, check=True)
 
     def rust(*command):
-        run(*cargo, *command, "--locked", "--target-dir", str(TARGET))
+        environment = dict(env)
+        if (
+            "--target" in command
+            and "-apple-ios" in command[command.index("--target") + 1]
+        ):
+            environment["IPHONEOS_DEPLOYMENT_TARGET"] = "18.0"
+        run(
+            *cargo,
+            *command,
+            "--locked",
+            "--target-dir",
+            str(TARGET),
+            environment=environment,
+        )
 
     def check_deployment(library, platform, minimum):
         command = ["xcrun", "vtool", "-show-build", str(library)]

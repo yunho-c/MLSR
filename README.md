@@ -3,12 +3,13 @@
 A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
-**Status:** complete Supertonic 3 text-to-PCM synthesis is implemented in Rust,
-with verified YAML bundles, a persistent Core ML runtime, and a WAV CLI. The
-first qualified target is macOS arm64, English/Korean, voices M1/F1. The public
-C ABI and Dart/Go/Python bindings expose
-[bounded segment jobs and cancellation](docs/jobs.md). Playback and
-additional inference backends are subsequent work.
+**Status:** the first Supertonic 3 proof of concept is implemented and
+[qualified on an M4 Pro](docs/poc-qualification.md): Rust synthesis and WAV CLI,
+verified YAML bundles, a persistent cidre/Core ML runtime, installed
+Dart/Go/Python bindings, and a [Flutter speak/stop player](examples/flutter_speak/).
+It supports English/Korean, voices M1/F1, and
+[bounded segment jobs with cancellation](docs/jobs.md). QNN is the next backend;
+other devices, minimum OS versions, and distribution packages need qualification.
 Builds never download model weights.
 
 A pinned Supertonic 3 Core ML reference bundle and development-only
@@ -27,6 +28,7 @@ include/mlsr.h       Generated C header
 bindings/dart/       Dart package, generated FFI, and native build hook
 bindings/go/         Go module using cgo
 bindings/python/     Python package using ctypes
+examples/flutter_speak/ macOS Flutter playback and WAV export example
 model-manifests/     Model download metadata, checksums, and licenses
 tests/fixtures/      Small, shared test inputs
 tests/integration/   Tests of the actual C ABI
@@ -34,7 +36,7 @@ tools/codegen/       Pinned cbindgen header generator
 tools/supertonic3/   Model verification and real reference-fixture capture/replay
 tools/check_coreml.py Apple runtime, native callers, and build checks
 tools/check_synthesis_bindings.py Installed real-synthesis package qualification
-tools/dev.py         Portable development commands
+tools/dev.py         Portable checks and explicit real-model/benchmark commands
 docs/                Architecture, FFI contract, and platform status
 ```
 

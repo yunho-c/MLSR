@@ -1,0 +1,38 @@
+name: mlsr_speak
+description: "A local MLSR speech player for the macOS Apple Silicon proof of concept."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mlsr:
+    path: ../../bindings/dart
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/fraunces-OFL.txt
+    - assets/fonts/manrope-OFL.txt
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+
+hooks:
+  user_defines:
+    mlsr:
+      coreml: true

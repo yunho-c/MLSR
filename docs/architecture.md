@@ -59,6 +59,12 @@ Text normalization, model policy, inference scheduling, and synthesis stay in
 Rust. Host-language integrations should not reimplement them. Audio playback is
 a separate concern from producing PCM and is not a dependency of the core.
 
+The [Flutter example](../examples/flutter_speak/README.md) demonstrates that
+boundary: Dart consumes the same job stream, a separate Swift AVAudioEngine
+adapter bounds and plays queued PCM, and WAV output is written incrementally.
+Stop flushes host playback before joining inference. Request epochs reject stale
+results; model selection and synthesis still belong to Rust.
+
 ## Assets and distribution
 
 Large model weights are external assets. YAML manifests in `model-manifests/`

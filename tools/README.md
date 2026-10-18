@@ -58,3 +58,58 @@ initialization with existing OS caches, and cancellation signal/quiescence times
 `--variant baseline` needs only the baseline bundle; `--variant all` needs the
 optional graphs. See [execution variants](../docs/execution-variants.md) for
 preparation, parity gates and the experimental fixed-vocoder limitation.
+
+## Explicit Apple Silicon qualification
+
+The normal `check` command stays portable and does not load model weights. The
+following commands consume already prepared local assets:
+
+```sh
+python3 tools/dev.py validate-reference --reference /path/to/reference
+python3 tools/dev.py test-real --bundle /path/to/baseline-bundle \
+  --reference /path/to/reference --output /path/to/new-suite \
+  --variant-bundle /path/to/optional-variant-bundle --flutter
+python3 tools/dev.py benchmark --bundle /path/to/baseline-bundle \
+  --output /path/to/new-benchmark
+```
+
+Reference validation checks fixture integrity without inference. `test-real`
+runs all enabled Rust tests (including opt-in model tests), saved-noise tensor
+replay, standalone CLI WAV checks, and installed C/Dart/Go/Python tests. The
+optional flags add optimized-model parity/lifecycle and the real Flutter UI
+test; a full POC run includes both. It records command exit codes, source and
+artifact hashes, and individual evidence receipts. A failed/partial run remains
+failed in its report. Choose a new output directory for every run.
+
+The benchmark command defaults to the baseline execution variant. It measures
+fresh-process initialization with existing OS caches and warm public-job
+latency separately from UI playback and instrumented trace timing. No command
+clears system caches or installs toolchains. Reports and model weights stay
+outside Git; compact qualification summaries are committed under
+`tests/fixtures/supertonic3/`.
+
+`profile_coreml.py --mobius /path/to/mobius --bundle /path/to/variant-bundle
+--output /path/to/new-plans` calls the existing Möbius public compute-plan helper.
+It verifies pinned models and saves preferred placement/cost estimates. These
+are diagnostics, not proof of utilization or physical ANE weight residency.
+
+For runtime evidence, build the `coreml_trace` Rust example with the `coreml`
+feature, then run:
+
+```sh
+python3 tools/trace_synthesis.py --bundle /path/to/variant-bundle \
+  --output /path/to/new-traces
+python3 tools/analyze_synthesis_trace.py --capture /path/to/new-traces/capture.yaml \
+  --output /path/to/new-traces/analysis.yaml
+```
+
+The tool loads models before attaching Instruments, then gates real speech on
+Instruments' Darwin start notification. A small development-only helper compiles
+the public SDK's `os_signpost` macros; it is not linked into the library or app.
+Baseline, fused-eight-step, and CPU-only conditions use actual text and retained
+model sessions. Raw traces, command logs, XML exports, PCM hashes, and process
+IDs are retained. The analyzer requires every hardware event it attributes to
+fit both a speech-request interval and an ANE evaluation interval from the
+workload PID. It rejects missing intervals and unexpected counts. Attached traces
+can lack model names; generic events establish process execution, not individual
+model placement. These are diagnostic traces, not latency benchmarks.

@@ -39,7 +39,11 @@ Future<void> main(List<String> args) async {
       throw FormatException('MLSR native-library must be a filesystem path.');
     }
     Uri source;
-    if (input.userDefines.path('native-library') case final prebuilt?) {
+    // Older supported hooks versions parse Windows drive letters as URI schemes.
+    final prebuilt = supplied is String && File(supplied).isAbsolute
+        ? File(supplied).uri
+        : input.userDefines.path('native-library');
+    if (prebuilt != null) {
       source = prebuilt;
       output.dependencies.add(source);
     } else {
@@ -54,6 +58,40 @@ Future<void> main(List<String> args) async {
         );
       }
       final cargoOutput = input.outputDirectory.resolve('cargo/');
+      final cargoEnvironment = Map<String, String>.of(Platform.environment);
+      if (config.targetOS == OS.macOS) {
+        // Xcode puts its toolchain ahead of /usr/bin. A bare `cc` can then
+        // bypass Apple's SDK-selecting wrapper, leaving cidre without headers.
+        // Resolve the active toolchain explicitly; preserve deliberate CC
+        // overrides. Never inherit an iOS deployment target into a host build.
+        cargoEnvironment.remove('IPHONEOS_DEPLOYMENT_TARGET');
+        Future<String> xcrun(String option) async {
+          final result = await Process.run('xcrun', [
+            '--sdk',
+            'macosx',
+            option,
+            if (option == '--find') 'clang',
+          ]);
+          if (result.exitCode != 0) {
+            throw StateError(
+              'Could not resolve the macOS SDK: ${result.stderr}',
+            );
+          }
+          return (result.stdout as String).trim();
+        }
+
+        cargoEnvironment['SDKROOT'] = await xcrun('--show-sdk-path');
+        final compilerKey = 'CC_${target.replaceAll('-', '_')}';
+        if (!cargoEnvironment.containsKey(compilerKey) &&
+            !cargoEnvironment.containsKey('CC_$target') &&
+            !cargoEnvironment.containsKey('CC')) {
+          cargoEnvironment[compilerKey] = await xcrun('--find');
+        }
+        cargoEnvironment['MACOSX_DEPLOYMENT_TARGET'] =
+            coreml && config.macOS.targetVersion < 15
+            ? '15.0'
+            : '${config.macOS.targetVersion}.0';
+      }
       final result = await Process.run(
         'cargo',
         [
@@ -71,13 +109,8 @@ Future<void> main(List<String> args) async {
           cargoOutput.toFilePath(),
         ],
         workingDirectory: root.toFilePath(),
-        environment: {
-          if (config.targetOS == OS.macOS)
-            'MACOSX_DEPLOYMENT_TARGET':
-                coreml && config.macOS.targetVersion < 15
-                ? '15.0'
-                : '${config.macOS.targetVersion}.0',
-        },
+        environment: cargoEnvironment,
+        includeParentEnvironment: false,
       );
       if (result.exitCode != 0) {
         throw StateError('Cargo failed:\n${result.stdout}\n${result.stderr}');
@@ -91,13 +124,16 @@ Future<void> main(List<String> args) async {
       ]) {
         output.dependencies.add(root.resolve(name));
       }
-      final crates = Directory.fromUri(root.resolve('crates/'));
-      output.dependencies.add(crates.uri);
-      await for (final entry in crates.list(
-        recursive: true,
-        followLinks: false,
-      )) {
-        output.dependencies.add(entry.uri);
+      // Rust embeds the YAML contracts too; edits must invalidate native assets.
+      for (final folder in ['crates/', 'model-manifests/']) {
+        final directory = Directory.fromUri(root.resolve(folder));
+        output.dependencies.add(directory.uri);
+        await for (final entry in directory.list(
+          recursive: true,
+          followLinks: false,
+        )) {
+          output.dependencies.add(entry.uri);
+        }
       }
     }
 

@@ -273,10 +273,30 @@ def main():
             "test-standalone",
             "package-python",
             "test-model-tools",
+            "validate-reference",
+            "test-real",
+            "benchmark",
         ],
     )
-    command = parser.parse_args().command
-    if command == "generate":
+    parser.add_argument("options", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    command = args.command
+    if command == "validate-reference":
+        run(
+            sys.executable, "-m", "tools.supertonic3", "verify-reference", *args.options
+        )
+    elif command == "test-real":
+        run(sys.executable, ROOT / "tools/qualify_poc.py", *args.options)
+    elif command == "benchmark":
+        # The ordinary benchmark follows the public default. Optimized models
+        # require an explicit --variant and their own qualification evidence.
+        options = args.options
+        if not any(x == "--variant" or x.startswith("--variant=") for x in options):
+            options = ["--variant", "baseline", *options]
+        run(sys.executable, ROOT / "tools/benchmark_synthesis.py", *options)
+    elif args.options:
+        parser.error(f"{command} does not accept additional options")
+    elif command == "generate":
         generate()
     elif command == "check-generated":
         generate(check=True)

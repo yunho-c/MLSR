@@ -62,6 +62,12 @@ This opts into a macOS 15+ Core ML build. The default hook build supplies the
 portable ABI without a synthesis backend. `coreml` is currently a macOS host
 build option; it does not configure iOS packaging.
 
+The [Flutter speak/stop example](../../examples/flutter_speak/README.md) uses this
+hook with Flutter 3.41.4. Supported hook/code-assets ranges allow that SDK's pinned
+dependencies as well as the newer versions in the standalone Dart lockfile. On
+macOS the hook resolves the active Xcode SDK/compiler and tracks the embedded
+YAML manifests, so native builds work from Xcode and rebuild when model pins change.
+
 Outside the checkout, supply a matching prebuilt library through the consuming
 application's `pubspec.yaml`:
 

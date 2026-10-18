@@ -3,15 +3,17 @@
 Cross-platform support requires both a portable API and a working inference
 runtime on each target. Supertonic text-to-PCM synthesis is implemented through
 Core ML and qualified on macOS arm64, including the public C ABI and installed
-Dart/Go/Python synthesis packages. Additional inference backends are future work.
+Dart/Go/Python synthesis packages and a Flutter playback example. The
+[POC qualification](poc-qualification.md) records the exact host, artifacts,
+timing boundaries, and remaining device/release gates.
 
 | Target | Scaffold configuration | Validation |
 | --- | --- | --- |
-| macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML | Full text-to-PCM parity, English/Korean WAV CLI; C static/shared synthesis; installed Dart/Go/Python cancel/reuse/WAV tests |
+| macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML; Flutter player | Full text-to-PCM parity, installed C/Dart/Go/Python checks, real Flutter playback/cancel/export, release app build/signature checks, warm benchmark and process-attributed ANE traces on M4 Pro/macOS 27.0.1 |
 | macOS x64 | Host builds; optional Core ML | Cross-compiled/linked locally; inference not executed |
 | Linux x64, glibc | Native host builds; CI job configured | Awaiting CI run |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
-| Windows x64, MSVC Rust | Native host builds; CI job configured | Awaiting CI run |
+| Windows x64, MSVC Rust | Native host builds; CI job configured | All-target/all-feature Rust cross-check passed; native execution and CI run unverified |
 | Windows arm64, MSVC Rust | Dart target mapping configured | Not locally tested; C/Go toolchain needs qualification |
 | iOS arm64 / simulator | Core ML shared/static artifacts, minimum iOS 18 | Cross-compiled/linked locally; device execution and app packaging unqualified |
 | Android | Future runtime and target-specific packaging | Not implemented |
@@ -71,5 +73,8 @@ does not carry Rust's native linkage metadata to a C/Xcode linker.
 
 The initial Rust runtime qualification ran on M4 Pro/macOS 27.0.1 with Rust 1.95
 and Xcode SDKs macOS 27.0/iOS 27.1. Rust 1.88 host tests and foreign-caller checks
-are also exercised locally. Actual macOS 15/iOS 18 runtime execution, physical
-iOS devices, ANE placement/residency, and performance remain separate gates.
+are also exercised locally. The final POC additionally records warm public-job
+performance, public compute plans, and process-attributed ANE execution with a
+CPU-only control on this host. These do not establish physical ANE residency or
+execution placement for every model. Actual macOS 15/iOS 18 runtime execution,
+physical iOS devices, and release distribution remain separate gates.
