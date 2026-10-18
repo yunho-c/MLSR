@@ -36,6 +36,15 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Navigation on an old speech cannot override another controller request.
+    NotCurrentSpeech,
+    /// Requested frame is outside retained audio. The current position is unchanged.
+    InvalidSeek {
+        /// Rejected absolute source frame.
+        frame: u64,
+        /// Current retained end frame (zero means nothing is retained).
+        available_end: u64,
+    },
     /// The selected output/device cannot provide an explicitly requested feature.
     UnsupportedCapability(&'static str),
     /// Native audio output failed independently of inference.
@@ -102,6 +111,16 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NotCurrentSpeech => {
+                f.write_str("speech_not_current: another request is current on this controller")
+            }
+            Self::InvalidSeek {
+                frame,
+                available_end,
+            } => write!(
+                f,
+                "invalid_seek: frame {frame}, retained end {available_end}"
+            ),
             Self::UnsupportedCapability(name) => write!(f, "unsupported_capability: {name}"),
             Self::Output(message) => write!(f, "output_failed: {message}"),
             Self::OperationFailed(error) => error.fmt(f),
@@ -128,6 +147,8 @@ impl Error {
     /// Stable machine-readable category for foreign-language adapters.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::NotCurrentSpeech => "speech_not_current",
+            Self::InvalidSeek { .. } => "invalid_seek",
             Self::UnsupportedCapability(_) => "unsupported_capability",
             Self::Output(_) => "output_failed",
             Self::OperationFailed(error) => error.category,

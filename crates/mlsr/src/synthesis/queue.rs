@@ -22,6 +22,20 @@ pub(crate) struct Queue {
     worker: Mutex<Option<JoinHandle<()>>>,
 }
 impl Queue {
+    pub(crate) fn options(&self) -> QueueOptions {
+        self.options
+    }
+    pub(crate) fn reserve_id(&self) -> Result<u64> {
+        let mut gate = lock(&self.shared.gate);
+        if gate.closed {
+            return Err(Error::Closed);
+        }
+        let id = gate.next_id;
+        gate.next_id = id
+            .checked_add(1)
+            .ok_or_else(|| Error::WorkerFailed("request IDs exhausted".into()))?;
+        Ok(id)
+    }
     pub(crate) fn chunk_frames(&self) -> usize {
         self.options.job.chunk_frames()
     }

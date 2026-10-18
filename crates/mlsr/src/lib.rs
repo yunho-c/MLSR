@@ -15,6 +15,7 @@ pub mod job;
 pub mod models;
 pub mod output;
 pub mod request;
+pub mod retention;
 pub mod runtime;
 pub mod speech;
 pub mod synthesis;

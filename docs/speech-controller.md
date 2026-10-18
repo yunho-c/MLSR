@@ -10,7 +10,8 @@ thread, so platform graph objects do not need to cross threads or implement Send
 Each accepted `speak` returns a `Speech` immediately. Replace cancels only that
 controller's active and queued speech; enqueue preserves FIFO order. Admission
 or capability failure leaves existing speech intact. Queue count/text limits come
-from the shared scheduler; a cancelled queued handle terminates without inference.
+from the shared scheduler; replay queues separately obey those pending count/text
+limits plus one active request. A cancelled queued handle terminates without inference.
 There can be at most 16 live controllers per owner. Renders and other controllers
 remain independent of replacement. Dropping a Speech handle preserves convenient
 fire-and-forget playback; explicit cancellation or controller/Tts closure stops it.
@@ -33,8 +34,9 @@ Replacement/cancellation advance playback epochs. Stale output snapshots cannot
 finish current speech. Output failure retires that graph, cancels/joins its
 synthesis and reports a typed failure; the next speech may open a fresh graph.
 Source-frame positions, whole-request estimates, authoritative duration and
-original UTF-8/UTF-16 segment highlighting remain separate values. Retention,
-seeking and sentence navigation are the next reader-layer step.
+original UTF-8/UTF-16 segment highlighting remain separate values. The
+[reader layer](reader-api.md) adds retention, seeking, completed-recording replay
+and sentence navigation without another scheduler.
 
 Route changes request pause. Interruption end does not override a user pause;
 host-managed policy requires an explicit resume. These are shared policy rules,
@@ -43,7 +45,7 @@ advertised and qualified separately by each platform adapter.
 
 ## Validation and remaining integration
 
-Ten deterministic output tests cover lazy opening and graph reuse; playback drain
+The original ten deterministic output tests cover lazy opening and graph reuse; playback drain
 after generation; replace scope; FIFO/pause/rate/volume; prompt flush during a
 gated in-flight model call; queued cancellation; stale callback rejection; a
 controlled cancel-versus-final-completion race; admission failure preservation;
@@ -52,6 +54,7 @@ output failure/recovery; route/interruption policy and fire-and-forget lifetime.
 `cargo test --locked --workspace` passed (60 core tests, seven CLI tests and four
 FFI tests; two external-asset core tests skipped). Strict all-feature/all-target
 clippy, Rust 1.88 workspace checks and Windows core target compilation passed.
-These tests qualify the shared controller, not physical audio output. The Apple
-adapter, reader retention/navigation, new C/language facade surfaces, Flutter
-migration and full installed/native acceptance remain tracked separately.
+Those step-4 counts are historical. Subsequent [Apple adapter](apple-output.md)
+and [reader](reader-api.md) tests add native and retained-audio qualification.
+New C/language facade surfaces, Flutter migration and full installed/native
+acceptance remain tracked separately.

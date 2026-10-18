@@ -110,6 +110,33 @@ impl Request {
     pub fn options(&self) -> RequestOptions {
         self.options
     }
+    /// Resume at an original sentence in an already validated plan. Source text,
+    /// original segment IDs and per-segment seeds remain unchanged. The resulting
+    /// request has a new audio timeline starting at zero.
+    pub fn at_sentence(&self, plan: Arc<TextPlan>, sentence: u32) -> Result<Self> {
+        if plan.original() != self.text()
+            || plan.language() != self.voice.language()
+            || plan.manifest_sha256() != self.voice.voice().manifest_sha256()
+        {
+            return Err(Error::InvalidOptions(
+                "text plan does not belong to this request".into(),
+            ));
+        }
+        let start = plan
+            .sentences()
+            .get(sentence as usize)
+            .ok_or_else(|| {
+                Error::InvalidOptions("sentence is outside the original text plan".into())
+            })?
+            .segments()
+            .start;
+        let mut request = self.clone();
+        request.resume = Some((plan, start));
+        Ok(request)
+    }
+    pub(crate) fn start_segment(&self) -> usize {
+        self.resume.as_ref().map_or(0, |(_, start)| *start)
+    }
     pub(crate) fn prepare(&self, engine: &Engine) -> Result<(Arc<TextPlan>, usize)> {
         let catalog = engine.voice_catalog()?;
         let voice = catalog.get(self.voice.voice().id())?;

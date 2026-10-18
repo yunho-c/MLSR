@@ -11,7 +11,7 @@ must not be marked complete merely because a subset of tests passes.
 | 3 | Shared render/stream/WAV APIs with state and completion | Complete | [Shared Rust facade and qualification](headless-sdk.md); SDK translations in step 7 |
 | 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
 | 5 | Reusable native Apple playback and host policy adapter | Complete | [Native adapter and qualification](apple-output.md); language wiring in step 7 |
-| 6 | Retention, seeking, reader timeline and navigation | Pending | |
+| 6 | Retention, seeking, reader timeline and navigation | Complete | [Reader API, storage limits and native qualification](reader-api.md); SDK translation pending |
 | 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | Pending | |
 | 8 | Three examples, installed-package and full acceptance qualification | Pending | |
 
@@ -31,7 +31,7 @@ primitive or the older demonstration already supports part of it.
 | VOICE-03 | Explicit locale resolution/fallback, missing voice errors | Rust complete: `explicit_fallback_never_silently_changes_language_or_voice`; SDK translation pending |
 | TEXT-01 | Frozen original sentence/segment plan and immutable request options | Rust complete: text plans plus `request::tests`; SDK translation pending |
 | TEXT-02 | Correct original UTF-8/UTF-16 mapping including Korean/emoji/combining text | Rust complete: `text::plan::tests`; Dart translation pending |
-| TEXT-03 | Explicit input limits, segmentation without truncation, stable navigation seeds | Rust complete: segmentation/suffix tests plus real seeded PCM equality; navigation integration pending |
+| TEXT-03 | Explicit input limits, segmentation without truncation, stable navigation seeds | Rust complete: segmentation/suffix and native reader retention equality; SDK translation pending |
 | SYN-01 | Lazy advanced audio consumption/explicit start; states do not drain audio | Rust complete: `synthesis::tests`; SDK translation pending |
 | SYN-02 | Independent bounded state snapshots and synthesis completion | Rust complete: late/slow observer and quiescence tests; SDK translation pending |
 | SYN-03 | Speaking-rate normalization and typed backend options | Rust complete: request tests and real legacy PCM equality; SDK translation pending |
@@ -48,11 +48,11 @@ primitive or the older demonstration already supports part of it.
 | OUTPUT-03 | Pause/resume clock and final played-back completion | Native driver and actual Core ML speech tests pass; acoustic timestamps not claimed |
 | OUTPUT-04 | Volume and independent pitch-preserving playback rate | Native five-rate/live-change tests plus offline pitch probe pass; SDK controls pending |
 | OUTPUT-05 | Host-managed policy, route/interruption handling and explicit capabilities | macOS host policy and synthetic native configuration recovery pass; interruption capability false, physical route/iOS unqualified |
-| STORE-01 | RAM/disk budgets; typed quota failure; cleanup only owned resources | Pending |
-| TIME-01 | Position, bufferedUntil, seekableRanges, estimated/final duration | Pending |
-| TIME-02 | Seek during generation/completion/pause; invalid seek preserves position | Pending |
-| TIME-03 | Original-text highlight follows presented audio through rate/seek changes | Pending |
-| TIME-04 | Previous/next sentence and explicit ungenerated-text navigation | Pending |
+| STORE-01 | RAM/disk budgets; typed quota failure; cleanup only owned resources | Shared quota/store limits, lookahead, real OS failure and cleanup tests pass; SDK translation pending |
+| TIME-01 | Position, bufferedUntil, seekableRanges, estimated/final duration | Shared source-frame timeline and whole-estimate/final-duration tests pass; SDK translation pending |
+| TIME-02 | Seek during generation/completion/pause; invalid seek preserves position | Rust/native seeks pass, including playing/paused and completed-generation; completed recording replay gets a new Speech sharing PCM |
+| TIME-03 | Original-text highlight follows presented audio through rate/seek changes | Original UTF-8/UTF-16 reader tests and native seek/rate/replay pass; SDK translation pending |
+| TIME-04 | Previous/next sentence and explicit ungenerated-text navigation | Long-sentence boundaries, frozen-plan suffixes, stale-handle rejection and native exact PCM pass; SDK translation pending |
 | SDK-01 | Flutter uses public SDK without a duplicate speech/session implementation | Pending |
 | SDK-02 | Existing offline bundled model delivery and release sandbox preserved | Pending |
 | EXAMPLE-01 | Speak button: rapid replace/enqueue/cancel | Pending |

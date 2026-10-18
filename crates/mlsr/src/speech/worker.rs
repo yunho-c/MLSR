@@ -7,12 +7,18 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 const TICK: Duration = Duration::from_millis(5);
 struct Playback {
-    stream: AudioStream,
-    pending: Option<crate::job::AudioChunk>,
+    stream: Option<AudioStream>,
+    retained: Option<Arc<Store>>,
+    pending: Option<Pending>,
+    cursor: u64,
+    ended_generation: bool,
     ended_input: bool,
     applied: Desired,
     system_paused: bool,
-    markers: Vec<(u64, u32)>,
+}
+struct Pending {
+    start: u64,
+    audio: crate::audio::Audio,
 }
 pub(super) fn run(shared: Arc<Shared>, factory: Arc<dyn OutputFactory>, policy: AudioPolicy) {
     let result = catch_unwind(AssertUnwindSafe(|| run_inner(&shared, &factory, policy)));
@@ -72,8 +78,9 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
                 // Cancellation can race with claiming the synthesis consumer.
                 // It does not imply a broken native graph. Flush that graph and
                 // keep it; actual output failures still retire it on this thread.
-                let healthy_cancel = matches!(error, Error::Cancelled) && cancelled.is_some();
-                if healthy_cancel {
+                let healthy_output = (matches!(error, Error::Cancelled) && cancelled.is_some())
+                    || matches!(&error, Error::OperationFailed(failure) if failure.stage != FailureStage::Playback);
+                if healthy_output {
                     if let Some(current) = output.as_mut()
                         && advance(&mut epoch)
                             .and_then(|next| current.flush(next))
@@ -126,24 +133,30 @@ fn play(
         *output = Some(factory.open(policy)?);
     }
     let output = output.as_mut().expect("opened output");
-    let current_epoch = advance(epoch)?;
+    let mut current_epoch = advance(epoch)?;
     output.flush(current_epoch)?;
     let desired = lock(&control.state).desired;
     output.begin(
         current_epoch,
         control.job.snapshot().format,
-        0,
+        control.replay_start.unwrap_or(0),
         desired.rate,
         desired.volume,
         desired.paused,
     )?;
     let mut playback = Playback {
-        stream: control.job.audio()?,
+        stream: if control.replay_start.is_some() {
+            None
+        } else {
+            Some(control.job.audio()?)
+        },
+        retained: lock(&control.retained).clone(),
         pending: None,
+        cursor: control.replay_start.unwrap_or(0),
+        ended_generation: control.replay_start.is_some(),
         ended_input: false,
         applied: desired,
         system_paused: false,
-        markers: Vec::new(),
     };
     loop {
         let cancelled = lock(&control.state).snapshot.cancellation;
@@ -156,53 +169,29 @@ fn play(
             }
             control.job.cancel_with(reason);
             while control.job.wait(TICK).is_none() {}
+            drop(playback);
             control.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
             return Ok(());
         }
         apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
-        for _ in 0..8 {
-            if playback.pending.is_none() && !playback.ended_input {
-                match playback.stream.poll(Duration::ZERO) {
-                    AudioPoll::Audio(chunk) => {
-                        if playback
-                            .markers
-                            .last()
-                            .is_none_or(|&(_, id)| id != chunk.segment.id)
-                        {
-                            playback.markers.push((chunk.start_frame, chunk.segment.id));
-                        }
-                        playback.pending = Some(chunk);
-                    }
-                    AudioPoll::Finished(done) => match done.outcome {
-                        Outcome::Completed => {
-                            playback.ended_input = true;
-                            output.finish_input(current_epoch)?;
-                        }
-                        Outcome::Cancelled { reason } => {
-                            control.cancel(reason);
-                            break;
-                        }
-                        Outcome::Failed { error } => return Err(Error::OperationFailed(error)),
-                    },
-                    AudioPoll::Timeout => break,
-                    AudioPoll::End => {
-                        return Err(Error::Output(
-                            "audio stream ended without completion".into(),
-                        ));
-                    }
-                }
-            }
-            if let Some(chunk) = &playback.pending {
-                match output.enqueue(current_epoch, chunk.start_frame, &chunk.audio)? {
-                    EnqueueResult::Accepted => {
-                        playback.pending = None;
-                    }
-                    EnqueueResult::Full => break,
-                }
-            } else {
-                break;
-            }
+        let seek = lock(&control.state).seek_to.take();
+        if let Some(frame) = seek {
+            current_epoch = advance(epoch)?;
+            output.flush(current_epoch)?;
+            output.begin(
+                current_epoch,
+                control.job.snapshot().format,
+                frame,
+                playback.applied.rate,
+                playback.applied.volume,
+                playback.applied.paused,
+            )?;
+            playback.pending = None;
+            playback.cursor = frame;
+            playback.ended_input = false;
+            lock(&control.state).snapshot.position_frame = frame;
         }
+        pump(control, &mut playback, output.as_mut(), current_epoch)?;
         if lock(&control.state).snapshot.cancellation.is_some() {
             // Do not poll/drain an epoch after consuming its cancellation. The
             // loop's independent cancellation path flushes before joining work.
@@ -236,6 +225,7 @@ fn play(
                     state.snapshot.position_frame = frames;
                 }
                 drop(state);
+                drop(playback);
                 control.finish(Outcome::Completed, PlaybackPhase::Ended);
                 return Ok(());
             }
@@ -248,6 +238,121 @@ fn play(
             .wait_timeout(gate, TICK)
             .unwrap_or_else(|p| p.into_inner());
     }
+}
+fn retention_error(control: &Control, error: Error) -> Error {
+    Error::OperationFailed(Failure::new(control.id(), FailureStage::Retention, &error))
+}
+fn note_segment(control: &Control, start: u64, id: u32) {
+    let mut markers = lock(&control.markers);
+    if markers.last().is_none_or(|&(_, previous)| previous != id) {
+        markers.push((start, id));
+    }
+}
+fn generation_outcome(control: &Control, playback: &mut Playback, outcome: Outcome) -> Result<()> {
+    match outcome {
+        Outcome::Completed => playback.ended_generation = true,
+        Outcome::Cancelled { reason } => control.cancel(reason),
+        Outcome::Failed { error } => return Err(Error::OperationFailed(error)),
+    }
+    Ok(())
+}
+fn pump(
+    control: &Control,
+    playback: &mut Playback,
+    output: &mut dyn AudioOutput,
+    epoch: u64,
+) -> Result<()> {
+    for _ in 0..8 {
+        if !playback.ended_generation
+            && let Some(done) = control.job.completion()
+        {
+            generation_outcome(control, playback, done.outcome)?;
+        }
+        if lock(&control.state).snapshot.cancellation.is_some() {
+            return Ok(());
+        }
+        if let Some(store) = playback.retained.clone() {
+            let ahead = store
+                .frames()
+                .saturating_sub(lock(&control.state).snapshot.position_frame);
+            if !playback.ended_generation
+                && ahead + control.job.chunk_frames() as u64 <= control.lookahead_frames as u64
+            {
+                match playback
+                    .stream
+                    .as_mut()
+                    .expect("generation consumer")
+                    .poll(Duration::ZERO)
+                {
+                    AudioPoll::Audio(chunk) => {
+                        store
+                            .append(chunk.start_frame, &chunk.audio)
+                            .map_err(|e| retention_error(control, e))?;
+                        note_segment(control, chunk.start_frame, chunk.segment.id);
+                    }
+                    AudioPoll::Finished(done) => {
+                        generation_outcome(control, playback, done.outcome)?
+                    }
+                    AudioPoll::Timeout => {}
+                    AudioPoll::End => {
+                        return Err(Error::Output(
+                            "audio stream ended without completion".into(),
+                        ));
+                    }
+                }
+            }
+            if playback.pending.is_none() {
+                playback.pending = store
+                    .read(playback.cursor, control.job.chunk_frames())
+                    .map_err(|e| retention_error(control, e))?
+                    .map(|audio| Pending {
+                        start: playback.cursor,
+                        audio,
+                    });
+            }
+        } else if playback.pending.is_none() && !playback.ended_generation {
+            match playback
+                .stream
+                .as_mut()
+                .expect("generation consumer")
+                .poll(Duration::ZERO)
+            {
+                AudioPoll::Audio(chunk) => {
+                    note_segment(control, chunk.start_frame, chunk.segment.id);
+                    playback.pending = Some(Pending {
+                        start: chunk.start_frame,
+                        audio: chunk.audio,
+                    });
+                }
+                AudioPoll::Finished(done) => generation_outcome(control, playback, done.outcome)?,
+                AudioPoll::Timeout => {}
+                AudioPoll::End => {
+                    return Err(Error::Output(
+                        "audio stream ended without completion".into(),
+                    ));
+                }
+            }
+        }
+        if lock(&control.state).snapshot.cancellation.is_some() {
+            return Ok(());
+        }
+        if let Some(chunk) = &playback.pending {
+            match output.enqueue(epoch, chunk.start, &chunk.audio)? {
+                EnqueueResult::Accepted => {
+                    playback.cursor = chunk.start + chunk.audio.frames() as u64;
+                    playback.pending = None;
+                }
+                EnqueueResult::Full => break,
+            }
+        } else {
+            if playback.ended_generation && !playback.ended_input {
+                output.finish_input(epoch)?;
+                playback.ended_input = true;
+            }
+            break;
+        }
+    }
+    Ok(())
 }
 fn apply_controls(
     control: &Control,
@@ -279,6 +384,15 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
     let previous = state.snapshot.clone();
     state.snapshot.synthesis = synthesis.phase;
     state.snapshot.buffered_until_frame = synthesis.generated_frames;
+    let end = playback.retained.as_ref().map_or(0, |s| s.frames());
+    state.snapshot.seekable_ranges = if end == 0 {
+        Vec::new()
+    } else {
+        std::iter::once(0..end).collect()
+    };
+    if playback.retained.is_some() {
+        state.snapshot.buffered_until_frame = end;
+    }
     state.snapshot.estimated_frames = synthesis.estimated_frames;
     state.snapshot.duration_frames = synthesis.duration_frames;
     state.snapshot.position_frame = output.position_frame.min(synthesis.generated_frames);
@@ -294,14 +408,14 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
     } else {
         PlaybackPhase::Buffering
     };
-    let segment = playback
-        .markers
+    let markers = lock(&control.markers);
+    let segment = markers
         .partition_point(|&(frame, _)| frame <= state.snapshot.position_frame)
         .checked_sub(1);
     state.snapshot.active_text_range = segment
         .filter(|_| state.snapshot.position_frame > 0)
         .and_then(|i| {
-            let id = playback.markers[i].1;
+            let id = markers[i].1;
             let plan = control.job.plan()?;
             let segment = plan.segments().get(id as usize)?;
             Some(ActiveTextRange {

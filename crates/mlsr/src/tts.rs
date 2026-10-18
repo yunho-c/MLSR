@@ -8,6 +8,7 @@ use crate::{
     error::{Error, LimitKind, Result},
     output::{AudioPolicy, OutputFactory},
     request::Request,
+    retention::{Budget, RetentionOptions, RetentionStats},
     speech::{SpeakMode, Speech, SpeechController, SpeechOptions},
     synthesis::{AudioPoll, Queue, QueueOptions, SynthesisJob},
     voice::VoiceCatalog,
@@ -66,6 +67,7 @@ impl Drop for Operation<'_> {
 /// Rust blocking calls belong off application UI/event-loop threads.
 pub struct Tts {
     queue: Arc<Queue>,
+    retention: Arc<Budget>,
     operations: Operations,
     close: Mutex<()>,
     output: Option<(Arc<dyn OutputFactory>, AudioPolicy)>,
@@ -85,14 +87,32 @@ impl Tts {
     /// lease. Opens no audio device; speech uses optional native output when
     /// compiled for a supported host (currently `apple-output` on macOS).
     pub fn new(engine: Engine, options: QueueOptions) -> Result<Self> {
+        Self::configured(
+            engine,
+            options,
+            RetentionOptions::default(),
+            crate::output::default_factory(),
+        )
+    }
+    /// Configure shared queue/disk budgets and optional output explicitly.
+    /// `None` is always headless; native factories remain lazy. This constructor
+    /// performs no audio-device or temporary-file I/O.
+    pub fn configured(
+        engine: Engine,
+        options: QueueOptions,
+        retention: RetentionOptions,
+        output: Option<(Arc<dyn OutputFactory>, AudioPolicy)>,
+    ) -> Result<Self> {
+        let retention = Budget::new(retention)?;
         Ok(Self {
             queue: Queue::new(engine, options)?,
+            retention,
             operations: Operations {
                 state: Mutex::new((false, 0)),
                 changed: Condvar::new(),
             },
             close: Mutex::new(()),
-            output: crate::output::default_factory(),
+            output,
             controllers: Mutex::new(Controllers {
                 closed: false,
                 default: None,
@@ -108,9 +128,12 @@ impl Tts {
         factory: Arc<dyn OutputFactory>,
         policy: AudioPolicy,
     ) -> Result<Self> {
-        let mut owner = Self::new(engine, options)?;
-        owner.output = Some((factory, policy));
-        Ok(owner)
+        Self::configured(
+            engine,
+            options,
+            RetentionOptions::default(),
+            Some((factory, policy)),
+        )
     }
     fn make_controller(&self, controllers: &mut Controllers) -> Result<SpeechController> {
         if controllers.closed {
@@ -127,7 +150,12 @@ impl Tts {
                 message: "at most 16 live speech controllers per Tts".into(),
             });
         }
-        let controller = SpeechController::new(self.queue.clone(), factory.clone(), *policy)?;
+        let controller = SpeechController::new(
+            self.queue.clone(),
+            self.retention.clone(),
+            factory.clone(),
+            *policy,
+        )?;
         controllers.owners.push(Arc::downgrade(&controller.owner));
         Ok(controller)
     }
@@ -162,6 +190,10 @@ impl Tts {
     /// Read loaded voice metadata without consuming the inference lane.
     pub fn voices(&self) -> Result<VoiceCatalog> {
         self.queue.voices()
+    }
+    /// Shared owned temporary PCM usage, including caller-retained recordings.
+    pub fn retention_stats(&self) -> RetentionStats {
+        self.retention.stats()
     }
     /// Resolve a stable voice ID and locale with an explicit fallback rule.
     pub fn resolve_voice(
@@ -324,6 +356,7 @@ impl Tts {
             }
         }
         let result = self.queue.close();
+        self.retention.close();
         let mut state = lock(&self.operations.state);
         while state.1 != 0 {
             state = self

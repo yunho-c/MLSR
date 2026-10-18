@@ -690,3 +690,449 @@ fn cancellation_consumed_between_enqueues_keeps_the_healthy_output() {
     assert_eq!(lock(&factory.devices).len(), 1);
     assert!(!lock(&factory.device(0)).dropped);
 }
+
+#[test]
+fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
+    let factory = Factory::new(false, true);
+    let (engine, calls) = crate::engine::fake_engine();
+    let tts = Tts::with_output(
+        engine,
+        QueueOptions::default(),
+        factory.clone(),
+        AudioPolicy::Managed,
+    )
+    .unwrap();
+    let speech = tts
+        .speak(
+            request(&tts, "First sentence.\nSecond sentence."),
+            SpeechOptions::new(1.0, 0.0, true).unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    let state = wait(&speech, |s| s.synthesis == SynthesisPhase::Terminal);
+    assert_eq!(state.duration_frames, Some(84000));
+    assert_eq!(
+        state.seekable_ranges,
+        std::iter::once(0..84000).collect::<Vec<_>>()
+    );
+    assert_eq!(state.position_frame, 0);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    let device = factory.device(0);
+    let before = lock(&device).epoch;
+    assert_eq!(speech.seek(84001).unwrap_err().code(), "invalid_seek");
+    assert_eq!(lock(&device).epoch, before);
+    assert_eq!(speech.snapshot().position_frame, 0);
+    speech.seek(43000).unwrap();
+    let seeked = wait(&speech, |s| s.position_frame == 43000);
+    assert_eq!(seeked.playback, PlaybackPhase::Paused);
+    assert_eq!(seeked.active_text_range.unwrap().sentence_id, 1);
+    assert!(lock(&device).epoch > before);
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        2,
+        "seek must not invoke inference"
+    );
+    assert!(matches!(
+        speech.previous_sentence().unwrap(),
+        Navigation::Seeked { frame: 0 }
+    ));
+    wait(&speech, |s| {
+        s.position_frame == 0 && s.playback == PlaybackPhase::Paused
+    });
+    lock(&device).advance = true;
+    speech.resume().unwrap();
+    let original = speech.wait(Duration::from_secs(3)).unwrap();
+    assert!(matches!(original.outcome, Outcome::Completed));
+    assert_eq!(speech.snapshot().position_frame, 84000);
+    let bytes = tts.retention_stats().used_bytes;
+    assert_eq!(bytes, 84000 * 4);
+    let replay = speech
+        .replay_from(
+            42001,
+            SpeechOptions::new(1.5, 0.0, true).unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    assert!(replay.id() > speech.id());
+    let replay_state = wait(&replay, |s| s.playback == PlaybackPhase::Paused);
+    assert_eq!(replay_state.position_frame, 42001);
+    assert_eq!(replay_state.active_text_range.unwrap().segment_id, 1);
+    let retained = lock(&replay.control.retained).clone().unwrap();
+    assert!(
+        retained
+            .read(42001, 4096)
+            .unwrap()
+            .unwrap()
+            .samples()
+            .iter()
+            .all(|v| *v == 1.0)
+    );
+    drop(retained);
+    assert_eq!(
+        tts.retention_stats().used_bytes,
+        bytes,
+        "replay shares disk bytes"
+    );
+    speech.dispose().unwrap();
+    assert_eq!(speech.completion(), Some(original));
+    assert!(speech.snapshot().seekable_ranges.is_empty());
+    assert_eq!(tts.retention_stats().used_bytes, bytes);
+    replay.resume().unwrap();
+    assert!(matches!(
+        replay.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    replay.dispose().unwrap();
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+    assert_eq!(tts.retention_stats().live_stores, 0);
+}
+
+#[test]
+fn paused_lookahead_is_bounded_and_ungenerated_navigation_reuses_original_plan() {
+    let factory = Factory::new(false, true);
+    let (engine, calls) = crate::engine::fake_engine();
+    let tts = Tts::with_output(
+        engine,
+        QueueOptions::default(),
+        factory.clone(),
+        AudioPolicy::Managed,
+    )
+    .unwrap();
+    let text = format!(
+        "😀 First e\u{301} {}.\nSecond sentence.\n안녕하세요.",
+        "long words ".repeat(40)
+    );
+    let original = tts
+        .speak(
+            request(&tts, &text),
+            SpeechOptions::new(1.0, 0.0, true)
+                .unwrap()
+                .with_lookahead(8192)
+                .unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    let first = wait(&original, |s| s.buffered_until_frame >= 8192);
+    assert_eq!(first.buffered_until_frame, 8192);
+    assert_eq!(first.position_frame, 0);
+    assert!(
+        first.estimated_frames.is_none(),
+        "partial prediction cannot be a whole-request estimate"
+    );
+    std::thread::sleep(Duration::from_millis(40));
+    assert_eq!(original.snapshot().buffered_until_frame, 8192);
+    assert_eq!(tts.retention_stats().used_bytes, 8192 * 4);
+    let plan = original.plan().unwrap();
+    assert!(plan.sentences()[0].segments().len() > 1);
+    let expected_segment = plan.sentences()[2].segments().start;
+    let Navigation::Started(next) = original.navigate_to_sentence(2).unwrap() else {
+        panic!("ungenerated sentence must start a new request")
+    };
+    assert!(matches!(
+        original.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Navigation
+        }
+    ));
+    wait(&next, |s| s.buffered_until_frame >= 8192);
+    assert!(Arc::ptr_eq(&plan, &next.plan().unwrap()));
+    assert_eq!(next.control.job.request().start_segment(), expected_segment);
+    let store = lock(&next.control.retained).clone().unwrap();
+    assert!(
+        store
+            .read(0, 4096)
+            .unwrap()
+            .unwrap()
+            .samples()
+            .iter()
+            .all(|v| *v == expected_segment as f32)
+    );
+    drop(store);
+    let device = factory.device(0);
+    lock(&device).advance = true;
+    next.resume().unwrap();
+    assert!(matches!(
+        next.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    let highlight = next.snapshot().active_text_range.unwrap();
+    assert_eq!(highlight.segment_id, expected_segment as u32);
+    assert_eq!(&text[highlight.utf8], "안녕하세요.");
+    assert_eq!(
+        String::from_utf16(&text.encode_utf16().collect::<Vec<_>>()[highlight.utf16]).unwrap(),
+        "안녕하세요."
+    );
+    assert!(calls.load(Ordering::SeqCst) >= 2);
+    assert!(matches!(
+        next.next_sentence().unwrap(),
+        Navigation::Boundary
+    ));
+    tts.close().unwrap();
+    assert!(next.snapshot().seekable_ranges.is_empty());
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+}
+
+#[test]
+fn retention_quota_failure_cleans_up_and_no_retention_remains_headless_storage() {
+    let factory = Factory::new(true, true);
+    let (engine, _) = crate::engine::fake_engine();
+    let tts = Tts::configured(
+        engine,
+        QueueOptions::default(),
+        crate::retention::RetentionOptions {
+            max_total_bytes: 20000,
+            max_stores: 2,
+        },
+        Some((factory.clone(), AudioPolicy::Managed)),
+    )
+    .unwrap();
+    let failed = tts
+        .speak(
+            request(&tts, "Quota."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    let done = failed.wait(Duration::from_secs(3)).unwrap();
+    let Outcome::Failed { error } = done.outcome else {
+        panic!("retention must fail at its quota")
+    };
+    assert_eq!(error.stage, FailureStage::Retention);
+    assert_eq!(
+        error.category,
+        crate::error::LimitKind::RetainedAudio.as_str()
+    );
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+    assert_eq!(tts.retention_stats().live_stores, 0);
+    let plain = tts
+        .speak(
+            request(&tts, "No retention."),
+            SpeechOptions::default().with_retention(false),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    assert!(matches!(
+        plain.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    assert!(plain.snapshot().seekable_ranges.is_empty());
+    assert!(
+        plain
+            .replay_from(0, SpeechOptions::default(), SpeakMode::Replace)
+            .is_err()
+    );
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+    assert_eq!(
+        lock(&factory.devices).len(),
+        1,
+        "a storage failure does not break the native output"
+    );
+}
+
+#[test]
+fn replay_queues_are_bounded_and_old_navigation_cannot_replace_current_speech() {
+    let factory = Factory::new(true, true);
+    let (engine, calls) = crate::engine::fake_engine();
+    let tts = Tts::with_output(
+        engine,
+        QueueOptions {
+            max_requests: 1,
+            ..QueueOptions::default()
+        },
+        factory.clone(),
+        AudioPolicy::Managed,
+    )
+    .unwrap();
+    let recording = tts
+        .speak(
+            request(&tts, "Recording."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    assert!(matches!(
+        recording.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    let first = recording
+        .replay_from(
+            0,
+            SpeechOptions::new(1.0, 0.0, true).unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&first, |s| s.playback == PlaybackPhase::Paused);
+    let queued = recording
+        .replay_from(0, SpeechOptions::default(), SpeakMode::Enqueue)
+        .unwrap();
+    assert_eq!(
+        recording
+            .replay_from(0, SpeechOptions::default(), SpeakMode::Replace)
+            .err()
+            .unwrap()
+            .code(),
+        "queue_full"
+    );
+    assert!(first.snapshot().cancellation.is_none());
+    assert!(queued.snapshot().cancellation.is_none());
+    assert_eq!(
+        recording.navigate_to_sentence(0).err().unwrap().code(),
+        "speech_not_current"
+    );
+    queued.cancel();
+    assert!(matches!(
+        queued.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Requested
+        }
+    ));
+    first.cancel();
+    assert!(matches!(
+        first.wait(Duration::from_secs(3)).unwrap().outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Requested
+        }
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(matches!(
+        recording.completion().unwrap().outcome,
+        Outcome::Completed
+    ));
+    tts.close().unwrap();
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+}
+
+#[cfg(all(feature = "coreml", feature = "apple-output", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE; actual Core ML and muted macOS reader playback"]
+fn real_reader_seek_navigation_exact_retention_and_completed_replay() {
+    use crate::{
+        config::EngineOptions, engine::Engine, models::supertonic3::Bundle, request::BackendOptions,
+    };
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let engine =
+        Engine::from_bundle(Bundle::open(root).unwrap(), EngineOptions::default()).unwrap();
+    let tts = Tts::new(engine, QueueOptions::default()).unwrap();
+    let request = Request::new(
+        "Hello from MLSR.\nThis is another sentence.",
+        tts.resolve_voice("en", Some("supertonic3:M1"), VoiceFallback::Strict)
+            .unwrap(),
+        RequestOptions::new(
+            1.0,
+            BackendOptions::Supertonic3 {
+                steps: 8,
+                seed: 1729,
+            },
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let job = tts.synthesize(request.clone()).unwrap();
+    let original = tts.collect(&job, RenderOptions::default()).unwrap();
+    let suffix_request = request.at_sentence(job.plan().unwrap(), 1).unwrap();
+    let suffix = tts
+        .render(suffix_request, RenderOptions::default())
+        .unwrap();
+    let first = tts
+        .speak(
+            request,
+            SpeechOptions::new(1.5, 0.0, true)
+                .unwrap()
+                .with_lookahead(8192)
+                .unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&first, |s| {
+        s.buffered_until_frame == 8192 && s.playback == PlaybackPhase::Paused
+    });
+    first.seek(4096).unwrap();
+    let seeked = wait(&first, |s| s.position_frame == 4096);
+    assert_eq!(seeked.playback, PlaybackPhase::Paused);
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(first.snapshot().position_frame, 4096);
+    assert!(first.snapshot().buffered_until_frame <= 12288);
+    let plan = first.plan().unwrap();
+    let Navigation::Started(next) = first.navigate_to_sentence(1).unwrap() else {
+        panic!("ungenerated native sentence")
+    };
+    assert!(matches!(
+        first.wait(Duration::from_secs(30)).unwrap().outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Navigation
+        }
+    ));
+    wait(&next, |s| {
+        s.buffered_until_frame > 0 && s.playback == PlaybackPhase::Paused
+    });
+    assert!(Arc::ptr_eq(&plan, &next.plan().unwrap()));
+    next.resume().unwrap();
+    assert!(matches!(
+        next.wait(Duration::from_secs(30)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    assert_eq!(
+        next.snapshot().duration_frames,
+        Some(suffix.frames() as u64)
+    );
+    let stored = lock(&next.control.retained).clone().unwrap();
+    let mut frame = 0;
+    while let Some(audio) = stored.read(frame, 4096).unwrap() {
+        let start = frame as usize;
+        assert!(
+            audio
+                .samples()
+                .iter()
+                .zip(&suffix.samples()[start..start + audio.frames()])
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+        );
+        frame += audio.frames() as u64;
+    }
+    assert_eq!(frame, suffix.frames() as u64);
+    drop(stored);
+    let bytes = tts.retention_stats().used_bytes;
+    assert_eq!(bytes, frame * 4);
+    let replay = next
+        .replay_from(
+            frame / 2,
+            SpeechOptions::new(2.0, 0.0, true).unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&replay, |s| s.playback == PlaybackPhase::Paused);
+    assert_eq!(replay.snapshot().position_frame, frame / 2);
+    assert_eq!(tts.retention_stats().used_bytes, bytes);
+    next.dispose().unwrap();
+    assert_eq!(tts.retention_stats().used_bytes, bytes);
+    replay.seek(0).unwrap();
+    wait(&replay, |s| s.position_frame == 0);
+    replay.resume().unwrap();
+    let playing = wait(&replay, |s| s.position_frame > 4096);
+    replay.seek(1024).unwrap();
+    let moved = wait(&replay, |s| s.position_frame < playing.position_frame);
+    assert!(moved.position_frame >= 1024);
+    assert_ne!(moved.playback, PlaybackPhase::Paused);
+    assert!(matches!(
+        replay.wait(Duration::from_secs(30)).unwrap().outcome,
+        Outcome::Completed
+    ));
+    assert_eq!(replay.snapshot().position_frame, frame);
+    assert_eq!(replay.snapshot().active_text_range.unwrap().segment_id, 1);
+    replay.dispose().unwrap();
+    assert_eq!(tts.retention_stats().used_bytes, 0);
+    assert_eq!(tts.retention_stats().live_stores, 0);
+    tts.close().unwrap();
+    let report = serde_json::json!({"result":"pass","muted":true,
+        "original_frames":original.frames(),"suffix_frames":suffix.frames(),
+        "retained_suffix":"every Float32 sample bit equals independently rendered original-plan suffix",
+        "paused_seek_frame":4096,"paused_lookahead_limit_frames":8192,
+        "seek_while_playing_frame":1024,
+        "navigation":"new request with original sentence/segment IDs and seed offsets",
+        "completed_replay":"new request identity; shared retained PCM; paused rebase and seek to zero",
+        "retention_bytes_before_replay":bytes,"retention_final":tts.retention_stats()});
+    println!("{report}");
+    if let Some(path) = std::env::var_os("MLSR_READER_REPORT") {
+        std::fs::write(path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    }
+}

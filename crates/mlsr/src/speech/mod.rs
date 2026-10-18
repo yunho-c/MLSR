@@ -6,6 +6,7 @@ use crate::{
     job::lock,
     output::{AudioPolicy, OutputCapabilities, OutputFactory},
     request::Request,
+    retention::{Budget, Store},
     synthesis::{Queue, SynthesisJob, SynthesisPhase},
 };
 use serde::Serialize;
@@ -26,12 +27,26 @@ pub enum SpeakMode {
     /// Append after the current and queued speech. Pause does not skip the current.
     Enqueue,
 }
+/// Sentence navigation distinguishes a retained seek from a new playback request.
+pub enum Navigation {
+    /// Existing speech seeks without inference or changing its request identity.
+    Seeked {
+        /// Original source-audio frame at the sentence start.
+        frame: u64,
+    },
+    /// A new handle for ungenerated text or replay of a completed recording.
+    Started(Speech),
+    /// No previous/next spoken sentence exists in the original plan.
+    Boundary,
+}
 /// Initial playback settings, independent of frozen synthesis RequestOptions.
 #[derive(Clone, Copy, Debug)]
 pub struct SpeechOptions {
     playback_rate: f32,
     volume: f32,
     paused: bool,
+    retain_audio: bool,
+    lookahead_frames: usize,
 }
 impl Default for SpeechOptions {
     fn default() -> Self {
@@ -39,6 +54,8 @@ impl Default for SpeechOptions {
             playback_rate: 1.0,
             volume: 1.0,
             paused: false,
+            retain_audio: true,
+            lookahead_frames: 88200,
         }
     }
 }
@@ -59,6 +76,7 @@ impl SpeechOptions {
             playback_rate,
             volume,
             paused,
+            ..Self::default()
         })
     }
     /// Requested source-preserving playback multiplier.
@@ -72,6 +90,30 @@ impl SpeechOptions {
     /// Whether the request should begin paused.
     pub fn paused(self) -> bool {
         self.paused
+    }
+    /// Enable full temporary PCM retention (default true) or omit seek storage.
+    pub fn with_retention(mut self, retain: bool) -> Self {
+        self.retain_audio = retain;
+        self
+    }
+    /// Whether newly generated audio is retained under the shared disk quota.
+    pub fn retains_audio(self) -> bool {
+        self.retain_audio
+    }
+    /// Bound newly retained audio ahead of presentation. Additional inference,
+    /// consumer and native output queues have independent documented limits.
+    pub fn with_lookahead(mut self, frames: usize) -> Result<Self> {
+        if !(1..=44100 * 30).contains(&frames) {
+            return Err(Error::InvalidOptions(
+                "speech lookahead requires 1 frame..=30 seconds".into(),
+            ));
+        }
+        self.lookahead_frames = frames;
+        Ok(self)
+    }
+    /// Source-frame lookahead cap, default two seconds at 44,100 Hz.
+    pub fn lookahead_frames(self) -> usize {
+        self.lookahead_frames
     }
     fn validate(self, caps: OutputCapabilities) -> Result<()> {
         validate_rate(self.playback_rate, caps)?;
@@ -137,7 +179,7 @@ pub struct ActiveTextRange {
 pub struct SpeechSnapshot {
     /// Monotonic state revision.
     pub revision: u64,
-    /// Stable request identity shared with its synthesis handle.
+    /// Stable request identity; replay gets a new identity without new inference.
     pub request_id: u64,
     /// Independent generation phase.
     pub synthesis: SynthesisPhase,
@@ -149,6 +191,9 @@ pub struct SpeechSnapshot {
     pub position_frame: u64,
     /// End of contiguous generated audio available ahead of the position.
     pub buffered_until_frame: u64,
+    /// Half-open retained source intervals. Their end is also a valid seek point.
+    /// Empty when retention is disabled, released, or the owner is closed.
+    pub seekable_ranges: Vec<std::ops::Range<u64>>,
     /// Whole-request estimate, if available.
     pub estimated_frames: Option<u64>,
     /// Authoritative final generated duration, independent of output drain.
@@ -175,24 +220,38 @@ struct Desired {
 struct State {
     snapshot: SpeechSnapshot,
     desired: Desired,
+    seek_to: Option<u64>,
 }
 struct Control {
+    id: u64,
     job: SynthesisJob,
+    retained: Mutex<Option<Arc<Store>>>,
+    replay_start: Option<u64>,
+    lookahead_frames: usize,
+    markers: Mutex<Vec<(u64, u32)>>,
     state: Mutex<State>,
     changed: Condvar,
 }
 impl Control {
-    fn new(job: SynthesisJob, options: SpeechOptions) -> Arc<Self> {
+    fn new(
+        job: SynthesisJob,
+        id: u64,
+        options: SpeechOptions,
+        retained: Option<Arc<Store>>,
+        replay_start: Option<u64>,
+        markers: Vec<(u64, u32)>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             state: Mutex::new(State {
                 snapshot: SpeechSnapshot {
                     revision: 0,
-                    request_id: job.id(),
+                    request_id: id,
                     synthesis: SynthesisPhase::Queued,
                     playback: PlaybackPhase::Queued,
                     format: job.snapshot().format,
-                    position_frame: 0,
+                    position_frame: replay_start.unwrap_or(0),
                     buffered_until_frame: 0,
+                    seekable_ranges: Vec::new(),
                     estimated_frames: None,
                     duration_frames: None,
                     playback_rate: options.playback_rate,
@@ -207,13 +266,19 @@ impl Control {
                     rate: options.playback_rate,
                     volume: options.volume,
                 },
+                seek_to: None,
             }),
+            id,
             job,
+            retained: Mutex::new(retained),
+            replay_start,
+            lookahead_frames: options.lookahead_frames,
+            markers: Mutex::new(markers),
             changed: Condvar::new(),
         })
     }
     fn id(&self) -> u64 {
-        self.job.id()
+        self.id
     }
     fn publish(&self, state: &mut State) {
         state.snapshot.revision = state.snapshot.revision.saturating_add(1);
@@ -229,6 +294,12 @@ impl Control {
             Some(reason) => (Outcome::Cancelled { reason }, PlaybackPhase::Stopped),
             None => (outcome, playback),
         };
+        if !matches!(outcome, Outcome::Completed) {
+            // Failed/cancelled recordings cannot be replayed. Release this
+            // request's reference before done; other replay handles own theirs.
+            lock(&self.retained).take();
+            state.snapshot.seekable_ranges.clear();
+        }
         state.snapshot.playback = playback;
         state.snapshot.completion = Some(Completion {
             request_id: self.id(),
@@ -269,6 +340,7 @@ struct Shared {
 pub(crate) struct Owner {
     shared: Arc<Shared>,
     queue: Arc<Queue>,
+    retention: Arc<Budget>,
     factory: Arc<dyn OutputFactory>,
     worker: Mutex<Option<JoinHandle<()>>>,
 }
@@ -281,6 +353,7 @@ pub struct SpeechController {
 impl SpeechController {
     pub(crate) fn new(
         queue: Arc<Queue>,
+        retention: Arc<Budget>,
         factory: Arc<dyn OutputFactory>,
         policy: AudioPolicy,
     ) -> Result<Self> {
@@ -310,6 +383,7 @@ impl SpeechController {
             owner: Arc::new(Owner {
                 shared,
                 queue,
+                retention,
                 factory,
                 worker: Mutex::new(Some(worker)),
             }),
@@ -323,26 +397,16 @@ impl SpeechController {
         options: SpeechOptions,
         mode: SpeakMode,
     ) -> Result<Speech> {
-        options.validate(self.owner.factory.capabilities())?;
+        self.owner.validate(options)?;
         let mut gate = lock(&self.owner.shared.gate);
-        if gate.closed {
-            return Err(Error::Closed);
-        }
-        let control = Control::new(self.owner.queue.create(request)?, options);
-        if mode == SpeakMode::Replace {
-            if let Some(active) = &gate.active {
-                active.cancel(CancelReason::Replaced);
-            }
-            for pending in gate.pending.drain(..) {
-                pending.cancel(CancelReason::Replaced);
-            }
-        }
-        gate.pending.push_back(control.clone());
-        self.owner.shared.changed.notify_all();
-        Ok(Speech {
-            control,
-            owner: Arc::downgrade(&self.owner),
-        })
+        self.owner.admit(&gate, request.text().len())?;
+        let job = self.owner.queue.create(request)?;
+        let retained = options
+            .retain_audio
+            .then(|| self.owner.retention.create(job.snapshot().format))
+            .transpose()?;
+        let control = Control::new(job.clone(), job.id(), options, retained, None, Vec::new());
+        Ok(self.owner.submit(&mut gate, control, mode))
     }
     /// Output capability metadata without opening the audio device.
     pub fn capabilities(&self) -> OutputCapabilities {
@@ -354,6 +418,51 @@ impl SpeechController {
     }
 }
 impl Owner {
+    fn validate(&self, options: SpeechOptions) -> Result<()> {
+        options.validate(self.factory.capabilities())?;
+        if options.lookahead_frames < self.queue.chunk_frames() {
+            return Err(Error::InvalidOptions(
+                "lookahead must hold at least one configured PCM chunk".into(),
+            ));
+        }
+        Ok(())
+    }
+    fn admit(&self, gate: &Gate, bytes: usize) -> Result<()> {
+        if gate.closed {
+            return Err(Error::Closed);
+        }
+        let limits = self.queue.options();
+        let (count, existing_bytes) = gate
+            .pending
+            .iter()
+            .filter(|control| lock(&control.state).snapshot.completion.is_none())
+            .fold((0, 0), |(count, bytes), control| {
+                (count + 1, bytes + control.job.request().text().len())
+            });
+        if count >= limits.max_requests || existing_bytes + bytes > limits.max_text_bytes {
+            return Err(Error::LimitExceeded {
+                kind: crate::error::LimitKind::RequestQueue,
+                message: "speech queue count/text budget exceeded".into(),
+            });
+        }
+        Ok(())
+    }
+    fn submit(self: &Arc<Self>, gate: &mut Gate, control: Arc<Control>, mode: SpeakMode) -> Speech {
+        if mode == SpeakMode::Replace {
+            if let Some(active) = &gate.active {
+                active.cancel(CancelReason::Replaced);
+            }
+            for pending in gate.pending.drain(..) {
+                pending.cancel(CancelReason::Replaced);
+            }
+        }
+        gate.pending.push_back(control.clone());
+        self.shared.changed.notify_all();
+        Speech {
+            control,
+            owner: Arc::downgrade(self),
+        }
+    }
     fn cancel(&self, control: &Arc<Control>, reason: CancelReason) {
         let mut gate = lock(&self.shared.gate);
         gate.pending.retain(|p| p.id() != control.id());
@@ -400,7 +509,20 @@ impl Speech {
     }
     /// Latest snapshot independent of any state subscription.
     pub fn snapshot(&self) -> SpeechSnapshot {
-        lock(&self.control.state).snapshot.clone()
+        let mut state = lock(&self.control.state);
+        let end = lock(&self.control.retained)
+            .as_ref()
+            .map_or(0, |s| s.frames());
+        let ranges = if end == 0 {
+            Vec::new()
+        } else {
+            std::iter::once(0..end).collect()
+        };
+        if state.snapshot.seekable_ranges != ranges {
+            state.snapshot.seekable_ranges = ranges;
+            self.control.publish(&mut state);
+        }
+        state.snapshot.clone()
     }
     /// Observe current then coalesced state, retaining the final snapshot.
     pub fn states(&self) -> SpeechStates {
@@ -415,6 +537,215 @@ impl Speech {
         if let Some(owner) = self.owner.upgrade() {
             owner.cancel(&self.control, CancelReason::Requested);
         }
+    }
+    /// Flush/rebase a running request within retained PCM; paused seeks remain
+    /// paused and never regenerate audio. Admission returns immediately; state
+    /// confirms the applied frame. Invalid seeks leave the position unchanged.
+    /// For a completed recording use replay_from for a new immutable outcome.
+    pub fn seek(&self, frame: u64) -> Result<()> {
+        let owner = self.owner.upgrade().ok_or(Error::Closed)?;
+        if !owner.factory.capabilities().rebase {
+            return Err(Error::UnsupportedCapability("seek/rebase"));
+        }
+        let mut state = lock(&self.control.state);
+        if state.snapshot.completion.is_some() || state.snapshot.cancellation.is_some() {
+            return Err(Error::Closed);
+        }
+        let end = lock(&self.control.retained)
+            .as_ref()
+            .map_or(0, |s| s.frames());
+        if end == 0 || frame > end {
+            return Err(Error::InvalidSeek {
+                frame,
+                available_end: end,
+            });
+        }
+        state.seek_to = Some(frame);
+        owner.shared.changed.notify_all();
+        Ok(())
+    }
+    /// Replay a completed recording from retained PCM without inference or a
+    /// second disk copy. A new Speech identity/done preserves the original outcome.
+    pub fn replay_from(
+        &self,
+        frame: u64,
+        options: SpeechOptions,
+        mode: SpeakMode,
+    ) -> Result<Speech> {
+        let owner = self.owner.upgrade().ok_or(Error::Closed)?;
+        owner.validate(options)?;
+        let mut gate = lock(&owner.shared.gate);
+        owner.admit(&gate, self.control.job.request().text().len())?;
+        if !matches!(
+            self.completion().map(|c| c.outcome),
+            Some(Outcome::Completed)
+        ) {
+            return Err(Error::InvalidOptions(
+                "replay requires a completed recording; seek active speech instead".into(),
+            ));
+        }
+        let retained = lock(&self.control.retained).clone();
+        let end = retained.as_ref().map_or(0, |s| s.frames());
+        if end == 0 || frame > end {
+            return Err(Error::InvalidSeek {
+                frame,
+                available_end: end,
+            });
+        }
+        let id = owner.queue.reserve_id()?;
+        let control = Control::new(
+            self.control.job.clone(),
+            id,
+            options,
+            retained,
+            Some(frame),
+            lock(&self.control.markers).clone(),
+        );
+        Ok(owner.submit(&mut gate, control, mode))
+    }
+    /// Frozen original plan once available, including UTF-8/UTF-16 sentence spans.
+    pub fn plan(&self) -> Option<Arc<crate::text::TextPlan>> {
+        self.control.job.plan()
+    }
+    fn current_sentence(&self) -> Result<u32> {
+        let snapshot = self.snapshot();
+        if let Some(range) = snapshot.active_text_range {
+            return Ok(range.sentence_id);
+        }
+        let plan = self
+            .plan()
+            .ok_or_else(|| Error::InvalidOptions("text plan is not ready".into()))?;
+        let markers = lock(&self.control.markers);
+        let segment = markers
+            .partition_point(|&(frame, _)| frame <= snapshot.position_frame)
+            .checked_sub(1)
+            .map_or(self.control.job.request().start_segment(), |i| {
+                markers[i].1 as usize
+            });
+        Ok(plan.segments()[segment].sentence_id())
+    }
+    /// Move to the previous spoken sentence in the original plan. A long
+    /// sentence split into several model segments remains one navigation unit.
+    pub fn previous_sentence(&self) -> Result<Navigation> {
+        match self.current_sentence()?.checked_sub(1) {
+            Some(id) => self.navigate_to_sentence(id),
+            None => Ok(Navigation::Boundary),
+        }
+    }
+    /// Move to the next original spoken sentence, or report the document boundary.
+    pub fn next_sentence(&self) -> Result<Navigation> {
+        let id = self.current_sentence()? + 1;
+        let plan = self
+            .plan()
+            .ok_or_else(|| Error::InvalidOptions("text plan is not ready".into()))?;
+        if id as usize >= plan.sentences().len() {
+            return Ok(Navigation::Boundary);
+        }
+        self.navigate_to_sentence(id)
+    }
+    /// Seek retained sentence audio, or explicitly start a new request from the
+    /// frozen plan. Ungenerated targets cancel only this active request with the
+    /// Navigation reason; pending speech keeps its order behind the new request.
+    /// An older handle cannot navigate over another current request.
+    pub fn navigate_to_sentence(&self, sentence: u32) -> Result<Navigation> {
+        let owner = self.owner.upgrade().ok_or(Error::Closed)?;
+        let plan = self
+            .plan()
+            .ok_or_else(|| Error::InvalidOptions("text plan is not ready".into()))?;
+        let target = plan
+            .sentences()
+            .get(sentence as usize)
+            .ok_or_else(|| Error::InvalidOptions("sentence is outside the original plan".into()))?
+            .segments()
+            .start as u32;
+        let mut gate = lock(&owner.shared.gate);
+        if gate.closed {
+            return Err(Error::Closed);
+        }
+        let current = gate.active.as_ref().is_some_and(|c| c.id() == self.id());
+        let idle = gate.pending.is_empty()
+            && gate
+                .active
+                .as_ref()
+                .is_none_or(|c| lock(&c.state).snapshot.completion.is_some());
+        if !current && !idle {
+            return Err(Error::NotCurrentSpeech);
+        }
+        let retained = lock(&self.control.retained).clone();
+        let frame = lock(&self.control.markers)
+            .iter()
+            .find(|&&(_, id)| id == target)
+            .map(|&(frame, _)| frame)
+            .filter(|&frame| retained.as_ref().is_some_and(|s| s.frames() > frame));
+        let (options, completed) = {
+            let mut state = lock(&self.control.state);
+            if state.snapshot.cancellation.is_some()
+                || matches!(
+                    state.snapshot.completion.as_ref().map(|c| &c.outcome),
+                    Some(Outcome::Cancelled { .. } | Outcome::Failed { .. })
+                )
+            {
+                return Err(Error::Closed);
+            }
+            if let Some(frame) = frame
+                && state.snapshot.completion.is_none()
+            {
+                if !owner.factory.capabilities().rebase {
+                    return Err(Error::UnsupportedCapability("seek/rebase"));
+                }
+                state.seek_to = Some(frame);
+                owner.shared.changed.notify_all();
+                return Ok(Navigation::Seeked { frame });
+            }
+            (
+                SpeechOptions {
+                    playback_rate: state.desired.rate,
+                    volume: state.desired.volume,
+                    paused: state.desired.paused,
+                    retain_audio: retained.is_some(),
+                    lookahead_frames: self.control.lookahead_frames,
+                },
+                state.snapshot.completion.is_some(),
+            )
+        };
+        owner.validate(options)?;
+        owner.admit(&gate, self.control.job.request().text().len())?;
+        let next = if let Some(frame) = frame.filter(|_| completed) {
+            Control::new(
+                self.control.job.clone(),
+                owner.queue.reserve_id()?,
+                options,
+                retained,
+                Some(frame),
+                lock(&self.control.markers).clone(),
+            )
+        } else {
+            let request = self.control.job.request().at_sentence(plan, sentence)?;
+            let job = owner.queue.create(request)?;
+            let retained = options
+                .retain_audio
+                .then(|| owner.retention.create(job.snapshot().format))
+                .transpose()?;
+            Control::new(job.clone(), job.id(), options, retained, None, Vec::new())
+        };
+        self.control.cancel(CancelReason::Navigation);
+        gate.pending.push_front(next.clone());
+        owner.shared.changed.notify_all();
+        Ok(Navigation::Started(Speech {
+            control: next,
+            owner: Arc::downgrade(&owner),
+        }))
+    }
+    /// Cancel/join this request and release this handle's retained recording.
+    /// Other replay handles retain their own shared reference. Blocking Rust
+    /// disposal belongs off UI/event-loop threads; the final outcome is preserved.
+    pub fn dispose(&self) -> Result<()> {
+        self.cancel();
+        while self.wait(Duration::from_millis(50)).is_none() {}
+        let retained = lock(&self.control.retained).take();
+        drop(retained);
+        self.snapshot();
+        Ok(())
     }
     fn command(
         &self,

@@ -332,6 +332,13 @@ impl SynthesisJob {
     pub fn plan(&self) -> Option<Arc<TextPlan>> {
         lock(&self.lease.control.state).plan.clone()
     }
+    /// Original immutable request, including backend settings and voice resolution.
+    pub fn request(&self) -> &Request {
+        &self.lease.control.request
+    }
+    pub(crate) fn chunk_frames(&self) -> usize {
+        self.lease.control.limits.chunk_frames()
+    }
     /// Cancel without waiting for native inference. Completion waits for quiescence.
     pub fn cancel(&self) {
         self.cancel_with(CancelReason::Requested);

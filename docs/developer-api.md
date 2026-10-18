@@ -165,6 +165,10 @@ Seek is valid only inside retained ranges. A seek outside them returns an explic
 result without moving playback. Valid seeks flush/invalidate old scheduled audio,
 rebase the output clock and feed the retained store from the requested frame.
 Seeking while paused remains paused. Seeking never re-synthesizes retained PCM.
+The retained endpoint is a valid cursor as well. After playback has completed,
+`replay_from` returns a new `Speech` sharing the recording; the original outcome
+stays immutable and the new `done` represents the replay's actual drain. State
+subscriptions end with their request and callers observe the new replay handle.
 
 Previous/next sentence use sentence IDs from the plan, including sentences split
 into several model segments. Navigation to ungenerated text is an explicit new
@@ -172,6 +176,10 @@ speech request from that plan position, with original source mappings and seeds;
 the previous handle terminates as navigation-cancelled. It does not pretend that
 ungenerated text has a known time offset. Optional duration-only planning can
 predict a whole request; final PCM duration always remains authoritative.
+Navigation returns an explicit retained seek, new speech handle, or document
+boundary. Pending requests retain their order behind a new navigation request;
+an older handle cannot navigate over another current speech. See the
+[reader API](reader-api.md) for budgets, ownership and qualification.
 
 ## Rendering and errors
 
