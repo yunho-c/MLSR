@@ -36,6 +36,10 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// The selected output/device cannot provide an explicitly requested feature.
+    UnsupportedCapability(&'static str),
+    /// Native audio output failed independently of inference.
+    Output(String),
     /// Structured high-level request failure, preserving its category and stage.
     OperationFailed(crate::completion::Failure),
     /// A finite queue, memory or storage budget would be exceeded.
@@ -98,6 +102,8 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedCapability(name) => write!(f, "unsupported_capability: {name}"),
+            Self::Output(message) => write!(f, "output_failed: {message}"),
             Self::OperationFailed(error) => error.fmt(f),
             Self::LimitExceeded { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::VoiceUnavailable(message) => write!(f, "voice_unavailable: {message}"),
@@ -122,6 +128,8 @@ impl Error {
     /// Stable machine-readable category for foreign-language adapters.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::UnsupportedCapability(_) => "unsupported_capability",
+            Self::Output(_) => "output_failed",
             Self::OperationFailed(error) => error.category,
             Self::LimitExceeded { kind, .. } => kind.as_str(),
             Self::VoiceUnavailable(_) => "voice_unavailable",

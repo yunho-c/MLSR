@@ -22,6 +22,9 @@ pub(crate) struct Queue {
     worker: Mutex<Option<JoinHandle<()>>>,
 }
 impl Queue {
+    pub(crate) fn chunk_frames(&self) -> usize {
+        self.options.job.chunk_frames()
+    }
     pub(crate) fn new(engine: Engine, options: QueueOptions) -> Result<Arc<Self>> {
         options.validate()?;
         let engine = Arc::new(engine);

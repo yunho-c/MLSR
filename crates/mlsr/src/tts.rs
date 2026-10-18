@@ -6,13 +6,15 @@ use crate::{
     completion::{Failure, FailureStage, Outcome},
     engine::Engine,
     error::{Error, LimitKind, Result},
+    output::{AudioPolicy, OutputFactory},
     request::Request,
+    speech::{SpeakMode, Speech, SpeechController, SpeechOptions},
     synthesis::{AudioPoll, Queue, QueueOptions, SynthesisJob},
     voice::VoiceCatalog,
 };
 use std::{
     path::Path,
-    sync::{Arc, Condvar, Mutex},
+    sync::{Arc, Condvar, Mutex, Weak},
     time::Duration,
 };
 
@@ -47,6 +49,11 @@ struct Operations {
     state: Mutex<(bool, usize)>,
     changed: Condvar,
 }
+struct Controllers {
+    closed: bool,
+    default: Option<SpeechController>,
+    owners: Vec<Weak<crate::speech::Owner>>,
+}
 struct Operation<'a>(&'a Operations);
 impl Drop for Operation<'_> {
     fn drop(&mut self) {
@@ -61,6 +68,8 @@ pub struct Tts {
     queue: Arc<Queue>,
     operations: Operations,
     close: Mutex<()>,
+    output: Option<(Arc<dyn OutputFactory>, AudioPolicy)>,
+    controllers: Mutex<Controllers>,
 }
 impl Tts {
     /// Load a verified model handle and return only when its engine is ready.
@@ -82,7 +91,72 @@ impl Tts {
                 changed: Condvar::new(),
             },
             close: Mutex::new(()),
+            output: None,
+            controllers: Mutex::new(Controllers {
+                closed: false,
+                default: None,
+                owners: Vec::new(),
+            }),
         })
+    }
+    /// Construct with optional reusable output. The factory is opened lazily by
+    /// the first active speech, on the controller thread, never by headless render.
+    pub fn with_output(
+        engine: Engine,
+        options: QueueOptions,
+        factory: Arc<dyn OutputFactory>,
+        policy: AudioPolicy,
+    ) -> Result<Self> {
+        let mut owner = Self::new(engine, options)?;
+        owner.output = Some((factory, policy));
+        Ok(owner)
+    }
+    fn make_controller(&self, controllers: &mut Controllers) -> Result<SpeechController> {
+        if controllers.closed {
+            return Err(Error::Closed);
+        }
+        let (factory, policy) = self
+            .output
+            .as_ref()
+            .ok_or(Error::UnsupportedCapability("no audio output configured"))?;
+        controllers.owners.retain(|weak| weak.strong_count() != 0);
+        if controllers.owners.len() >= 16 {
+            return Err(Error::LimitExceeded {
+                kind: LimitKind::RequestQueue,
+                message: "at most 16 live speech controllers per Tts".into(),
+            });
+        }
+        let controller = SpeechController::new(self.queue.clone(), factory.clone(), *policy)?;
+        controllers.owners.push(Arc::downgrade(&controller.owner));
+        Ok(controller)
+    }
+    /// Reusable default controller used by speak; opens no output until playback.
+    pub fn speech_controller(&self) -> Result<SpeechController> {
+        let mut controllers = lock(&self.controllers);
+        if controllers.closed {
+            return Err(Error::Closed);
+        }
+        if let Some(controller) = &controllers.default {
+            return Ok(controller.clone());
+        }
+        let controller = self.make_controller(&mut controllers)?;
+        controllers.default = Some(controller.clone());
+        Ok(controller)
+    }
+    /// Another independently scoped speech queue sharing this owner's engine.
+    /// Replacing speech on it does not cancel renders or any other controller.
+    pub fn create_speech_controller(&self) -> Result<SpeechController> {
+        self.make_controller(&mut lock(&self.controllers))
+    }
+    /// Convenient speech submission through the default controller. It snapshots
+    /// request/settings and returns a handle before generation/output startup.
+    pub fn speak(
+        &self,
+        request: Request,
+        options: SpeechOptions,
+        mode: SpeakMode,
+    ) -> Result<Speech> {
+        self.speech_controller()?.speak(request, options, mode)
     }
     /// Read loaded voice metadata without consuming the inference lane.
     pub fn voices(&self) -> Result<VoiceCatalog> {
@@ -233,6 +307,21 @@ impl Tts {
     pub fn close(&self) -> Result<()> {
         let _close = lock(&self.close);
         lock(&self.operations.state).0 = true;
+        let owners = {
+            let mut controllers = lock(&self.controllers);
+            controllers.closed = true;
+            controllers
+                .owners
+                .iter()
+                .filter_map(Weak::upgrade)
+                .collect::<Vec<_>>()
+        };
+        let mut output_error = None;
+        for owner in owners {
+            if let Err(error) = owner.close() {
+                output_error.get_or_insert(error);
+            }
+        }
         let result = self.queue.close();
         let mut state = lock(&self.operations.state);
         while state.1 != 0 {
@@ -242,7 +331,11 @@ impl Tts {
                 .wait(state)
                 .unwrap_or_else(|p| p.into_inner());
         }
-        result
+        result?;
+        match output_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 }
 impl Drop for Tts {

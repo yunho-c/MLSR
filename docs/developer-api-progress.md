@@ -9,7 +9,7 @@ must not be marked complete merely because a subset of tests passes.
 | 1 | Developer contracts and Apple clock/completion/rate spike | Complete | [Contract](developer-api.md), [native probe and limitations](playback-probe.md), `tests/fixtures/developer-api/playback-probe.json` |
 | 2 | Voice catalog/resolution and frozen Unicode segment plans | Complete | [Rust API and validation](voices-and-text-plans.md); SDK translations in step 7 |
 | 3 | Shared render/stream/WAV APIs with state and completion | Complete | [Shared Rust facade and qualification](headless-sdk.md); SDK translations in step 7 |
-| 4 | Shared speech handles, bounded scheduler and state machine | Pending | |
+| 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
 | 5 | Reusable native Apple playback and host policy adapter | Pending | |
 | 6 | Retention, seeking, reader timeline and navigation | Pending | |
 | 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | Pending | |
@@ -38,11 +38,11 @@ primitive or the older demonstration already supports part of it.
 | RENDER-01 | Bounded in-memory AudioClip with format/frame metadata | Rust complete: render limit and real PCM tests; SDK translation pending |
 | RENDER-02 | Shared incremental WAV output, no clobber, owned partial cleanup | Rust/CLI complete: WAV and consumer tests; SDK translation pending |
 | RENDER-03 | Cancellation/disk/quota failures propagate; parity across bindings | Rust failure paths and native PCM parity complete; cross-binding parity pending |
-| SESSION-01 | Immediate per-request Speech handle, immutable outcome exactly once | Pending |
-| SESSION-02 | Replace scope, enqueue order, bounded queue count/text bytes | Pending |
-| SESSION-03 | Queued cancellation, old callback rejection, close/join races | Pending |
-| STATE-01 | Independent synthesis/playback states; buffering is not completion | Pending |
-| STATE-02 | Late/current snapshot, bounded paused/slow subscribers, retained terminal | Pending |
+| SESSION-01 | Immediate per-request Speech handle, immutable outcome exactly once | Rust complete: speech tests including the controlled final-completion race; SDK translation pending |
+| SESSION-02 | Replace scope, enqueue order, bounded queue count/text bytes | Rust complete: synthesis/speech tests including admission failure preservation; SDK translation pending |
+| SESSION-03 | Queued cancellation, old callback rejection, close/join races | Rust deterministic tests complete; native output and SDK integration pending |
+| STATE-01 | Independent synthesis/playback states; buffering is not completion | Rust complete: delayed drain output test; native qualification pending |
+| STATE-02 | Late/current snapshot, bounded paused/slow subscribers, retained terminal | Rust complete: revision-only watches and late/drop tests; language async buffering pending |
 | OUTPUT-01 | Optional output dependency and native PCM path for all bindings | Pending |
 | OUTPUT-02 | Bounded enqueue, independent flush/cancel path | Pending |
 | OUTPUT-03 | Pause/resume clock and final played-back completion | Pending |

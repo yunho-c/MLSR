@@ -36,7 +36,7 @@ pub enum FailureStage {
     Retention,
 }
 /// Cloneable structured error retained by a request after native cleanup.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Failure {
     /// Stable request identity.
     pub request_id: u64,
@@ -71,7 +71,7 @@ impl fmt::Display for Failure {
 }
 impl std::error::Error for Failure {}
 /// Immutable final request outcome.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Outcome {
     /// Selected consumer completed successfully (speech also drained output).
@@ -88,7 +88,7 @@ pub enum Outcome {
     },
 }
 /// Exactly-once final result; handles retain it independently of event delivery.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Completion {
     /// Stable request identity.
     pub request_id: u64,
