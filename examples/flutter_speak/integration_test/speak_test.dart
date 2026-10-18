@@ -1,22 +1,36 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-// The diagnostic counts native registry entries; this is intentionally a test.
+// Native registry counts are diagnostic test-only evidence.
 // ignore: implementation_imports
 import 'package:mlsr/src/bindings.g.dart' as native;
 import 'package:mlsr_speak/main.dart';
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_speak/speech_controller.dart';
 
+int wavFrames(Uint8List bytes) {
+  final view = ByteData.sublistView(bytes);
+  for (var offset = 12; offset + 8 <= bytes.length;) {
+    final length = view.getUint32(offset + 4, Endian.little);
+    if (String.fromCharCodes(bytes.sublist(offset, offset + 4)) == 'data') {
+      expect(offset + 8 + length, lessThanOrEqualTo(bytes.length));
+      return length ~/ 4;
+    }
+    offset += 8 + length + (length & 1);
+  }
+  throw StateError('WAV has no data chunk');
+}
+
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
-  testWidgets('real voices, responsive UI, bounded playback, stop/reuse and WAV', (
+  testWidgets('public SDK speak, reader and export keep the UI responsive', (
     tester,
   ) async {
     const output = String.fromEnvironment('MLSR_TEST_OUTPUT');
@@ -24,7 +38,7 @@ void main() {
     final directory = Directory(output);
     expect(await directory.exists(), isFalse);
     await directory.create(recursive: true);
-    final speech = SpeechController(muted: true);
+    final speech = DemoController(muted: true);
     final handles = native.mlsr_live_handles();
     await tester.pumpWidget(SpeakApp(controller: speech));
     await tester.pumpAndSettle();
@@ -36,7 +50,12 @@ void main() {
       lastTick = now;
       ticks++;
     });
-    final report = <String, Object?>{'passed': false, 'muted': true};
+    final report = <String, Object?>{
+      'passed': false,
+      'muted': true,
+      'timing_boundary':
+          'UI observation at 20 ms pump intervals; not acoustic or native flush timing',
+    };
     Future<void> until(bool Function() done) async {
       final deadline = DateTime.now().add(const Duration(seconds: 90));
       while (!done()) {
@@ -46,8 +65,6 @@ void main() {
         await tester.pump(const Duration(milliseconds: 20));
         await Future<void>.delayed(const Duration(milliseconds: 5));
       }
-      // Publish the final controller state before the next UI action. In
-      // particular, stop makes the editor writable on the next Flutter frame.
       await tester.pump();
     }
 
@@ -60,6 +77,13 @@ void main() {
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
       await File('$output/$name.png').writeAsBytes(bytes!.buffer.asUint8List());
       image.dispose();
+    }
+
+    Future<void> tap(String key) async {
+      final finder = find.byKey(Key(key));
+      await tester.ensureVisible(finder);
+      await tester.tap(finder);
+      await tester.pump();
     }
 
     try {
@@ -77,76 +101,139 @@ void main() {
         find.byKey(const Key('script')),
         List.filled(12, english).join('\n'),
       );
-      await tester.tap(find.byKey(const Key('speak')));
+      final onset = Stopwatch()..start();
+      await tap('speak');
       await until(() => speech.generatedFrames >= 8192 || speech.error != null);
       expect(speech.error, isNull);
-      final playing = await speech.player.state();
-      expect(playing['queuedFrames'] as int, inInclusiveRange(1, 22050));
-      expect(playing['peakQueuedFrames'] as int, lessThanOrEqualTo(22050));
-      expect(playing['pendingFrames'] as int, lessThanOrEqualTo(4096));
-      report['playing'] = playing;
+      report['first_retained_pcm_observed_ms'] =
+          onset.elapsedMicroseconds / 1000;
+      await until(() => speech.playedFrames > 0 || speech.error != null);
+      report['first_position_observed_ms'] = onset.elapsedMicroseconds / 1000;
+      final retained = (await speech.engineState()).retention;
+      expect(retained.usedBytes, lessThanOrEqualTo(128 * 1024 * 1024));
+      report['retained_peak_bytes'] = retained.peakBytes;
       await screenshot('playing');
       final stopping = Stopwatch()..start();
-      await tester.tap(find.byKey(const Key('stop')));
-      // This query is queued directly after stop on the native audio queue;
-      // no inference-worker wait or controller completion is needed to flush.
-      final stopped = await speech.player.state();
-      report['stop_to_playback_flush_ms'] = stopping.elapsedMicroseconds / 1000;
-      expect(stopped['queuedFrames'], 0);
-      expect(stopped['active'], isFalse);
+      await tap('stop');
       await until(() => !speech.speaking);
-      report['stop_to_controller_idle_ms'] =
+      report['cancel_to_terminal_observed_ms'] =
           stopping.elapsedMicroseconds / 1000;
-      report['stopped'] = stopped;
+      expect(speech.state!.completion!.reason, CancelReason.requested);
+      expect(speech.canExport, isFalse);
       expect(speech.error, isNull);
-      expect(
-        speech.wav,
-        isNull,
-        reason: 'Stopped partial audio must not be exportable',
-      );
-      // Reuse the same engine and exercise real, muted AVAudioEngine playback to
-      // its completion callback, separately from the synthesis terminal event.
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<TextField>(find.byKey(const Key('script'))).readOnly,
-        isFalse,
-      );
-      // A desktop button takes focus. showKeyboard caches the EditableText
-      // identity, so tap the editor again just as a user would before typing.
-      await tester.tap(find.byKey(const Key('script')));
-      await tester.pump();
-      await tester.enterText(
-        find.byKey(const Key('script')),
+
+      // Native admission and replace behavior with rapid calls from the UI layer.
+      final replaced = speech.speak(
+        'Replace this request.',
+        'en',
+        'M1',
+        paused: true,
+      )!;
+      final current = speech.speak(
         'Hello from MLSR.',
+        'en',
+        'M1',
+        paused: true,
+      )!;
+      expect((await replaced.done).reason, CancelReason.replaced);
+      final queued = speech.speak(
+        'A queued sentence.',
+        'en',
+        'F1',
+        mode: SpeakMode.enqueue,
+      )!;
+      queued.cancel();
+      expect((await queued.done).reason, CancelReason.requested);
+      await until(
+        () =>
+            (speech.generatedFrames > 8192 && speech.paused) ||
+            speech.error != null,
       );
-      expect(
-        tester
-            .widget<TextField>(find.byKey(const Key('script')))
-            .controller!
-            .text,
-        'Hello from MLSR.',
-      );
-      await tester.tap(find.byKey(const Key('speak')));
-      await until(() => speech.wav != null || speech.error != null);
       expect(speech.error, isNull);
+      final pausedPosition = speech.playedFrames;
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(speech.playedFrames, pausedPosition);
+      speech.setRate(1.5);
+      speech.setVolume(.4);
+      speech.seek(4096);
+      await until(() => speech.playedFrames == 4096);
+      expect(speech.state!.playbackRate, 1.5);
+      await tap('pause');
+      await until(() => !speech.generating || speech.error != null);
       report['generation_finished_while_playing'] = speech.speaking;
       await until(() => !speech.speaking);
+      expect((await current.done).kind, OutcomeKind.completed);
+      expect(speech.error, isNull);
       expect(speech.playedFrames, speech.generatedFrames);
       final exportPath = '$output/hello.wav';
       await speech.exportTo(exportPath);
       final wav = await File(exportPath).readAsBytes();
-      expect(wav.length, 56 + speech.generatedFrames * 4);
+      expect(wavFrames(wav), speech.generatedFrames);
       report['wav_frames'] = speech.generatedFrames;
       await expectLater(
         speech.exportTo(exportPath),
-        throwsA(isA<FileSystemException>()),
+        throwsA(isA<SynthesisException>()),
       );
       expect(await File(exportPath).readAsBytes(), wav);
       await screenshot('completed');
-      final koreanRun = speech.speak('안녕하세요. 반갑습니다.', 'ko', 'F1');
-      await until(() => speech.speaking);
+      // Completed seek is a new retained replay identity, not a rewritten outcome.
+      final oldId = speech.speech!.id;
+      speech.seek(4096);
+      expect(speech.speech!.id, isNot(oldId));
+      await until(() => speech.paused && speech.playedFrames == 4096);
+      speech.togglePause();
       await until(() => !speech.speaking);
-      await koreanRun;
+
+      final unsupported = speech.speak('안녕하세요 👩🏽‍💻.', 'ko', 'F1')!;
+      await expectLater(
+        unsupported.done,
+        throwsA(
+          isA<SynthesisException>().having(
+            (error) => error.code,
+            'code',
+            'unsupported_character',
+          ),
+        ),
+      );
+      await until(() => speech.error != null);
+      expect(speech.canExport, isFalse);
+      report['unsupported_character_rejected'] = true;
+      final koreanRun = speech.speak(
+        '😀 안녕하세요.\nCafe\u0301 and hello.',
+        'ko',
+        'F1',
+        paused: true,
+      )!;
+      await until(
+        () =>
+            (speech.generatedFrames > 8192 && speech.paused) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      final plan = (await koreanRun.plan())!;
+      expect(plan.original, speech.original);
+      for (final segment in plan.segments) {
+        expect(
+          plan.original.substring(segment.utf16.start, segment.utf16.end),
+          segment.original,
+        );
+      }
+      await screenshot('reader');
+      speech.navigate(next: true);
+      await until(
+        () =>
+            speech.state?.activeTextRange?.sentenceId == 1 ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      speech.navigate(next: false);
+      await until(
+        () =>
+            speech.state?.activeTextRange?.sentenceId == 0 ||
+            speech.error != null,
+      );
+      speech.togglePause();
+      await until(() => !speech.speaking);
       expect(speech.error, isNull);
       expect(speech.generatedFrames, greaterThan(44100));
       await speech.exportTo('$output/korean.wav');
@@ -164,7 +251,6 @@ void main() {
       report['passed'] = true;
     } catch (failure) {
       report['failure'] = failure.toString();
-      report['failure_player'] = await speech.player.state();
       report['failure_generated_frames'] = speech.generatedFrames;
       report['failure_played_frames'] = speech.playedFrames;
       rethrow;

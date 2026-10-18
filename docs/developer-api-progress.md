@@ -11,8 +11,8 @@ must not be marked complete merely because a subset of tests passes.
 | 3 | Shared render/stream/WAV APIs with state and completion | Complete | [Shared Rust facade and qualification](headless-sdk.md); SDK translations in step 7 |
 | 4 | Shared speech handles, bounded scheduler and state machine | Complete | [Controller and deterministic output tests](speech-controller.md); native output in step 5 |
 | 5 | Reusable native Apple playback and host policy adapter | Complete | [Native adapter and qualification](apple-output.md); language wiring in step 7 |
-| 6 | Retention, seeking, reader timeline and navigation | Complete | [Reader API, storage limits and native qualification](reader-api.md); SDK translation pending |
-| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | In progress | [Additive C ABI](developer-c-api.md), Python synchronous/asyncio and Go context/stream facades pass portable and real Core ML/native playback tests (Go race detector); Dart relocated-package and Core ML/native reader tests pass; Flutter verified loader added, example migration pending |
+| 6 | Retention, seeking, reader timeline and navigation | Complete | [Reader API, storage limits and native qualification](reader-api.md); SDKs expose the shared behavior; full acceptance qualification in step 8 |
+| 7 | Public Rust/C/Dart/Go/Python SDKs and Flutter migration | Complete | [Additive C ABI](developer-c-api.md), all three SDKs pass portable and real Core ML/native playback tests; Flutter uses shared Tts/Speech for scheduling, playback, reader controls and WAV export. Verified model ownership/readiness is exposed in all bindings. Installed release acceptance remains step 8. |
 | 8 | Three examples, installed-package and full acceptance qualification | Pending | |
 
 ## Requirement checklist
@@ -53,7 +53,7 @@ primitive or the older demonstration already supports part of it.
 | TIME-02 | Seek during generation/completion/pause; invalid seek preserves position | Rust/native seeks pass, including playing/paused and completed-generation; completed recording replay gets a new Speech sharing PCM |
 | TIME-03 | Original-text highlight follows presented audio through rate/seek changes | Original UTF-8/UTF-16 reader tests and native seek/rate/replay pass; SDK translation pending |
 | TIME-04 | Previous/next sentence and explicit ungenerated-text navigation | Long-sentence boundaries, frozen-plan suffixes, stale-handle rejection and native exact PCM pass; SDK translation pending |
-| SDK-01 | Flutter uses public SDK without a duplicate speech/session implementation | Pending |
+| SDK-01 | Flutter uses public SDK without a duplicate speech/session implementation | Complete: DemoController observes public handles; no PCM channel, native app player or WAV serializer; real speak/reader/export integration passes |
 | SDK-02 | Existing offline bundled model delivery and release sandbox preserved | Pending |
 | EXAMPLE-01 | Speak button: rapid replace/enqueue/cancel | Pending |
 | EXAMPLE-02 | Reader: pause/rate/volume/seek/highlight/navigation | Pending |

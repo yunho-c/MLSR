@@ -40,3 +40,4 @@ hooks:
   user_defines:
     mlsr:
       coreml: true
+      apple-output: true
