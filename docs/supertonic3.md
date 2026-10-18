@@ -144,7 +144,7 @@ Audio exposes samples, sample rate, channels, frame count, and duration. Samples
 are finite Float32 values with no clipping or loudness normalization. They remain
 valid after engine shutdown, destruction, or subsequent synthesis.
 
-The example in `engine.rs` is compiled as a Rust documentation test. The opt-in
+The opt-in
 `engine_reuses_models_and_returns_independent_audio` test executes English/Korean
 requests through this API and checks model reuse and audio lifetime.
 
@@ -168,9 +168,11 @@ Failures do not leave a partial output WAV. The destination directory must exist
 they do not alter preprocessing or model math. The CLI and Rust engine need no
 Python interpreter and never download assets.
 
-The public C ABI and language bindings still expose version queries. Streaming,
-jobs/cancellation, long-text splitting, playback, physical iOS qualification,
-additional runtimes, and performance/quality studies are subsequent milestones.
+The synchronous API remains a single-segment operation. For paragraphs and
+cancellation, use the [Rust job API](jobs.md), which streams bounded PCM and
+preserves original UTF-8 source ranges. The public C ABI and language bindings
+still expose version queries. Playback, physical iOS qualification, additional
+runtimes, and performance/quality studies are subsequent milestones.
 
 ## Recorded qualification
 

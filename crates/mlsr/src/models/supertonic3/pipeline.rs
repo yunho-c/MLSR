@@ -10,6 +10,17 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
+pub(crate) trait SynthesisObserver {
+    fn checkpoint(&self) -> Result<()> {
+        Ok(())
+    }
+    fn planned(&mut self, _plan: &SynthesisPlan) -> Result<()> {
+        Ok(())
+    }
+}
+struct Unobserved;
+impl SynthesisObserver for Unobserved {}
+
 struct NativeVoice {
     ttl: Tensor,
     dp: Tensor,
@@ -147,7 +158,7 @@ impl Pipeline {
         voice: &str,
         options: SynthesisOptions,
     ) -> Result<SynthesisOutput> {
-        self.run(text, language, voice, options, None, false)
+        self.run(text, language, voice, options, None, false, &mut Unobserved)
             .map(|(output, _)| output)
     }
     /// Execute the same pipeline while recording all intermediates. A supplied
@@ -161,7 +172,35 @@ impl Pipeline {
         options: SynthesisOptions,
         saved_noise: Option<HostTensor>,
     ) -> Result<(SynthesisOutput, Diagnostics)> {
-        self.run(text, language, voice, options, saved_noise, true)
+        self.run(
+            text,
+            language,
+            voice,
+            options,
+            saved_noise,
+            true,
+            &mut Unobserved,
+        )
+    }
+    pub(crate) fn synthesize_controlled(
+        &mut self,
+        text: &str,
+        language: &str,
+        voice: &str,
+        options: SynthesisOptions,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisOutput> {
+        self.run(text, language, voice, options, None, false, observer)
+            .map(|(output, _)| output)
+    }
+    pub(crate) fn segments(
+        &self,
+        text: &str,
+        language: &str,
+        voice: &str,
+    ) -> Result<Vec<crate::text::TextSegment>> {
+        self.bundle.voice(voice)?;
+        self.bundle.segment_text(text, language)
     }
     /// Available bundled voices.
     pub fn voices(&self) -> impl Iterator<Item = &str> {
@@ -205,6 +244,7 @@ impl Pipeline {
         }
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)]
     fn run(
         &mut self,
         text: &str,
@@ -213,7 +253,9 @@ impl Pipeline {
         options: SynthesisOptions,
         saved_noise: Option<HostTensor>,
         diagnostic: bool,
+        observer: &mut dyn SynthesisObserver,
     ) -> Result<(SynthesisOutput, Diagnostics)> {
+        observer.checkpoint()?;
         let encoded = self.bundle.encode_text(text, language)?;
         let host_voice = self.bundle.voice(voice)?;
         let native_voice = &self.voices[voice];
@@ -224,6 +266,7 @@ impl Pipeline {
         trace.record(diagnostic, "style_dp", host_voice.style_dp());
         let ids = self.session.upload(encoded.ids().clone())?;
         let text_mask = self.session.upload(encoded.mask().clone())?;
+        observer.checkpoint()?;
         let duration = self.predict(
             "duration_predictor",
             &[
@@ -234,8 +277,11 @@ impl Pipeline {
             "duration",
             &[1],
         )?;
+        observer.checkpoint()?;
         let raw = self.session.read(&duration)?;
         let plan = SynthesisPlan::from_duration(floats(&raw, "duration")?[0], options)?;
+        observer.planned(&plan)?;
+        observer.checkpoint()?;
         trace.record(diagnostic, "duration_raw", &raw);
         trace.record(diagnostic, "duration", &scalar(plan.duration_seconds())?);
         let prepared = match saved_noise {
@@ -248,6 +294,7 @@ impl Pipeline {
         trace.record(diagnostic, "ve_latent_mask", prepared.padded_mask());
         let mut latent = self.session.upload(prepared.padded_noise().clone())?;
         let latent_mask = self.session.upload(prepared.padded_mask().clone())?;
+        observer.checkpoint()?;
         let embedding = self.predict(
             "text_encoder",
             &[
@@ -258,6 +305,7 @@ impl Pipeline {
             "text_emb",
             &[1, 256, 128],
         )?;
+        observer.checkpoint()?;
         self.snapshot(diagnostic, &mut trace, "text_emb", &embedding)?;
         let total = scalar(options.steps() as f32)?;
         trace.record(diagnostic, "total_step", &total);
@@ -274,6 +322,7 @@ impl Pipeline {
         let bucket = plan.latent_bucket();
         let model = &self.models[&format!("ve_{bucket}")];
         for step in 0..options.steps() {
+            observer.checkpoint()?;
             self.session
                 .write(&mut self.current_step, scalar(step as f32)?)?;
             let inputs = [
@@ -295,6 +344,7 @@ impl Pipeline {
             } else {
                 self.session.predict(model, &inputs, &["denoised_latent"])?
             };
+            observer.checkpoint()?;
             // This export returns the updated state, including integration.
             // No extra Euler update or guidance operation belongs in Rust.
             latent = outputs
@@ -321,12 +371,14 @@ impl Pipeline {
         let vocoder_host = HostTensor::new(vec![1, 144, length], TensorData::F32(cropped))?;
         trace.record(diagnostic, "vocoder_input", &vocoder_host);
         let vocoder_input = self.session.upload(vocoder_host)?;
+        observer.checkpoint()?;
         let wav = self.predict(
             "vocoder",
             &[("latent", &vocoder_input)],
             "wav",
             &[1, length * 3072],
         )?;
+        observer.checkpoint()?;
         let wav = self.session.read(&wav)?;
         let samples = floats(&wav, "waveform")?;
         let pcm = samples[..plan.requested_frames().min(samples.len())].to_vec();
@@ -337,6 +389,7 @@ impl Pipeline {
                 HostTensor::new(vec![pcm.len()], TensorData::F32(pcm.clone()))?,
             );
         }
+        observer.checkpoint()?;
         Ok((
             SynthesisOutput {
                 audio: Audio::mono(pcm, 44100)?,

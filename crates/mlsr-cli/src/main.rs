@@ -136,7 +136,7 @@ fn run(cli: Cli) -> Result<()> {
             if args.output.symlink_metadata().is_ok() {
                 return Err(format!("output already exists: {}", args.output.display()).into());
             }
-            let mut engine = Engine::load(
+            let engine = Engine::load(
                 &args.assets.manifest,
                 &args.assets.bundle,
                 EngineOptions {

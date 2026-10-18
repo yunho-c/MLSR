@@ -1,54 +1,152 @@
-//! A synchronous Rust text-to-PCM engine with persistent native resources.
-//!
-//! ```no_run
-//! use mlsr::{config::{EngineOptions, SynthesisOptions}, engine::{Engine, SynthesisRequest}};
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut engine = Engine::load("manifest.yaml", "/path/to/bundle", EngineOptions::default())?;
-//! let speech = engine.synthesize(SynthesisRequest {
-//!     text: "Hello from MLSR.", language: "en", voice: "M1",
-//!     options: SynthesisOptions::default(),
-//! })?;
-//! println!("{} frames at {} Hz", speech.audio().frames(), speech.audio().sample_rate());
-//! engine.shutdown()?;
-//! // speech still owns its audio after shutdown.
-//! # Ok(())
-//! # }
-//! ```
-use crate::{
-    config::{EngineOptions, SynthesisOptions},
-    error::Result,
-    models::supertonic3::{Bundle, Pipeline},
-    runtime::SessionStats,
-};
-use std::path::Path;
-
+//! Persistent synthesis engine with bounded pull jobs and synchronous convenience.
+//! The orchestration worker owns the pipeline; its runtime worker owns Core ML.
 pub use crate::models::supertonic3::SynthesisOutput;
+use crate::{
+    audio::Audio,
+    config::{EngineOptions, JobOptions, MAX_TEXT_BYTES, SynthesisOptions},
+    error::{Error, InputErrorKind, Result},
+    job::{Control, Job, JobReport, Outcome, SegmentInfo, lock},
+    models::supertonic3::{Bundle, Pipeline, SynthesisObserver, SynthesisPlan},
+    runtime::SessionStats,
+    text::TextSegment,
+};
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    path::Path,
+    sync::{
+        Arc, Mutex,
+        mpsc::{self, Receiver, SyncSender},
+    },
+    thread::{self, JoinHandle},
+};
 
-/// Borrowed input for one synchronous call. Output owns any retained text/audio.
+/// Borrowed request. Starting a job copies strings before returning.
 #[derive(Clone, Copy, Debug)]
 pub struct SynthesisRequest<'a> {
-    /// Original UTF-8 text; it is never truncated.
+    /// Original UTF-8 text, up to 64 KiB; never truncated.
     pub text: &'a str,
     /// Model language tag, e.g. en or ko.
     pub language: &'a str,
     /// Bundled voice identifier, M1 or F1 in the first slice.
     pub voice: &'a str,
-    /// Validated speed, step count, and request-local seed.
+    /// Validated speed, steps, and seed. Segment n uses seed.wrapping_add(n).
     pub options: SynthesisOptions,
 }
+struct Request {
+    text: String,
+    language: String,
+    voice: String,
+    options: SynthesisOptions,
+}
+impl Request {
+    fn copy(input: SynthesisRequest<'_>) -> Result<Self> {
+        if input.text.len() > MAX_TEXT_BYTES {
+            return Err(Error::Input {
+                kind: InputErrorKind::InputTooLarge,
+                message: "raw UTF-8 exceeds 64 KiB".into(),
+            });
+        }
+        if input.language.len() > 16 || input.voice.len() > 64 {
+            return Err(Error::InvalidOptions(
+                "language/voice identifier too long".into(),
+            ));
+        }
+        Ok(Self {
+            text: input.text.into(),
+            language: input.language.into(),
+            voice: input.voice.into(),
+            options: input.options,
+        })
+    }
+}
+trait Backend: Send {
+    fn voices(&self) -> Vec<String>;
+    fn segments(&self, request: &Request) -> Result<Vec<TextSegment>>;
+    fn single(
+        &mut self,
+        request: &Request,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisOutput>;
+    fn segment(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<Audio>;
+    fn stats(&self) -> Result<SessionStats>;
+    fn shutdown(&mut self) -> Result<()>;
+}
+impl Backend for Pipeline {
+    fn voices(&self) -> Vec<String> {
+        self.voices().map(str::to_owned).collect()
+    }
+    fn segments(&self, request: &Request) -> Result<Vec<TextSegment>> {
+        self.segments(&request.text, &request.language, &request.voice)
+    }
+    fn single(
+        &mut self,
+        request: &Request,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisOutput> {
+        self.synthesize_controlled(
+            &request.text,
+            &request.language,
+            &request.voice,
+            request.options,
+            observer,
+        )
+    }
+    fn segment(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<Audio> {
+        let options = SynthesisOptions::new(
+            request.options.steps(),
+            request.options.speed(),
+            request.options.seed().wrapping_add(u64::from(segment.id)),
+        )?;
+        self.synthesize_controlled(
+            &segment.original,
+            &request.language,
+            &request.voice,
+            options,
+            observer,
+        )
+        .map(SynthesisOutput::into_audio)
+    }
+    fn stats(&self) -> Result<SessionStats> {
+        self.stats()
+    }
+    fn shutdown(&mut self) -> Result<()> {
+        self.shutdown()
+    }
+}
+enum Command {
+    Stream(Request, Arc<Control>),
+    Single(Request, Arc<Control>, SyncSender<Result<SynthesisOutput>>),
+    Stats(Arc<Control>, SyncSender<Result<SessionStats>>),
+    Shutdown,
+}
+struct State {
+    closed: bool,
+    next_id: u64,
+    active: Option<Arc<Control>>,
+}
 
-/// A loaded synthesis engine. Requires `coreml` on macOS/iOS for execution.
-///
-/// Reuse one engine for repeated requests. Calls need exclusive access, and
-/// native inference is synchronous. This version does not provide streaming,
-/// playback, jobs, or cancellation. Dropping the engine releases native resources
-/// and joins the worker; owned results remain valid independently.
+/// Loaded engine with one active operation. Concurrent submissions fail with
+/// Error::Busy. Jobs, chunks and cancellation tokens contain no native pointers.
+/// Drop/shutdown cancels active work, joins both workers, and leaves owned audio
+/// valid. Blocking methods belong off host-language UI/event-loop threads.
 pub struct Engine {
-    pipeline: Pipeline,
+    commands: SyncSender<Command>,
+    state: Arc<Mutex<State>>,
+    worker: Mutex<Option<JoinHandle<Result<()>>>>,
+    voices: Vec<String>,
 }
 impl Engine {
-    /// Verify all local assets, load the six Core ML graphs, and prepare buffers.
-    /// No Python interpreter, network access, or model conversion is involved.
+    /// Verify assets and load the persistent graphs once, without downloads.
     pub fn load(
         manifest: impl AsRef<Path>,
         bundle: impl AsRef<Path>,
@@ -56,36 +154,315 @@ impl Engine {
     ) -> Result<Self> {
         Self::from_bundle(Bundle::load(manifest, bundle)?, options)
     }
-    /// Load an already verified bundle, which must remain immutable while used.
+    /// Load a verified bundle, which must remain immutable while the engine lives.
     pub fn from_bundle(bundle: Bundle, options: EngineOptions) -> Result<Self> {
+        Self::with_backend(Box::new(Pipeline::load(
+            bundle,
+            options.compute_policy,
+            options.reuse_output_buffers,
+        )?))
+    }
+    fn with_backend(backend: Box<dyn Backend>) -> Result<Self> {
+        let voices = backend.voices();
+        let (commands, receiver) = mpsc::sync_channel(1);
+        let state = Arc::new(Mutex::new(State {
+            closed: false,
+            next_id: 1,
+            active: None,
+        }));
+        let shared = state.clone();
+        let worker = thread::Builder::new()
+            .name("mlsr-synthesis".into())
+            .spawn(move || worker(backend, receiver, shared))
+            .map_err(|e| Error::WorkerFailed(e.to_string()))?;
         Ok(Self {
-            pipeline: Pipeline::load(bundle, options.compute_policy, options.reuse_output_buffers)?,
+            commands,
+            state,
+            worker: Mutex::new(Some(worker)),
+            voices,
         })
     }
-    /// List bundled voices without copying their conditioning tensors.
+    /// Bundled voice identifiers, without copying native conditioning tensors.
     pub fn voices(&self) -> impl Iterator<Item = &str> {
-        self.pipeline.voices()
+        self.voices.iter().map(String::as_str)
     }
-    /// Generate complete owned PCM for one bounded utterance.
-    pub fn synthesize(&mut self, request: SynthesisRequest<'_>) -> Result<SynthesisOutput> {
-        self.pipeline.synthesize(
-            request.text,
-            request.language,
-            request.voice,
-            request.options,
-        )
+    fn submit(
+        &self,
+        options: JobOptions,
+        make: impl FnOnce(Arc<Control>) -> Command,
+    ) -> Result<Arc<Control>> {
+        let mut state = lock(&self.state);
+        if state.closed {
+            return Err(Error::Closed);
+        }
+        if state.active.is_some() {
+            return Err(Error::Busy);
+        }
+        let id = state.next_id;
+        state.next_id = id
+            .checked_add(1)
+            .ok_or_else(|| Error::WorkerFailed("job IDs exhausted".into()))?;
+        let control = Control::new(id, options);
+        state.active = Some(control.clone());
+        // At most one accepted request, so this bounded command slot is empty.
+        // Keep the gate locked until enqueue, preventing shutdown from overtaking it.
+        if self.commands.send(make(control.clone())).is_err() {
+            state.closed = true;
+            state.active = None;
+            return Err(Error::Closed);
+        }
+        Ok(control)
     }
-    /// Diagnostic resource/call counters, not physical-memory or device metrics.
+    /// Start paragraph/sentence synthesis and return immediately. A dedicated
+    /// worker validates all segments before its first model call. Poll events to
+    /// apply backpressure; cancelling does not enqueue an inference command.
+    pub fn start(&self, request: SynthesisRequest<'_>, limits: JobOptions) -> Result<Job> {
+        let request = Request::copy(request)?;
+        Ok(Job {
+            control: self.submit(limits, |control| Command::Stream(request, control))?,
+        })
+    }
+    /// Synthesize exactly one bounded utterance without segmentation, preserving
+    /// the reference pipeline's math and seed. Returns Busy while a job is active.
+    pub fn synthesize(&self, request: SynthesisRequest<'_>) -> Result<SynthesisOutput> {
+        let request = Request::copy(request)?;
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.submit(JobOptions::default(), |control| {
+            Command::Single(request, control, tx)
+        })?;
+        rx.recv().map_err(|_| Error::Closed)?
+    }
+    /// Native resource counters; returns Busy during synthesis.
     pub fn runtime_stats(&self) -> Result<SessionStats> {
-        self.pipeline.stats()
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.submit(JobOptions::default(), |control| Command::Stats(control, tx))?;
+        rx.recv().map_err(|_| Error::Closed)?
     }
-    /// Release native resources and join the worker. Repeated calls are harmless;
-    /// subsequent synthesis fails. Previously returned audio remains valid.
-    pub fn shutdown(&mut self) -> Result<()> {
-        self.pipeline.shutdown()
+    /// Cancel, wait for the in-flight native call, and join the workers.
+    /// Idempotent and safe concurrently with polling/cancellation.
+    pub fn shutdown(&self) -> Result<()> {
+        // Serialize joining; do not hold the state gate while waiting for work.
+        let mut worker = lock(&self.worker);
+        let Some(handle) = worker.take() else {
+            return Ok(());
+        };
+        let active = {
+            let mut state = lock(&self.state);
+            state.closed = true;
+            state.active.clone()
+        };
+        if let Some(control) = active {
+            control.cancel();
+        }
+        let _ = self.commands.send(Command::Shutdown);
+        handle
+            .join()
+            .map_err(|_| Error::WorkerFailed("synthesis worker panicked".into()))?
+    }
+}
+impl Drop for Engine {
+    fn drop(&mut self) {
+        let _ = self.shutdown();
     }
 }
 
+struct Observer<'a> {
+    control: &'a Control,
+    segment: Option<SegmentInfo>,
+}
+impl SynthesisObserver for Observer<'_> {
+    fn checkpoint(&self) -> Result<()> {
+        self.control.checkpoint()
+    }
+    fn planned(&mut self, plan: &SynthesisPlan) -> Result<()> {
+        self.checkpoint()?;
+        if plan.requested_frames() > self.control.options.segment_frames() {
+            return Err(Error::Synthesis(
+                "predicted segment exceeds the configured frame limit".into(),
+            ));
+        }
+        if let Some(segment) = &mut self.segment {
+            segment.predicted_frames = plan.requested_frames() as u64;
+            self.control.predicted(segment.clone())?;
+        }
+        Ok(())
+    }
+}
+fn stream(
+    backend: &mut dyn Backend,
+    request: &Request,
+    control: &Control,
+    frames: &mut u64,
+    segments: &mut u32,
+) -> Result<()> {
+    control.checkpoint()?;
+    let parts = backend.segments(request)?;
+    for segment in parts {
+        // A stopped consumer cannot trigger generation of another segment while
+        // its queue is full, even before the next duration event is published.
+        control.wait_capacity(control.options.chunk_frames())?;
+        let info = SegmentInfo {
+            id: segment.id,
+            text_span: segment.span.clone(),
+            start_frame: *frames,
+            predicted_frames: 0,
+            sample_rate: 44100,
+            channels: 1,
+        };
+        let mut observer = Observer {
+            control,
+            segment: Some(info),
+        };
+        let audio = backend.segment(request, &segment, &mut observer)?;
+        control.checkpoint()?;
+        if audio.frames() > control.options.segment_frames() {
+            return Err(Error::Synthesis(
+                "waveform exceeds the configured segment limit".into(),
+            ));
+        }
+        let info = observer.segment.expect("segment observer");
+        for samples in audio.samples().chunks(control.options.chunk_frames()) {
+            control.audio(&info, *frames, samples)?;
+            *frames += samples.len() as u64;
+        }
+        *segments += 1;
+    }
+    Ok(())
+}
+fn complete(state: &Mutex<State>, control: &Control, report: JobReport, poison: bool) {
+    let mut state = lock(state);
+    if poison {
+        state.closed = true;
+    }
+    if state
+        .active
+        .as_ref()
+        .is_some_and(|active| active.id == control.id)
+    {
+        state.active = None;
+    }
+    // Terminal visibility follows release of all per-request native handles and
+    // state reset. A new submit may block briefly on this gate but cannot see Busy.
+    control.finish(report);
+}
+fn worker(
+    mut backend: Box<dyn Backend>,
+    receiver: Receiver<Command>,
+    state: Arc<Mutex<State>>,
+) -> Result<()> {
+    while let Ok(command) = receiver.recv() {
+        let (control, frames, segments, outcome, poison) = match command {
+            Command::Shutdown => break,
+            Command::Stream(request, control) => {
+                let (mut frames, mut segments) = (0, 0);
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    stream(
+                        backend.as_mut(),
+                        &request,
+                        &control,
+                        &mut frames,
+                        &mut segments,
+                    )
+                }));
+                let poison = result.is_err();
+                let result = result.unwrap_or_else(|_| {
+                    Err(Error::WorkerFailed(
+                        "panic during synthesis; backend retired".into(),
+                    ))
+                });
+                (control, frames, segments, outcome(result), poison)
+            }
+            Command::Single(request, control, reply) => {
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    backend.single(
+                        &request,
+                        &mut Observer {
+                            control: &control,
+                            segment: None,
+                        },
+                    )
+                }));
+                let poison = result.is_err();
+                let result = result.unwrap_or_else(|_| {
+                    Err(Error::WorkerFailed(
+                        "panic during synthesis; backend retired".into(),
+                    ))
+                });
+                let frames = result
+                    .as_ref()
+                    .map_or(0, |output| output.audio().frames() as u64);
+                let summary = result.as_ref().map_or_else(
+                    |e| Outcome::Failed(Arc::new(Error::Synthesis(e.to_string()))),
+                    |_| Outcome::Completed,
+                );
+                complete(
+                    &state,
+                    &control,
+                    JobReport {
+                        frames,
+                        segments: u32::from(result.is_ok()),
+                        outcome: summary,
+                    },
+                    poison,
+                );
+                let _ = reply.send(result);
+                if poison {
+                    break;
+                }
+                continue;
+            }
+            Command::Stats(control, reply) => {
+                let result = catch_unwind(AssertUnwindSafe(|| backend.stats()));
+                let poison = result.is_err();
+                let result = result.unwrap_or_else(|_| {
+                    Err(Error::WorkerFailed("panic reading runtime stats".into()))
+                });
+                complete(
+                    &state,
+                    &control,
+                    JobReport {
+                        frames: 0,
+                        segments: 0,
+                        outcome: Outcome::Completed,
+                    },
+                    poison,
+                );
+                let _ = reply.send(result);
+                if poison {
+                    break;
+                }
+                continue;
+            }
+        };
+        complete(
+            &state,
+            &control,
+            JobReport {
+                frames,
+                segments,
+                outcome,
+            },
+            poison,
+        );
+        if poison {
+            break;
+        }
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| backend.shutdown()))
+        .unwrap_or_else(|_| Err(Error::WorkerFailed("panic shutting down backend".into())));
+    lock(&state).closed = true;
+    result
+}
+fn outcome(result: Result<()>) -> Outcome {
+    match result {
+        Ok(()) => Outcome::Completed,
+        Err(Error::Cancelled) => Outcome::Cancelled,
+        Err(error) => Outcome::Failed(Arc::new(error)),
+    }
+}
+
+#[cfg(test)]
+mod job_tests;
 #[cfg(all(test, feature = "coreml", target_os = "macos"))]
 mod tests {
     use super::*;
@@ -95,7 +472,7 @@ mod tests {
         let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../model-manifests/supertonic3-coreml.yaml");
-        let mut engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
+        let engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
         assert_eq!(engine.voices().collect::<Vec<_>>(), ["F1", "M1"]);
         let first = engine
             .synthesize(SynthesisRequest {

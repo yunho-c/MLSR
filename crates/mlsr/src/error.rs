@@ -36,6 +36,14 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Another request is active on this engine.
+    Busy,
+    /// This engine has been shut down or its worker failed.
+    Closed,
+    /// Cancellation was observed at a safe inference boundary.
+    Cancelled,
+    /// The orchestration worker could not run safely.
+    WorkerFailed(String),
     /// Invalid speed, step count, or another synthesis option.
     InvalidOptions(String),
     /// Model output or supplied diagnostic tensors violate synthesis invariants.
@@ -70,6 +78,10 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Busy => f.write_str("engine_busy: another request is active"),
+            Self::Closed => f.write_str("engine_closed: engine is unavailable"),
+            Self::Cancelled => f.write_str("cancelled: synthesis was cancelled"),
+            Self::WorkerFailed(message) => write!(f, "worker_failed: {message}"),
             Self::InvalidOptions(message) => write!(f, "synthesis options: {message}"),
             Self::Synthesis(message) => write!(f, "synthesis: {message}"),
             Self::Input { kind, message } => write!(f, "{}: {message}", kind.as_str()),
@@ -77,6 +89,25 @@ impl fmt::Display for Error {
             Self::Manifest(message) => write!(f, "model manifest: {message}"),
             Self::Asset { path, message } => write!(f, "asset {}: {message}", path.display()),
             Self::Runtime(error) => write!(f, "inference: {error}"),
+        }
+    }
+}
+
+impl Error {
+    /// Stable machine-readable category for foreign-language adapters.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Busy => "engine_busy",
+            Self::Closed => "engine_closed",
+            Self::Cancelled => "cancelled",
+            Self::WorkerFailed(_) => "worker_failed",
+            Self::InvalidOptions(_) => "invalid_options",
+            Self::Synthesis(_) => "synthesis_failed",
+            Self::Input { kind, .. } => kind.as_str(),
+            Self::Io { .. } => "io_error",
+            Self::Manifest(_) => "invalid_manifest",
+            Self::Asset { .. } => "invalid_asset",
+            Self::Runtime(_) => "runtime_error",
         }
     }
 }

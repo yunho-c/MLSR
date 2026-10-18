@@ -33,8 +33,9 @@ owned audio. `Engine` exposes a synchronous Rust interface. Its
 [Core ML session](coreml-runtime.md) owns native models/tensors on one worker;
 native bindings stay private. The pinned reference tools qualify every input,
 intermediate, shape decision, and PCM result from original text with saved noise.
-Jobs, cancellation, long-text segmentation, and the synthesis C ABI remain future
-work; the module table also describes those intended responsibilities.
+[Jobs, cancellation and long-text segmentation](jobs.md) run on a dedicated
+orchestration worker with bounded pull output. The synthesis C ABI remains the
+next integration step.
 
 Keep model architecture separate from the inference backend: a model pipeline
 specifies what to execute, while a runtime supplies execution. Split modules into

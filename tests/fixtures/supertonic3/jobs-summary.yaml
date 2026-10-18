@@ -1,0 +1,48 @@
+schema_version: 1
+kind: rust_job_qualification
+recorded_utc: '2026-10-18T04:49:39+00:00'
+passed: true
+host: Apple M4 Pro, macOS 27.0.1 (26A434)
+toolchains:
+- 1.95.0
+- 1.88.0
+portable_cases:
+- paragraph and sentence segmentation with exact original UTF-8/grapheme spans
+- normalized token limits, removable prefixes and oversized/invalid input
+- metadata before audio, contiguous frame offsets, one terminal event
+- bounded queues and stopped consumer preventing the next segment
+- cancellation bypassing an in-flight call and waiting for quiescence
+- cancellation/drop/shutdown waking blocked producers
+- duration limits before waveform allocation, input recovery and panic retirement
+real_model_checks:
+  stable_opt_in_tests: 5
+  minimum_rust_real_job_test: passed
+  streamed_pcm: byte-exact to corresponding seeded single-segment calls
+  cancel_restart: passed; English stream cancellation followed by Korean synthesis
+  models_retained: 6
+  native_tensor_handles_after_requests: 12
+  full_saved_noise_replay:
+    tensor_comparisons: 672
+    all_tensors_exact: true
+    backings_reused: 224
+    final_stats:
+      live_tensors: 12
+      model_loads: 6
+      predictions: 396
+    reference_sha256: 5cfddc36a2dcba682a3c6f32d44d649583d3e3c71479849eadd8dea8b1581e71
+queue_policy:
+  default_frames: 44100
+  default_chunk_frames: 4096
+  event_limit: 32
+  max_segment_frames: 1572864
+external_evidence:
+  directory: ~/.cache/mlsr/qualification/poc-v1
+  files_sha256:
+    task4-backings.yaml: fdc672d1e724db1ac1346b7bb57310995ebdc4dcb3c5e6a8e94132b236c51b53
+    task4-backings.native.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    task4-rust.log: 41fb3c07a465e0a061e02c159db64b476eb8d2775d98aea35de4ce0076c4032f
+    task4-parity.log: a5e0dda9657aa29b89fe37e2e15de444f8a846db8ee1f250e3c1b2a30fd37692
+not_qualified:
+- public synthesis FFI or language adapters
+- ANE residency or runtime performance
+- physical iOS execution

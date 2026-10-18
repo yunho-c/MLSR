@@ -6,8 +6,9 @@ C ABI for Dart, Go, and Python.
 **Status:** complete Supertonic 3 text-to-PCM synthesis is implemented in Rust,
 with verified YAML bundles, a persistent Core ML runtime, and a WAV CLI. The
 first qualified target is macOS arm64, English/Korean, voices M1/F1. The public
-C ABI and Dart/Go/Python bindings currently expose version queries. Streaming,
-cancellation, playback, and additional inference backends are subsequent work.
+C ABI and Dart/Go/Python bindings currently expose version queries. Rust also
+provides [bounded segment jobs and cancellation](docs/jobs.md). Playback and
+additional inference backends are subsequent work.
 Builds never download model weights.
 
 A pinned Supertonic 3 Core ML reference bundle and development-only

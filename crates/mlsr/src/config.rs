@@ -4,6 +4,59 @@ use crate::error::{Error, Result};
 /// Maximum raw UTF-8 bytes in a single synthesis request, before normalization.
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
 
+/// Hard upper bound imposed by the largest supported Supertonic latent shape.
+pub const MAX_SEGMENT_FRAMES: usize = 512 * 3072;
+
+/// Bounds for a streaming job. PCM waiting in the event queue and the complete
+/// segment under generation have independent limits. Caller-owned chunks are
+/// outside the library's queue budget.
+#[derive(Clone, Copy, Debug)]
+pub struct JobOptions {
+    queue_frames: usize,
+    chunk_frames: usize,
+    segment_frames: usize,
+}
+impl JobOptions {
+    /// Queue: 1..=2,646,000 frames; chunk: 1..=min(queue,65,536); segment:
+    /// 1..=1,572,864. Limits are checked before allocating segment latents.
+    pub fn new(queue_frames: usize, chunk_frames: usize, segment_frames: usize) -> Result<Self> {
+        if !(1..=44100 * 60).contains(&queue_frames)
+            || !(1..=queue_frames.min(65536)).contains(&chunk_frames)
+            || !(1..=MAX_SEGMENT_FRAMES).contains(&segment_frames)
+        {
+            return Err(Error::InvalidOptions(
+                "invalid job queue/chunk/segment frame limits".into(),
+            ));
+        }
+        Ok(Self {
+            queue_frames,
+            chunk_frames,
+            segment_frames,
+        })
+    }
+    /// Maximum unconsumed PCM frames in the Rust event queue.
+    pub fn queue_frames(self) -> usize {
+        self.queue_frames
+    }
+    /// Maximum frames returned by one audio event.
+    pub fn chunk_frames(self) -> usize {
+        self.chunk_frames
+    }
+    /// Maximum predicted frames in a segment, checked before latent allocation.
+    pub fn segment_frames(self) -> usize {
+        self.segment_frames
+    }
+}
+impl Default for JobOptions {
+    fn default() -> Self {
+        Self {
+            queue_frames: 44100,
+            chunk_frames: 4096,
+            segment_frames: MAX_SEGMENT_FRAMES,
+        }
+    }
+}
+
 /// Persistent Core ML engine settings. Model/text policy stays in Rust.
 #[derive(Clone, Copy, Debug)]
 pub struct EngineOptions {
