@@ -736,9 +736,16 @@ fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
         speech.previous_sentence().unwrap(),
         Navigation::Seeked { frame: 0 }
     ));
-    wait(&speech, |s| {
+    let beginning = wait(&speech, |s| {
         s.position_frame == 0 && s.playback == PlaybackPhase::Paused
     });
+    let highlight = beginning
+        .active_text_range
+        .expect("paused frame zero has a source span");
+    assert_eq!(highlight.sentence_id, 0);
+    assert_eq!(highlight.segment_id, 0);
+    assert_eq!(highlight.utf8.start, 0);
+    assert_eq!(highlight.utf16.start, 0);
     lock(&device).advance = true;
     speech.resume().unwrap();
     let original = speech.wait(Duration::from_secs(3)).unwrap();

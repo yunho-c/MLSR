@@ -413,7 +413,10 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
         .partition_point(|&(frame, _)| frame <= state.snapshot.position_frame)
         .checked_sub(1);
     state.snapshot.active_text_range = segment
-        .filter(|_| state.snapshot.position_frame > 0)
+        // Paused reader cursors select frame zero too, including returning to
+        // the first sentence. Before ordinary playback begins, keep the
+        // initial buffering state free of a presented-audio highlight.
+        .filter(|_| state.snapshot.position_frame > 0 || playback.applied.paused)
         .and_then(|i| {
             let id = markers[i].1;
             let plan = control.job.plan()?;
