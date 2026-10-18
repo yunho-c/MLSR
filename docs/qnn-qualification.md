@@ -133,6 +133,48 @@ Apple runtime code was updated for explicit Int64 rejection; macOS/iOS inference
 was not rerun from this Windows host. CI execution and distributable native
 packages remain separate work.
 
+## Model delivery integration — 2026-10-18
+
+Merge `929d051` integrates local `main` at `82efec6` into `backend/qnn`.
+The [model delivery snapshot](../tests/fixtures/supertonic3/qnn-model-delivery-summary.yaml)
+records this build's hashes and results separately from the earlier measurements
+above. Model storage retains feature bit 4; QNN moves to bit 8. The native C
+smoke reports mask 13 (jobs, model store, QNN).
+
+The explicit experimental catalog verifies QNN's backend and original manifest
+hash. A real Rust store installation produces matching English/Korean M1/F1 PCM
+through `Engine::from_model` and direct-bundle loading. Removing the caller's
+model handle leaves the engine's lease intact; removal is blocked until engine
+drop joins native shutdown. Retained PCM survives subsequent model removal.
+Wrong-policy engine creation releases its temporary ownership correctly.
+
+Dart's real C ABI test also passes when engine creation races caller model
+disposal. Store removal stays blocked until engine disposal, and the native
+handle count returns to its starting value. C, Python, Go/cgo and Dart native
+bindings pass; all four PCM files match each other and the earlier qualification.
+The qualification script now includes model-store fixtures and the real leased
+QNN engine test in its consuming Dart package.
+
+Validation passed 42 workspace tests, all five ignored QNN runtime tests, strict
+Clippy, Windows x64 all-target/all-feature checking, C/Dart generation checks,
+Dart analysis, three portable Dart tests, and 46 Python model-tool tests. Eight
+workspace tests were initially ignored; the five QNN runtime tests were then run
+explicitly. Two portable Dart real-model tests and one model-tool test were skipped;
+the Dart real-model paths passed separately in the device suite. Apple inference
+and the macOS Flutter adapter were not rerun on this Windows host.
+
+The rebuilt replay passes all **92 adapter outcomes**, including byte-exact
+tensors in all 48 successful captures. Canonical thresholds and the same six
+failing cases are unchanged. The public job probe also passes, including twenty
+in-flight native cancellations and five backpressure cancellations. The manifest,
+four PTEs and native bridge are unchanged. The model remains experimental and
+outside the builtin catalog. This integration does not refresh the earlier SDK
+profiling or establish controlled performance measurements.
+
+New raw evidence is retained under `ignore/qnn-replay-merge-20261018/`,
+`ignore/qnn-bindings-merge-20261018/`, `ignore/qnn-jobs-merge-20261018.json`, and
+`ignore/qnn-merge-*.log`; their key reports and logs are hashed in the snapshot.
+
 ## Reproduction and retained evidence
 
 Follow [QNN setup and commands](qnn-runtime.md). The YAML snapshot hashes the core
