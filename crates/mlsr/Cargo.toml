@@ -47,6 +47,10 @@ name = "qnn_synthesis_replay"
 required-features = ["qnn"]
 
 [[example]]
+name = "qnn_qualification"
+required-features = ["qnn"]
+
+[[example]]
 name = "coreml_ffi_probe"
 crate-type = ["cdylib", "staticlib"]
 required-features = ["coreml"]

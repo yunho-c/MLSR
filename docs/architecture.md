@@ -14,6 +14,9 @@ parsers, and SHA-256. JSON reads the upstream tokenizer/configuration/voice asse
 model manifests and qualification reports remain YAML. The optional Apple-only
 `coreml` feature adds pinned cidre bindings. The portable frontend and noise
 preparation use pinned Unicode normalization and random-generation crates.
+The optional Windows ARM64 `qnn` feature links a separately prepared narrow C++
+bridge to ExecuTorch/QNN. No Python runtime or second native synthesis pipeline
+is introduced; Rust owns the same frontend, noise, duration, flow and job policy.
 
 ## Rust modules
 
@@ -30,7 +33,7 @@ preparation use pinned Unicode normalization and random-generation crates.
 [Supertonic text-to-PCM synthesis](supertonic3.md) is implemented, including local
 asset verification, frontend, duration/bucket planning, model sequencing, and
 owned audio. `Engine` exposes a synchronous Rust interface. Its
-[Core ML session](coreml-runtime.md) owns native models/tensors on one worker;
+[Core ML](coreml-runtime.md) or [QNN session](qnn-runtime.md) owns native models/tensors on one worker;
 native bindings stay private. The pinned reference tools qualify every input,
 intermediate, shape decision, and PCM result from original text with saved noise.
 [Jobs, cancellation and long-text segmentation](jobs.md) run on a dedicated

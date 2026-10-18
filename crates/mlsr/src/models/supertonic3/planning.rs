@@ -87,7 +87,7 @@ impl SynthesisPlan {
     pub fn requested_frames(&self) -> usize {
         self.frames
     }
-    /// True latent length sent to the vocoder after removing bucket padding.
+    /// True latent length. Core ML crops before vocoding; QNN keeps masked L96.
     pub fn latent_length(&self) -> usize {
         self.length
     }

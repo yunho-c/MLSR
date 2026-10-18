@@ -61,7 +61,8 @@ pub struct Tensor {
     owner: Arc<Inner>,
 }
 
-/// Dedicated storage offered to Core ML for an output feature.
+/// Reusable output storage. Core ML receives a native backing; QNN copies its
+/// result into this owned destination after synchronous execution.
 ///
 /// Reusing this buffer may change earlier tensors returned from predictions
 /// using it. Copy with `Session::read` to preserve a result. Contents after a

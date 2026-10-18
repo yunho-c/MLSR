@@ -1,5 +1,11 @@
 use super::*;
 
+#[cfg(not(all(feature = "qnn", target_os = "windows", target_arch = "aarch64")))]
+#[test]
+fn unavailable_qnn_does_not_start_a_worker() {
+    assert!(matches!(Session::qnn(), Err(Error::BackendUnavailable)));
+}
+
 #[cfg(not(all(feature = "coreml", any(target_os = "macos", target_os = "ios"))))]
 #[test]
 fn unavailable_backend_is_reported_without_spawning_a_worker() {

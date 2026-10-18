@@ -8,8 +8,12 @@ C ABI for Dart, Go, and Python.
 verified YAML bundles, a persistent cidre/Core ML runtime, installed
 Dart/Go/Python bindings, and a [Flutter speak/stop player](examples/flutter_speak/).
 It supports English/Korean, voices M1/F1, and
-[bounded segment jobs with cancellation](docs/jobs.md). QNN is the next backend;
-other devices, minimum OS versions, and distribution packages need qualification.
+[bounded segment jobs with cancellation](docs/jobs.md). An experimental
+[QNN backend](docs/qnn-runtime.md) now runs the pinned `superfast` preset on
+Windows ARM64/X2 Elite through the same Rust jobs and C/Dart/Go/Python APIs.
+Its adapter/lifecycle checks pass, but the preset fails the broader canonical
+numerical screen; see the [QNN qualification report](docs/qnn-qualification.md).
+Other devices, minimum OS versions, and distribution packages need qualification.
 Builds never download model weights.
 
 A pinned Supertonic 3 Core ML reference bundle and development-only

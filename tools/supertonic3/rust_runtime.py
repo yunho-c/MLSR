@@ -56,10 +56,14 @@ def decode_tensor_map(descriptors, raw, expected_dtypes):
         raise ReferenceError("Rust runtime output inventory changed")
     actual = {}
     for name, descriptor in descriptors.items():
+        dtype = {"float32": "<f4", "int32": "<i4", "int64": "<i8"}.get(
+            descriptor["dtype"]
+        )
+        element_size = 8 if dtype == "<i8" else 4
         shape = descriptor["shape"]
         start, length = descriptor["offset"], descriptor["length"]
         if (
-            descriptor["dtype"] not in ("float32", "int32")
+            dtype is None
             or descriptor["dtype"] != expected_dtypes[name]
             or not isinstance(shape, list)
             or not shape
@@ -67,14 +71,14 @@ def decode_tensor_map(descriptors, raw, expected_dtypes):
             or type(start) is not int
             or start < 0
             or type(length) is not int
-            or length != math.prod(shape) * 4
+            or length != math.prod(shape) * element_size
             or start + length > len(raw)
         ):
             raise ReferenceError(f"Invalid runtime tensor descriptor: {name}")
         actual[name] = np.frombuffer(
             raw,
-            dtype="<f4" if descriptor["dtype"] == "float32" else "<i4",
-            count=length // 4,
+            dtype=dtype,
+            count=length // element_size,
             offset=start,
         ).reshape(shape)
     return actual
@@ -211,9 +215,10 @@ def replay_rust(
     write_yaml(output, result)
     worker = None
     try:
-        with native_log.open("x") as log, tempfile.TemporaryDirectory(
-            prefix="mlsr-rust-replay-"
-        ) as temporary:
+        with (
+            native_log.open("x") as log,
+            tempfile.TemporaryDirectory(prefix="mlsr-rust-replay-") as temporary,
+        ):
             temporary = Path(temporary)
             worker = Worker(binary, log, timeout)
             print("Loading six models in one persistent Rust session", flush=True)

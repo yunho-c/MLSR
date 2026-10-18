@@ -3,12 +3,17 @@
 The first synthesis target is macOS arm64 with the pinned Core ML v2 export,
 English/Korean qualification, voices M1/F1, and 44,100 Hz mono Float32 PCM.
 
+Windows ARM64 also has an [experimental QNN Superfast backend](qnn-runtime.md).
+It shares the Rust frontend and job API, with a separate pinned manifest,
+eight-step/fixed-shape contract and explicit `QnnHtp` selection. Adapter and
+binding checks pass; the [canonical model-quality screen fails](qnn-qualification.md).
+
 ## Verified local bundles
 
 `mlsr::models::supertonic3::Bundle::load(manifest_path, bundle_directory)` parses
 the YAML manifest, checks the supported model/tensor/audio contracts, verifies
 the sizes and SHA-256 of every payload, and loads owned voice/indexer data.
-It does not load Core ML graphs or use the network. Portable tests do not need
+It does not load native graphs or use the network. Portable tests do not need
 Apple frameworks or downloaded weights.
 
 Manifests are limited to 1 MiB; auxiliary assets to 4 MiB each. YAML duplicate

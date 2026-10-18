@@ -1,9 +1,14 @@
-# Supertonic 3 baseline tools
+# Supertonic 3 model tools
 
-These development-only tools implement milestone 1: pin published model bytes,
-prepare a verified local bundle, and capture/replay real reference fixtures.
-The Rust runtime replay below additionally qualifies milestone 2. Public
-Dart/Go/Python synthesis and Rust text-to-PCM orchestration are subsequent work.
+These development-only tools pin model bytes, prepare verified local bundles,
+and capture/replay real reference fixtures, runtime stages and synthesis.
+
+The Windows ARM64 QNN tools use a separate Superfast manifest: `qnn_bundle`
+prepares/verifies assets and external runtimes, `qnn_replay` compares saved-noise
+Rust/QNN/ONNX stages, `qnn_profile` collects SDK HTP evidence, and `qnn_summary`
+revalidates captures and summarizes measurements. See [setup and reproduction](../../docs/qnn-runtime.md)
+and the [experimental qualification result](../../docs/qnn-qualification.md).
+The remaining commands below describe the Core ML baseline.
 
 The baseline is the published **v2** duration predictor and text encoder,
 v2 bucketed INT4 VectorEstimators, and the unchanged FP16 vocoder. The v2 models

@@ -27,7 +27,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
-    /// Verify local manifest/payloads and list voices without loading Core ML.
+    /// Verify local manifest/payloads and list voices without loading native graphs.
     Verify(Assets),
     /// Generate a new mono Float32 WAV file; existing files are never overwritten.
     Synthesize(Synthesize),

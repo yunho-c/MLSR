@@ -191,8 +191,8 @@ impl Pipeline {
         })
     }
     /// Synthesize original text using request-local seeded noise. Native TE/VE
-    /// outputs are forwarded without intermediate host readbacks. The final VE
-    /// state is copied/cropped to its true length for the flexible vocoder.
+    /// outputs are forwarded without client readbacks. Core ML crops the final
+    /// state for its flexible vocoder; QNN retains the full masked fixed input.
     pub fn synthesize(
         &mut self,
         text: &str,

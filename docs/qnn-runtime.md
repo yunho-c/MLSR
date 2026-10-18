@@ -70,20 +70,24 @@ short sequences and the upper shape boundary.
 ## Native build and ownership
 
 Use the ARM64 ExecuTorch installation prepared by the pinned `supertonic-npu`
-checkout. Its Windows backend registration patch is required: a stock backend
-DLL has a different registration boundary. Ordinary Cargo builds never build
+checkout. The bridge calls that revision's Windows backend registration export
+to register with its own ExecuTorch instance. Ordinary Cargo builds never build
 ExecuTorch or download the SDK.
 
 ```powershell
 ./tools/build_qnn.ps1 -ExecuTorchPrefix ../supertonic-npu/build/executorch-arm64/install
 . ./tools/qnn_env.ps1
+python -m tools.supertonic3.qnn_bundle verify-runtime --sdk C:/Qualcomm/AIStack/QAIRT/2.50.40.260831 --bridge $env:MLSR_QNN_BRIDGE_DIR
 cargo build --locked --release -p mlsr-cli -p mlsr-ffi --features qnn
-cargo test --locked --release -p mlsr --features qnn runtime::qnn::tests -- --ignored --test-threads=1
+cargo test --locked --release -p mlsr --features qnn runtime::qnn -- --ignored --test-threads=1
+target/release/mlsr.exe synthesize --manifest model-manifests/supertonic3-qnn-superfast.yaml --bundle C:/models/mlsr-qnn-superfast-v1 --compute-policy qnn-htp --text "Hello from MLSR." --language en --voice M1 --output hello.wav
 ```
 
 `qnn_env.ps1` selects the installed SDK, V81 skeleton and FastRPC driver, adds
 runtime DLL directories to this shell's PATH, and sets `MLSR_QNN_BRIDGE_DIR` for
 Cargo. The bridge and backend DLLs must remain loadable for every native host.
+Python uses `MLSR_DLL_DIRECTORIES` from this helper to register the explicit
+dependency directories with Windows' DLL loader.
 Select `ComputePolicy::QnnHtp`, CLI `--compute-policy qnn-htp`, or C ABI compute
 policy `2`. Feature bit `4` reports the compiled QNN capability. The ABI layout
 and default Core ML selection are unchanged.
@@ -99,7 +103,9 @@ Int64 alignment; the backend performs its own transfer staging.
 
 Input allocations and descriptors outlive each native call and remain retained
 until replaced or the module is destroyed. Modules are destroyed before their
-inputs and program bytes. Readback returns an independent owned snapshot.
+inputs and program bytes. If execution fails, the bridge destroys the module
+before releasing either generation of borrowed views; the next prediction
+reloads it from the retained program. Readback returns an independent owned snapshot.
 `live_tensors` counts client handles, not the bounded last-input references
 retained by modules. Native operations are serialized across sessions because
 the pinned delegate shares backend resources. Cancellation bypasses this queue
@@ -107,12 +113,56 @@ but waits for an in-flight graph to return before discarding its output.
 
 ## Qualification status
 
-Asset verification and portable contract tests are independent of execution.
-The persistent adapter has passed real-device model reuse, buffer ownership,
-alias rejection, metadata failure recovery and Unicode-path checks. Full stage
-replay, public job/C ABI checks and device qualification remain separate checks;
-the initial feasibility smoke does not establish their results.
+The [2026-10-18 qualification report](qnn-qualification.md) records passing
+real-device stage replay, model reuse, buffer ownership, native failure recovery,
+Unicode paths, public jobs, C/Python/Go/Dart and HTP profiling. MLSR matches the
+existing QNN runner byte for byte. **Six of twelve canonical ONNX comparisons
+fail the fixed numerical screen.** Keep this preset experimental until model
+quality and listening qualification pass.
 
 The job contract remains [the current Rust contract](jobs.md): one active job,
 bounded output, UTF-8 byte source offsets and cancellation independent of the
 inference queue. Playback and the future `Tts`/`Speech` facade are separate.
+
+## Reproduce device checks
+
+Use fresh output paths. Raw tensors, audio and logs are intentionally retained
+on failure. These are development tools; Python/ONNX are not runtime dependencies.
+Replay needs NumPy, PyYAML, ONNX Runtime and SoundFile plus the pinned sibling
+checkout's native runner and canonical ONNX assets. Profiling additionally uses
+that checkout's prepared ExecuTorch Python package, host `flatc`, and the SDK's
+x64 inspection bindings and ARM64 command-line tools.
+
+```powershell
+. ./tools/qnn_env.ps1
+$bundle = 'C:/models/mlsr-qnn-superfast-v1'
+$manifest = 'model-manifests/supertonic3-qnn-superfast.yaml'
+cargo build --locked --release -p mlsr --features qnn --example qnn_synthesis_replay --example qnn_qualification
+python -m tools.supertonic3.qnn_replay --source ../supertonic-npu --bundle $bundle --output ignore/qnn-replay-new
+# Exit 1 currently records the canonical failures; inspect report.yaml.
+target/release/examples/qnn_qualification.exe $manifest $bundle ignore/qnn-jobs-new.json
+python -m tools.supertonic3.qnn_profile --source ../supertonic-npu --bundle $bundle --replay ignore/qnn-replay-new --output ignore/qnn-profile-new
+```
+
+Run latency checks without concurrent device work. `qnn_qualification` exercises
+the public job API and records initialization, warm requests, cancellation during
+TE/VE/vocoder, backpressure, restart, memory and shutdown. `qnn_profile` extracts
+the unchanged PTE contexts and compile options, runs detailed SDK profiles on
+saved replay inputs and checks outputs against the reference.
+
+For all bindings, supply installed **ARM64** Python, Go, Dart 3.11+ and a compatible
+ARM64 LLVM-MinGW compiler. The script builds the shared ABI, tests C and each
+binding sequentially, exercises Dart's native-asset hook, then compares EN/KO
+M1/F1 PCM bytes. It does not download model weights, the SDK or toolchains.
+
+```powershell
+./tools/check_qnn_bindings.ps1 -Bundle $bundle -OutputDirectory ignore/qnn-bindings-new -Python C:/tools/python-arm64/python.exe -Go C:/tools/go-arm64/bin/go.exe -Dart C:/tools/dart-arm64/bin/dart.exe -CCompiler C:/tools/llvm-mingw/bin/aarch64-w64-mingw32-clang.exe
+```
+
+Record device/OS/toolchain, power source and thermal measurement limitations in
+an environment JSON alongside the reports. The checked-in qualification snapshot
+retains the captured fields. Revalidate all saved Rust tensors and summarize:
+
+```powershell
+python -m tools.supertonic3.qnn_summary --replay ignore/qnn-replay-new --jobs ignore/qnn-jobs-new.json --profile ignore/qnn-profile-new --bindings ignore/qnn-bindings-new --environment ignore/qnn-environment-new.json --compile-options ignore/qnn-profile-new/compile-options.json --output ignore/qnn-summary-new.yaml
+```

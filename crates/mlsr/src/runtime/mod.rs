@@ -3,6 +3,7 @@
 //! Core ML is the first backend. Its optional dependency is enabled by the
 //! `coreml` feature on macOS and iOS only. Sessions own native models/tensors on
 //! a persistent worker, with explicit host transfers and optional output reuse.
+//! The optional `qnn` feature uses the prepared native bridge on Windows ARM64.
 
 mod error;
 mod session;
