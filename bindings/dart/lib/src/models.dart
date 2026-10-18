@@ -1,5 +1,47 @@
 part of 'synthesis.dart';
 
+/// Generated package metadata for one immutable model. Contains logical asset
+/// keys only; platform directories are resolved by the Flutter adapter.
+class BundledModel {
+  final String package, id, assetPath, catalogYaml;
+  final List<String> platforms;
+  final List<ModelAssetFile> files;
+  const BundledModel({
+    required this.package,
+    required this.id,
+    required this.assetPath,
+    required this.catalogYaml,
+    required this.platforms,
+    required this.files,
+  });
+
+  ModelDescriptor descriptorFor(String platform) {
+    if (!platforms.contains(platform)) {
+      throw SynthesisException(
+        'model_platform_unsupported',
+        '$id is unavailable for $platform',
+      );
+    }
+    return ModelDescriptor(
+      catalogYaml: catalogYaml,
+      id: id,
+      platform: platform,
+    );
+  }
+}
+
+/// One exact manifest or payload file, used for bounded native materialization.
+/// Rust checks the actual manifest and all payload bytes before publication.
+class ModelAssetFile {
+  final String path, sha256;
+  final int sizeBytes;
+  const ModelAssetFile({
+    required this.path,
+    required this.sha256,
+    required this.sizeBytes,
+  });
+}
+
 /// Exact model release in a trusted application catalog. Generated model asset
 /// packages supply these constants; Flutter determines the current platform.
 class ModelDescriptor {

@@ -113,3 +113,75 @@ with `MLSR_TEST_DELIVERY_BUNDLE` and a Core ML-enabled native library. It copies
 a self-contained baseline into a temporary store, creates an engine concurrently
 with model disposal, synthesizes, checks removal is blocked, then closes and
 removes the version.
+
+## Prepare a Flutter asset package
+
+Run preparation **before** `flutter pub get`. The local generated package must
+exist when Pub resolves the application's dependencies. This is a developer/CI
+step; ordinary Flutter builds and the shipped app do not download model data.
+
+Example `mlsr-models.yaml` in a downstream application's directory:
+
+```yaml
+schema_version: 1
+package: mlsr_app_models
+output: .mlsr/model_assets
+mlsr_package: /path/to/MLSR/bindings/dart
+models:
+  - id: supertonic3-coreml-int4-v1
+    dart_name: supertonic3
+    source: ./model-input/supertonic3-coreml-int4-v1
+    platforms: [macos-arm64]
+```
+
+`source` contains a self-contained bundle. For an older development cache, add
+`manifest: /path/to/MLSR/model-manifests/supertonic3-coreml.yaml` to select the
+original pinned YAML file explicitly. The payload is still read from `source`.
+An optional top-level `catalog` selects a trusted YAML catalog; otherwise the CLI
+uses its embedded catalog. Relative paths resolve beside the config, and `~/`
+expands only in this developer tool. `mlsr_package` selects a local Dart checkout;
+omit it only when resolving MLSR version `^0.1.0` through another Pub source or
+application dependency override. The packages are not published yet.
+
+```sh
+mlsr models prepare-flutter --config mlsr-models.yaml
+flutter pub get
+```
+
+From this repository, invoke the command through
+`cargo run --locked --release -p mlsr-cli -- models prepare-flutter --config ...`.
+Add the generated package to the application's `pubspec.yaml`:
+
+```yaml
+dependencies:
+  mlsr_app_models:
+    path: .mlsr/model_assets
+```
+
+The package contains `catalog.yaml`, `package-index.yaml`, the original
+`mlsr-bundle.yaml` and every payload file, offline license notices, `pubspec.yaml`,
+and `lib/app_models.dart`. The Dart library supplies
+`AppModels.supertonic3` as a `BundledModel` constant. It contains package-relative
+asset keys and inventory, never developer model paths. A local `mlsr_package`
+path in the generated pubspec is build configuration only.
+
+Preparation verifies the input, streams payloads into independent regular files,
+and verifies the output before atomically publishing the package directory.
+Development file symlinks are dereferenced; no source symlinks enter the package.
+Repeated preparation with identical inputs is idempotent, including after Pub
+creates `.dart_tool` or `pubspec.lock`. Different existing contents cause an
+error; choose a fresh output directory instead of overwriting it. Competing
+preparations use a per-output advisory lock. No existing source or output is
+deleted. Generated weights and `.mlsr/` stay out of Git.
+
+Every nested file is explicitly listed in the generated pubspec, with OS filters
+derived from the selected platform keys. Flutter directory entries are not
+recursive, and platform filters require Flutter 3.41 or later. Architecture and
+backend eligibility remain runtime catalog checks; a `macos` asset filter does
+not qualify x64 inference. See Flutter's
+[asset packaging documentation](https://docs.flutter.dev/ui/assets/assets-and-images).
+
+The current generator supports the Supertonic3 contract. It includes the pinned
+upstream OpenRAIL-M text, MIT preprocessing notice, Apache-2.0 library license,
+and source references, retaining the publisher's differing `openrail++` tag in
+the manifest. Packaging does not change those declarations or relicense weights.

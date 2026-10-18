@@ -15,6 +15,8 @@ use std::{
 };
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+mod models;
+
 #[derive(Parser)]
 #[command(
     name = "mlsr",
@@ -27,6 +29,11 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Prepare verified local model data for downstream applications.
+    Models {
+        #[command(subcommand)]
+        command: models::Models,
+    },
     /// Verify local manifest/payloads and list voices without loading Core ML.
     Verify(Assets),
     /// Generate a new mono Float32 WAV file; existing files are never overwritten.
@@ -131,6 +138,7 @@ fn write_wav(path: &Path, samples: &[f32], sample_rate: u32, channels: u16) -> R
 
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Command::Models { command } => models::run(command)?,
         Command::Verify(assets) => {
             let bundle = Bundle::load(assets.manifest, assets.bundle)?;
             println!(
