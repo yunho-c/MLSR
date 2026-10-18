@@ -8,7 +8,7 @@ mod session;
 mod tensor;
 
 pub use error::{Error, Result};
-pub use session::{ComputePolicy, Model, Session, SessionStats, Tensor};
+pub use session::{ComputePolicy, Model, OutputBuffer, Session, SessionStats, Tensor};
 pub use tensor::{DType, HostTensor, TensorData};
 
 #[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]

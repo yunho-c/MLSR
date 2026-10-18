@@ -66,3 +66,25 @@ callers blocked. Abandoned replies release otherwise unreachable tensors.
 `stats` reports loaded models, retained tensor handles, and successful prediction
 calls (including warm-up). Tests cover cache reuse, repeated calls, release,
 concurrent clients, cross-session rejection, shutdown races, and worker failure.
+
+## Optional output reuse
+
+`output_buffer(shape, dtype)` creates dedicated, initialized storage.
+`predict_with_backings(model, inputs, output_names, backings)` offers named
+buffers to Core ML, validates their names/dtypes/shapes, and rejects aliasing
+with inputs or other output backings. OutputBuffer's separate type prevents
+arbitrary graph outputs or external memory from being used as backing storage.
+The adapter detects aliases of retained results by native object identity,
+including results with different client handle IDs.
+
+Always use the returned tensors. Core ML can decline a backing; each returned
+tensor's `output_backing_reused()` records whether the actual native object was
+the requested backing, as specified by Apple's `MLPredictionOptions` contract.
+No mapping or host readback is performed to forward these tensors between calls.
+
+For an iterative graph, allocate two buffers and alternate them. Reusing a
+buffer changes any previous results backed by that object; call `read` first to
+preserve a snapshot. Its contents after an error are unspecified. The final
+returned tensor retains its storage even after both OutputBuffers are dropped.
+This facility enables allocation reuse; it does not establish zero internal
+copies, permanent ANE residency, or an end-to-end latency improvement.

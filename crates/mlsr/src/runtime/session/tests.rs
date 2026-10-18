@@ -151,4 +151,97 @@ mod apple {
             thread.join().unwrap();
         }
     }
+
+    #[test]
+    fn output_backings_validate_aliases_and_forward_actual_results() {
+        let fixture = Fixture::compile();
+        let session = Session::coreml(ComputePolicy::CpuOnly).unwrap();
+        let model = session.load(fixture.model()).unwrap();
+        let mut latent = session.upload(host(0.)).unwrap();
+        let buffers = [
+            session.output_buffer(&[1, 2, 3], DType::F32).unwrap(),
+            session.output_buffer(&[1, 2, 3], DType::F32).unwrap(),
+        ];
+        let bad_shape = session.output_buffer(&[1, 3, 2], DType::F32).unwrap();
+        let bad_type = session.output_buffer(&[1, 2, 3], DType::I32).unwrap();
+        for bad in [&bad_shape, &bad_type] {
+            assert!(
+                session
+                    .predict_with_backings(&model, &[("x", &latent)], &["y"], &[("y", bad)])
+                    .is_err()
+            );
+        }
+        assert!(
+            session
+                .predict_with_backings(&model, &[("x", &latent)], &["y"], &[("z", &buffers[0])])
+                .is_err()
+        );
+        assert!(
+            session
+                .predict_with_backings(
+                    &model,
+                    &[("x", &latent)],
+                    &["y"],
+                    &[("y", &buffers[0]), ("y", &buffers[1])]
+                )
+                .is_err()
+        );
+        assert!(
+            session
+                .predict_with_backings(
+                    &model,
+                    &[("x", &latent)],
+                    &["y", "z"],
+                    &[("y", &buffers[0]), ("z", &buffers[0])]
+                )
+                .is_err()
+        );
+        // White-box direct-alias check is independent of whether this OS/model
+        // elects to honor output backings in the following real predictions.
+        assert!(
+            session
+                .predict_with_backings(
+                    &model,
+                    &[("x", &buffers[0].tensor)],
+                    &["y"],
+                    &[("y", &buffers[0])]
+                )
+                .is_err()
+        );
+        let mut expected = 0.;
+        for step in 0..8 {
+            let mut out = session
+                .predict_with_backings(
+                    &model,
+                    &[("x", &latent)],
+                    &["y", "z"],
+                    &[("y", &buffers[step % 2])],
+                )
+                .unwrap();
+            assert_eq!(session.read(&out[1]).unwrap(), host(expected * 3. - 1.));
+            assert!(!out[1].output_backing_reused());
+            latent = out.remove(0);
+            expected = expected * 2. + 1.;
+            assert_eq!(session.read(&latent).unwrap(), host(expected));
+            if latent.output_backing_reused() {
+                // A returned handle aliases the backing even though its ID differs.
+                assert!(
+                    session
+                        .predict_with_backings(
+                            &model,
+                            &[("x", &latent)],
+                            &["y"],
+                            &[("y", &buffers[step % 2])]
+                        )
+                        .is_err()
+                );
+            }
+        }
+        // Returned output outlives the backing handles; ordinary prediction still works.
+        drop(buffers);
+        assert_eq!(session.read(&latent).unwrap(), host(expected));
+        let out = session.predict(&model, &[("x", &latent)], &["y"]).unwrap();
+        assert_eq!(session.read(&out[0]).unwrap(), host(expected * 2. + 1.));
+        assert!(!out[0].output_backing_reused());
+    }
 }

@@ -17,6 +17,7 @@ struct Worker {
     next_id: u64,
     policy: ComputePolicy,
     predictions: u64,
+    model_loads: usize,
 }
 
 impl Worker {
@@ -40,6 +41,7 @@ impl Worker {
             id,
             shape: tensor.shape().to_vec(),
             dtype: tensor.dtype(),
+            backing_reused: tensor.backing_reused(),
         };
         self.tensors.insert(id, tensor);
         Ok(info)
@@ -55,6 +57,7 @@ impl Worker {
                     return Ok(Response::Model(id));
                 }
                 let model = NativeModel::load(&path, self.policy == ComputePolicy::CpuOnly)?;
+                self.model_loads += 1;
                 let id = self.id()?;
                 self.paths.insert(path, id);
                 self.models.insert(id, model);
@@ -81,7 +84,7 @@ impl Worker {
                 Ok(Response::Done)
             }
             Request::Stats => Ok(Response::Stats(SessionStats {
-                model_loads: self.models.len(),
+                model_loads: self.model_loads,
                 live_tensors: self.tensors.len(),
                 predictions: self.predictions,
             })),
@@ -89,6 +92,7 @@ impl Worker {
                 model,
                 inputs,
                 outputs,
+                backings,
             } => {
                 let model = self
                     .models
@@ -99,7 +103,15 @@ impl Worker {
                     .map(|(name, id)| Ok((name.as_str(), self.tensor(*id)?)))
                     .collect::<Result<Vec<_>>>()?;
                 let outputs = outputs.iter().map(String::as_str).collect::<Vec<_>>();
-                let predicted = model.predict(&inputs, &outputs)?;
+                let backings = backings
+                    .iter()
+                    .map(|(name, id)| Ok((name.as_str(), self.tensor(*id)?)))
+                    .collect::<Result<Vec<_>>>()?;
+                let predicted = if backings.is_empty() {
+                    model.predict(&inputs, &outputs)?
+                } else {
+                    model.predict_with_backings(&inputs, &outputs, &backings)?
+                };
                 let mut handles: Vec<TensorInfo> = Vec::with_capacity(predicted.len());
                 for tensor in predicted {
                     match self.insert(tensor) {
@@ -130,6 +142,7 @@ pub(in crate::runtime) fn run(receiver: mpsc::Receiver<Envelope>, policy: Comput
         next_id: 0,
         policy,
         predictions: 0,
+        model_loads: 0,
     };
     while let Ok(envelope) = receiver.recv() {
         if matches!(envelope.request, Request::Shutdown) {

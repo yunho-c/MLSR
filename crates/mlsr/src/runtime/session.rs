@@ -54,7 +54,18 @@ pub struct Tensor {
     id: u64,
     shape: Vec<usize>,
     dtype: DType,
+    backing_reused: bool,
     owner: Arc<Inner>,
+}
+
+/// Dedicated storage offered to Core ML for an output feature.
+///
+/// Reusing this buffer may change earlier tensors returned from predictions
+/// using it. Copy with `Session::read` to preserve a result. Contents after a
+/// failed prediction are unspecified. Never use a buffer while one of its
+/// returned tensors is an input to that same prediction.
+pub struct OutputBuffer {
+    tensor: Tensor,
 }
 
 impl Tensor {
@@ -65,6 +76,11 @@ impl Tensor {
     /// Native element type.
     pub fn dtype(&self) -> DType {
         self.dtype
+    }
+    /// Whether this tensor's creating prediction used its requested backing.
+    /// False for uploads, plain allocations, and predictions without reuse.
+    pub fn output_backing_reused(&self) -> bool {
+        self.backing_reused
     }
 }
 
@@ -78,6 +94,7 @@ pub(super) struct TensorInfo {
     pub id: u64,
     pub shape: Vec<usize>,
     pub dtype: DType,
+    pub backing_reused: bool,
 }
 
 // Portable messages contain owned Rust values/IDs only. No native Send/Sync impls.
@@ -95,6 +112,7 @@ pub(super) enum Request {
         model: u64,
         inputs: Vec<(String, u64)>,
         outputs: Vec<String>,
+        backings: Vec<(String, u64)>,
     },
     Release(u64),
     Stats,
@@ -177,6 +195,14 @@ impl Session {
         self.one_tensor(Request::Zeros(shape.to_vec(), dtype))
     }
 
+    /// Allocate a dedicated, initialized output backing. Core ML may decline
+    /// reuse; always consume the actual tensor returned by prediction.
+    pub fn output_buffer(&self, shape: &[usize], dtype: DType) -> Result<OutputBuffer> {
+        Ok(OutputBuffer {
+            tensor: self.zeros(shape, dtype)?,
+        })
+    }
+
     /// Copy native elements to an owned row-major tensor.
     pub fn read(&self, tensor: &Tensor) -> Result<HostTensor> {
         self.check_owner(&tensor.owner)?;
@@ -207,9 +233,27 @@ impl Session {
         inputs: &[(&str, &Tensor)],
         outputs: &[&str],
     ) -> Result<Vec<Tensor>> {
+        self.predict_with_backings(model, inputs, outputs, &[])
+    }
+
+    /// Predict with optional named output backings, retaining actual outputs.
+    /// Backing names must be unique requested outputs with compatible shapes
+    /// and dtypes. Use two alternating buffers for an iterative model; input
+    /// tensors and output backings must not alias. Each returned tensor reports
+    /// actual backing reuse, which is a framework choice rather than a promise.
+    pub fn predict_with_backings(
+        &self,
+        model: &Model,
+        inputs: &[(&str, &Tensor)],
+        outputs: &[&str],
+        backings: &[(&str, &OutputBuffer)],
+    ) -> Result<Vec<Tensor>> {
         self.check_owner(&model.owner)?;
         for (_, tensor) in inputs {
             self.check_owner(&tensor.owner)?;
+        }
+        for (_, backing) in backings {
+            self.check_owner(&backing.tensor.owner)?;
         }
         let request = Request::Predict {
             model: model.id,
@@ -218,6 +262,10 @@ impl Session {
                 .map(|(name, tensor)| (name.to_string(), tensor.id))
                 .collect(),
             outputs: outputs.iter().map(|name| name.to_string()).collect(),
+            backings: backings
+                .iter()
+                .map(|(name, buffer)| (name.to_string(), buffer.tensor.id))
+                .collect(),
         };
         let Response::Tensors(tensors) = self.inner.request(request)? else {
             return Err(protocol_error());
@@ -265,6 +313,7 @@ impl Session {
             id: info.id,
             shape: info.shape,
             dtype: info.dtype,
+            backing_reused: info.backing_reused,
             owner: self.inner.clone(),
         }
     }

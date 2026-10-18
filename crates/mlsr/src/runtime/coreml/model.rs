@@ -40,6 +40,15 @@ impl NativeModel {
         inputs: &[(&str, &NativeTensor)],
         outputs: &[&str],
     ) -> Result<Vec<NativeTensor>> {
+        self.predict_with_backings(inputs, outputs, &[])
+    }
+
+    pub(in crate::runtime) fn predict_with_backings(
+        &self,
+        inputs: &[(&str, &NativeTensor)],
+        outputs: &[&str],
+        backings: &[(&str, &NativeTensor)],
+    ) -> Result<Vec<NativeTensor>> {
         pool(|| {
             let description = self.model.model_desc();
             let input_descriptions = description.input_descs_by_name();
@@ -86,9 +95,53 @@ impl NativeModel {
             let provider = fallible("create feature provider", || {
                 ml::DictionaryFeatureProvider::with_dictionary(&dictionary)
             })?;
+            names.clear();
+            let mut backing_dictionary =
+                ns::DictionaryMut::<ns::String, ns::Id>::with_capacity(backings.len());
+            for (index, &(name, tensor)) in backings.iter().enumerate() {
+                if !outputs.contains(&name) || !names.insert(name) {
+                    return Err(Error::InvalidFeature(format!(
+                        "duplicate or unrequested backing {name}"
+                    )));
+                }
+                // OutputBuffer instances are independent client allocations. A
+                // reused result retains that exact object (Apple's reuse contract).
+                // Comparing objects detects aliases even across different handles,
+                // without mapping/readback of device tensors before prediction.
+                if inputs.iter().any(|(_, input)| tensor.same_object(input))
+                    || backings[..index]
+                        .iter()
+                        .any(|(_, other)| tensor.same_object(other))
+                {
+                    return Err(Error::InvalidFeature(format!(
+                        "output backing {name} aliases an input or another output"
+                    )));
+                }
+                let key = ns::String::with_str(name);
+                let desc = output_descriptions
+                    .get(&key)
+                    .ok_or_else(|| Error::InvalidFeature(format!("unknown backing {name}")))?;
+                let constraint = desc.multi_array_constraint().ok_or_else(|| {
+                    Error::InvalidFeature(format!("backing {name} is not a tensor"))
+                })?;
+                let value = ml::FeatureValue::with_multi_array(tensor.raw());
+                if constraint.data_type() != native_dtype(tensor.dtype())
+                    || !call("validate output backing", || desc.is_allowed_value(&value))?
+                {
+                    return Err(Error::InvalidFeature(format!(
+                        "backing {name}: incompatible dtype or shape"
+                    )));
+                }
+                backing_dictionary.insert(&key, tensor.raw().as_id_ref());
+            }
+            let mut options = ml::PredictionOpts::new();
+            call("set output backings", || {
+                options.set_output_backings(&backing_dictionary)
+            })?;
             // Core ML also validates missing required features, preserving optional-input semantics.
             let predicted = fallible("predict", || {
-                self.model.prediction_from_features(&*provider)
+                self.model
+                    .prediction_from_features_opts(&*provider, &options)
             })?;
             outputs
                 .iter()
@@ -100,7 +153,10 @@ impl NativeModel {
                     let array = value.multi_array().ok_or_else(|| {
                         Error::InvalidFeature(format!("output {name} is not a tensor"))
                     })?;
-                    let tensor = NativeTensor::from_native(array)?;
+                    let mut tensor = NativeTensor::from_native(array)?;
+                    if let Some((_, backing)) = backings.iter().find(|(key, _)| key == name) {
+                        tensor.mark_backing_reused(backing);
+                    }
                     let desc = output_descriptions.get(&key).ok_or_else(|| {
                         Error::InvalidFeature(format!("missing output contract {name}"))
                     })?;

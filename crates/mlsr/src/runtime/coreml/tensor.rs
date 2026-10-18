@@ -8,6 +8,7 @@ pub(in crate::runtime) struct NativeTensor {
     array: arc::R<ml::MultiArray>,
     shape: Vec<usize>,
     dtype: DType,
+    backing_reused: bool,
     _thread: PhantomData<Rc<()>>,
 }
 
@@ -151,6 +152,7 @@ impl NativeTensor {
                 array,
                 shape,
                 dtype,
+                backing_reused: false,
                 _thread: PhantomData,
             })
         })
@@ -161,6 +163,15 @@ impl NativeTensor {
     }
     pub(in crate::runtime) fn dtype(&self) -> DType {
         self.dtype
+    }
+    pub(in crate::runtime) fn backing_reused(&self) -> bool {
+        self.backing_reused
+    }
+    pub(super) fn mark_backing_reused(&mut self, backing: &Self) {
+        self.backing_reused = self.same_object(backing);
+    }
+    pub(super) fn same_object(&self, other: &Self) -> bool {
+        self.array.as_ptr() == other.array.as_ptr()
     }
     pub(super) fn raw(&self) -> &ml::MultiArray {
         &self.array
