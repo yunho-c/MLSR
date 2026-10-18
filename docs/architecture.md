@@ -9,8 +9,10 @@ Rust applications -------------> mlsr
 
 The Cargo workspace shares version metadata, a lockfile, and build outputs.
 `mlsr` and `mlsr-ffi` are the default members; `tools/codegen` is a development
-tool and is not a runtime dependency. Neither production crate currently has
-third-party runtime dependencies.
+tool and is not a runtime dependency. Default builds have no third-party runtime
+dependencies. The optional Apple-only `coreml` feature adds pinned cidre bindings.
+The JSON development transport dependency is confined to examples/tests; model
+manifests and qualification reports use YAML.
 
 ## Rust modules
 
@@ -24,11 +26,12 @@ third-party runtime dependencies.
 | `models` | Model-specific tokenization, tensor preparation, inference sequence, and voice formats |
 | `runtime` | Executing networks and integrating optional platform backends |
 
-Only version information is implemented. These module files establish ownership
-of future functionality without freezing speculative engine or runtime APIs.
-Supertonic 3 with Core ML is selected for the first slice. Its pinned reference
-bundle and development-only fixture tools are available; the Rust model/runtime
-interfaces are still to be implemented.
+Version queries and the [Core ML tensor runtime](coreml-runtime.md) are implemented.
+Its sessions own native models/tensors on one worker and expose portable owned
+data and opaque handles. Native bindings stay private; a separate system-binding
+crate is unnecessary. Model/tokenization orchestration remains a subsequent
+integration step. The pinned Supertonic bundle and saved-tensor replay tools
+qualify runtime outputs independently of that future text-to-PCM implementation.
 
 Keep model architecture separate from the inference backend: a model pipeline
 specifies what to execute, while a runtime supplies execution. Split modules into
@@ -58,7 +61,8 @@ compatibility. The first manifest pins the published Supertonic 3 v2 Core ML
 models, with bucketed INT4 VectorEstimators and FP16 shared stages.
 
 `tools/supertonic3/` verifies local assets and captures/replays real reference
-tensors using Python/Core ML. Its dependencies are development-only and do not
+tensors using Python/Core ML and replay saved runtime inputs through the Rust
+session. Its dependencies are development-only and do not
 enter the Rust crate, FFI library, or language packages. Small text/token fixtures
 and capture summaries live in Git; model bundles, complete tensor captures, and
 WAVs live in a user-selected external cache. These references establish porting

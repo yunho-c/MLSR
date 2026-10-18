@@ -93,10 +93,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          targets: aarch64-apple-ios, aarch64-apple-ios-sim
-      - name: Test the native adapter without downloading model weights
-        run: cargo +${{ matrix.rust }} test --locked -p mlsr -p mlsr-ffi --features coreml
-      - name: Link iOS device and simulator libraries
-        run: |
-          cargo +${{ matrix.rust }} build --locked -p mlsr-ffi --features coreml --target aarch64-apple-ios
-          cargo +${{ matrix.rust }} build --locked -p mlsr-ffi --features coreml --target aarch64-apple-ios-sim
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-darwin
+          components: clippy
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Lint the enabled backend
+        if: matrix.rust == 'stable'
+        run: cargo clippy --locked -p mlsr -p mlsr-ffi --all-targets --all-features -- -D warnings
+      - name: Test runtime, foreign callers, static/shared libraries, and Apple targets
+        run: python tools/check_coreml.py --toolchain ${{ matrix.rust }} --cross

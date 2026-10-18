@@ -62,16 +62,26 @@ def main():
         choices=["cpu_and_neural_engine", "cpu_only"],
         default="cpu_and_neural_engine",
     )
-    for name in ("verify-reference", "replay", "summary"):
+    for name in ("verify-reference", "replay", "replay-rust", "summary"):
         sub = commands.add_parser(name)
         sub.add_argument("--reference", type=Path, required=True)
         sub.add_argument("--corpus", type=Path, default=DEFAULT_CORPUS)
-        if name in ("replay", "summary"):
+        if name in ("replay", "replay-rust", "summary"):
             sub.add_argument("--output", type=Path, required=True)
-        if name == "replay":
+        if name in ("replay", "replay-rust"):
             sub.add_argument("--bundle", type=Path, required=True)
             sub.add_argument("--atol", type=float, default=1e-5)
             sub.add_argument("--rtol", type=float, default=1e-5)
+        if name == "replay-rust":
+            sub.set_defaults(atol=0.0, rtol=0.0)
+            sub.add_argument(
+                "--binary",
+                type=Path,
+                default=ROOT / "target/release/examples/coreml_replay",
+            )
+            sub.add_argument("--passes", type=int, default=2)
+            sub.add_argument("--output-backings", action="store_true")
+            sub.add_argument("--timeout", type=float, default=180.0)
         if name == "summary":
             sub.add_argument(
                 "--replay-report",
@@ -122,6 +132,29 @@ def main():
                 "frontend_cases": len(report["frontend"]),
                 "integrity": "passed",
             }
+        elif args.command == "replay-rust":
+            from .rust_runtime import replay_rust
+
+            report = replay_rust(
+                manifest,
+                args.bundle,
+                corpus,
+                args.reference,
+                args.output,
+                args.binary,
+                args.passes,
+                args.output_backings,
+                args.atol,
+                args.rtol,
+                args.timeout,
+            )
+            result = {
+                "passed": report["passed"],
+                "tensor_comparisons": report["tensor_comparisons"],
+                "all_tensors_exact": report["all_tensors_exact"],
+                "backings_reused": report["backings_reused"],
+                "report": str(args.output),
+            }
         elif args.command == "replay":
             report = replay(
                 manifest,
@@ -146,6 +179,13 @@ def main():
                 summary = compact_summary(report)
                 if args.replay_report:
                     evidence = load_yaml(args.replay_report)
+                    if (
+                        evidence.get("kind", "python_synthesis_replay")
+                        != "python_synthesis_replay"
+                    ):
+                        raise ReferenceError(
+                            "A runtime-only replay cannot qualify a complete synthesis replay"
+                        )
                     if evidence.get("reference_sha256") != digest(
                         args.reference / "reference.yaml"
                     ):

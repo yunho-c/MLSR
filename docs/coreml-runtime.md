@@ -10,11 +10,28 @@ borrowed native pointers form part of the public Rust API or C ABI.
 rejects empty/zero dimensions, overflowing element/byte counts, and data-length
 mismatches. Represent scalar model inputs as `[1]`.
 
+For example, after compiling the test affine model:
+
+```rust
+use mlsr::runtime::{ComputePolicy, HostTensor, Session, TensorData};
+
+let session = Session::coreml(ComputePolicy::CpuOnly)?;
+let model = session.load("/path/to/affine.mlmodelc")?;
+let input = session.upload(HostTensor::new(
+    vec![1, 2, 3], TensorData::F32(vec![1.0; 6]),
+)?)?;
+let outputs = session.predict(&model, &[("x", &input)], &["y"])?;
+let result = session.read(&outputs[0])?; // Six Float32 values equal to 3.
+session.shutdown()?;
+```
+
 Native arrays own retained `MLMultiArray` objects. Buffer access is scoped to
 Core ML's callbacks, with checked byte spans and element strides. Reading an
 output does not assume contiguous storage. Initialized allocations and typed
 copies preserve integer and floating-point representations. Native wrappers
 are explicitly neither Send nor Sync; the session owns them on one thread.
+Mutable copies reject overlapping or unproven layouts; read-only broadcast
+layouts remain supported. Native buffers are never borrowed Rust allocations.
 
 Predictions validate named input dtypes/shapes against Core ML's description,
 reject duplicate/unknown names, and validate requested outputs before returning
@@ -40,6 +57,19 @@ stride-aware copies, bit-preserving tensor transfer, output lifetime, malformed
 inputs/models, error recovery, and a controlled Objective-C exception. Portable
 host-tensor validation runs without the feature. Real Supertonic reference replay
 is an additional opt-in qualification.
+
+`python3 tools/check_coreml.py --cross` also exercises C static/shared callers,
+ctypes calls from foreign threads, and macOS/iOS compilation and deployment
+metadata. `--toolchain 1.88.0` selects the minimum supported Rust toolchain.
+These checks use the tiny fixture and need no speech model downloads.
+
+The recorded [Supertonic runtime qualification](../tests/fixtures/supertonic3/runtime-summary.yaml)
+contains 728 byte-exact tensor comparisons: 14 cases, two passes, and ordinary
+versus alternating output-buffer execution. Each session loaded six models once;
+the reuse run honored all 224 VE backing requests on the recorded M4 Pro/macOS
+27.0.1 host. The report records source/binary hashes and boundaries. It does not
+qualify physical iOS devices, minimum-OS execution, ANE residency, or performance.
+Reproduction commands are in the [model tool README](../tools/supertonic3/README.md#replay-through-the-rust-runtime).
 
 ## Persistent sessions
 

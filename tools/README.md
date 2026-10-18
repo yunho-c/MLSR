@@ -24,3 +24,9 @@ preparation, and real Core ML reference capture/replay. See its
 [README](supertonic3/README.md). `test-model-tools` runs the portable checks
 without building Rust, loading weights, or requiring Core ML; it additionally
 needs the packages in `supertonic3/requirements.txt`.
+
+`check_coreml.py` tests the optional Apple runtime without downloading weights.
+It compiles the tiny affine model with Xcode, runs Rust tests, builds static/shared
+native artifacts, and executes real inference from C and Python ctypes callers.
+`--cross` additionally links Intel macOS and iOS device/simulator artifacts.
+It requires installed targets/toolchains and never installs them automatically.

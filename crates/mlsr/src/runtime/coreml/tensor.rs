@@ -90,6 +90,31 @@ impl<'a> Layout<'a> {
         }
         true
     }
+
+    fn validate_writable(&self) -> Result<()> {
+        // Reading a broadcast view is valid, but writing arbitrary independent
+        // elements through overlapping strides cannot satisfy write's contract.
+        // Accept dense, transposed and padded layouts whose axes occupy disjoint
+        // spans. Reject exotic layouts we cannot establish as non-overlapping.
+        let mut axes = self
+            .shape
+            .iter()
+            .copied()
+            .zip(self.strides.iter().copied())
+            .filter(|(dim, _)| *dim > 1)
+            .collect::<Vec<_>>();
+        axes.sort_unstable_by_key(|&(_, stride)| stride);
+        let mut span = 1;
+        for (dim, stride) in axes {
+            if stride < span {
+                return Err(Error::InvalidTensor(
+                    "overlapping or unsupported mutable strides".into(),
+                ));
+            }
+            span += (dim - 1) * stride; // Bounded by Layout::new's checked span.
+        }
+        Ok(())
+    }
 }
 
 impl NativeTensor {
@@ -191,6 +216,7 @@ impl NativeTensor {
                 self.array.bytes_mut(|ptr, size, strides| {
                     result = (|| {
                         let layout = Layout::new(&self.shape, dimensions(strides)?, size)?;
+                        layout.validate_writable()?;
                         if ptr.is_null() {
                             return Err(Error::InvalidTensor("null native buffer".into()));
                         }
@@ -296,6 +322,30 @@ mod tests {
         assert_eq!(
             Layout::new(&[2, 3], vec![5, 1], 32).unwrap().byte_offset(5),
             28
+        );
+        assert!(
+            Layout::new(&[2, 3], vec![0, 1], 12)
+                .unwrap()
+                .validate_writable()
+                .is_err()
+        );
+        assert!(
+            Layout::new(&[2, 3], vec![1, 1], 16)
+                .unwrap()
+                .validate_writable()
+                .is_err()
+        );
+        assert!(
+            Layout::new(&[2, 3], vec![1, 2], 24)
+                .unwrap()
+                .validate_writable()
+                .is_ok()
+        );
+        assert!(
+            Layout::new(&[2, 3], vec![5, 1], 32)
+                .unwrap()
+                .validate_writable()
+                .is_ok()
         );
     }
 }

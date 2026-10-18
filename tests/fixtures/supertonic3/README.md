@@ -10,6 +10,10 @@
 - `reference-summary.yaml`: a compact record of the actual Core ML capture and
   replay, including device/software, model/corpus/tool hashes, shape routing,
   frame counts, and saved-noise/PCM hashes.
+- `runtime-summary.yaml`: qualification of the persistent Rust runtime against
+  those saved tensors, including ordinary allocation and alternating output
+  buffers. This supplies frontend inputs and duration/bucket decisions from
+  fixtures; it does not qualify the future Rust text-to-PCM pipeline.
 
 The six boundary probes target true latent lengths 127/128/129 and 255/256/257.
 The harness predicts duration, then calibrates speaking rate to the middle of

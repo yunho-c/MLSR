@@ -1,7 +1,7 @@
 //! MLSR's public Rust API and text-to-speech implementation.
 //!
-//! This initial scaffold exposes version information. Model loading and
-//! synthesis will be added after the first model and runtime are selected.
+//! Version information and a persistent, optional Core ML tensor runtime are
+//! available. The Supertonic text-to-PCM pipeline is the next integration step.
 
 #![deny(unsafe_code)]
 

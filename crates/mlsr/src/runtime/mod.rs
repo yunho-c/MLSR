@@ -1,7 +1,8 @@
 //! Inference execution and target-specific integration.
 //!
 //! Core ML is the first backend. Its optional dependency is enabled by the
-//! `coreml` feature on macOS and iOS only. Model execution is being implemented.
+//! `coreml` feature on macOS and iOS only. Sessions own native models/tensors on
+//! a persistent worker, with explicit host transfers and optional output reuse.
 
 mod error;
 mod session;

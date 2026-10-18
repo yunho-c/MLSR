@@ -244,6 +244,7 @@ name = "mlsr"
 version = "0.1.0"
 dependencies = [
  "cidre",
+ "serde_json",
 ]
 
 [[package]]

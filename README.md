@@ -3,14 +3,16 @@
 A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
-**Status:** initialized development scaffold. The Rust library and all three
-bindings expose native version/ABI queries. Model loading, inference, speech
-synthesis, streaming, and playback are not implemented yet. No model weights
-are downloaded by the build.
+**Status:** the Rust library has an optional persistent Core ML tensor runtime,
+with validated buffers, native tensor forwarding, and output-buffer reuse.
+The Supertonic text-to-PCM pipeline is the next integration step. The public C
+ABI and Dart/Go/Python bindings currently expose version queries. Streaming and
+playback are not implemented. Builds never download model weights.
 
 A pinned Supertonic 3 Core ML reference bundle and development-only
 [capture/replay tools](tools/supertonic3/README.md) establish the baseline for
 the first Rust synthesis implementation. The model manifest uses YAML.
+See the [Core ML runtime](docs/coreml-runtime.md) for its API and qualification.
 
 ## Layout
 
@@ -26,6 +28,7 @@ tests/fixtures/      Small, shared test inputs
 tests/integration/   Tests of the actual C ABI
 tools/codegen/       Pinned cbindgen header generator
 tools/supertonic3/   Model verification and real reference-fixture capture/replay
+tools/check_coreml.py Apple runtime, native callers, and build checks
 tools/dev.py         Portable development commands
 docs/                Architecture, FFI contract, and platform status
 ```
@@ -39,6 +42,7 @@ Rust applications depend directly on `mlsr`. Other languages call
 Install stable Rust, a native C toolchain, and Python 3.11+ for the development
 commands. The repository selects stable Rust without changing the global
 toolchain. Go checks need Go 1.22+ with cgo; Dart checks need Dart 3.11+.
+The production Rust crates require Rust 1.88 or newer.
 
 ```sh
 # Compile the Rust library and its C ABI.

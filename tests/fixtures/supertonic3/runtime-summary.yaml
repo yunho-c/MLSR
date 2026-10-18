@@ -1,0 +1,163 @@
+schema_version: 1
+kind: rust_coreml_runtime_qualification
+recorded_utc: '2026-10-18T02:36:04+00:00'
+bundle_id: supertonic3-coreml-int4-v1
+scope: Persistent Rust runtime executing saved tensor inputs; frontend, duration, bucket selection, and
+  PCM trim decisions are supplied by fixtures.
+passed: true
+manifest_sha256: 4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c
+reference_sha256: 5cfddc36a2dcba682a3c6f32d44d649583d3e3c71479849eadd8dea8b1581e71
+corpus_sha256: 3c4d522b406c29a5a2d289aca7a11bca0b43b2776ee683141cd128435b756bd2
+compute_policy: cpu_and_neural_engine
+binary_sha256: b3cf7db2d61122238b794aff96e40a7d1b6fd7b94de2c70cf6ebee49ce5b543c
+environment:
+  platform: macOS-27.0.1-arm64-arm-64bit-Mach-O
+  python: 3.14.8
+  numpy: 2.2.6
+  hardware: Apple M4 Pro
+  os_build: 26A434
+  rust: rustc 1.95.0 (59807616e 2026-04-14)
+  minimum_rust_tested: rustc 1.88.0 (6b00bc388 2025-06-23)
+  xcode: 'Xcode 27.1
+
+    Build version 27A9275'
+  macos_sdk: '27.0'
+  ios_sdk: '27.1'
+  ios_simulator_sdk: '27.1'
+source_files:
+  Cargo.lock: 88a78afc0c3d0b9015fae0614131a03f6682d1aa17133166b685f1d9909672ba
+  Cargo.toml: aae33786f27ad06a97dd8dfe796c120264f95644320ae0fe385dec66efb6ac84
+  crates/mlsr/Cargo.toml: a73a48c4e83415eac109edb6515ae57342c0edaa020fdc26b58eb70dc76142b1
+  crates/mlsr/examples/coreml_replay.rs: dbdf368c371f22582c2ff9eb31e8c276ea57933249f3a7041f1c81833d371927
+  crates/mlsr/src/runtime/coreml/mod.rs: 7f219c7f7e1efddcdad0ce68049c2af94d349047eec291d1472ac42a219c289e
+  crates/mlsr/src/runtime/coreml/model.rs: 326e3aae167158d52aac56f333960a843e00211a78bd6cd1b06d53aa1a5e493c
+  crates/mlsr/src/runtime/coreml/tensor.rs: dd07006169a46ff3cd6acf33c1bf61ad1ee3b047a56e2b3486484851e2807a5c
+  crates/mlsr/src/runtime/coreml/tests.rs: 2be44de880a2b546d11d67fb9ca0b5778029288eda8281cd06dfa532ec053a05
+  crates/mlsr/src/runtime/coreml/worker.rs: bba945f2b4510894ebc635966cb5517dbf855022cd178c759351d05e38e18e7c
+  crates/mlsr/src/runtime/error.rs: 70affbb86e86850cdfe9b6bcf1edea167f11d60a7bc6563a416bf4fd335172d3
+  crates/mlsr/src/runtime/mod.rs: 8d55c8c7d870119c795c33589fce1890efc3813ccfae6e7afcd2ba75282d31e0
+  crates/mlsr/src/runtime/session/tests.rs: ed11e0ab52cc8d943e6af535a11ec089fb762a6afa0249b4b063f37a5d9a584f
+  crates/mlsr/src/runtime/session.rs: 0dfaaf8ea2039591655cde422935f020fb04e3084159cee76e767d9da07b802d
+  crates/mlsr/src/runtime/tensor.rs: c13d6c5348fef8bd1d69c406235c9bbe8ca49d99c925b8320e111da3cbfcb7ea
+  tools/supertonic3/rust_runtime.py: 8006a1180102199d5cf478f7cefa79ca289e03be4e18bbe6a7e65ae646f4b931
+packaging_source_files:
+  tools/check_coreml.py: 1831ddd78169eb0268b94953748a7912c3115242970da9d05a25d0b2e64ccb8b
+  crates/mlsr/examples/coreml_ffi_probe.rs: 5ca4d4d5abcc913d2e45a397ee704aeb2054aa13cdf4b7f7047f0b342a091956
+  tests/integration/coreml_smoke.c: b1e0a407b21d67e1615e9d8a427585fe66da35435d00ca7a9bd7bbc9a6e32d02
+  tests/integration/coreml_ctypes.py: 80e1a85d5b867ca3e00c87a3c4a6347ea76cc6fc17ae8bddd2c7340e5c243498
+  .github/workflows/ci.yml: eab210679ae553de8fbe6f2d814fba03735f13f3469b3fbd1acd72ff6324635e
+replay:
+  cases: 14
+  passes_per_mode: 2
+  total_tensor_comparisons: 728
+  all_tensors_byte_exact: true
+  atol: 0.0
+  rtol: 0.0
+  allocation_modes:
+    ordinary:
+      case_executions: 28
+      tensor_comparisons: 364
+      model_loads: 6
+      successful_predictions: 308
+      persistent_tensor_handles: 0
+      all_case_tensor_counts_steady: true
+      ve_backings_reused: 0
+      worker_exit: 0
+    backings:
+      case_executions: 28
+      tensor_comparisons: 364
+      model_loads: 6
+      successful_predictions: 308
+      persistent_tensor_handles: 6
+      all_case_tensor_counts_steady: true
+      ve_backings_reused: 224
+      worker_exit: 0
+  cases_covered:
+  - id: en_m1_basic
+    bucket: 128
+    latent_length: 60
+  - id: en_f1_basic
+    bucket: 128
+    latent_length: 50
+  - id: en_normalization
+    bucket: 128
+    latent_length: 62
+  - id: en_punctuation
+    bucket: 128
+    latent_length: 56
+  - id: ko_m1_basic
+    bucket: 128
+    latent_length: 54
+  - id: ko_f1_basic
+    bucket: 128
+    latent_length: 45
+  - id: ko_normalization
+    bucket: 128
+    latent_length: 51
+  - id: ko_decomposed
+    bucket: 128
+    latent_length: 39
+  - id: latent_127
+    bucket: 128
+    latent_length: 127
+  - id: latent_128
+    bucket: 128
+    latent_length: 128
+  - id: latent_129
+    bucket: 256
+    latent_length: 129
+  - id: latent_255
+    bucket: 256
+    latent_length: 255
+  - id: latent_256
+    bucket: 256
+    latent_length: 256
+  - id: latent_257
+    bucket: 512
+    latent_length: 257
+native_checks:
+  host_runtime_tests: 10
+  host_ffi_version_tests: 1
+  rust_toolchains:
+  - 1.95.0
+  - 1.88.0
+  foreign_inference_callers:
+  - C linked to shared library
+  - C linked to static library
+  - Python ctypes from foreign threads
+  cross_linked_with_stable_rust:
+  - x86_64-apple-darwin
+  - aarch64-apple-ios
+  - aarch64-apple-ios-sim
+  deployment_metadata_verified:
+    macos: '15.0'
+    ios: '18.0'
+    ios_simulator: '18.0'
+  windows_all_features_typecheck: passed
+  apple_dependency_absent_on_default_and_windows: passed
+  json_dependency_absent_from_production_runtime: passed
+  portable_model_tool_tests: 36
+  existing_c_python_go_dart_version_checks: passed on macOS arm64
+  generated_c_and_dart_bindings: current
+  ci: configured; not executed during local qualification
+external_evidence:
+  directory: ~/.cache/mlsr/qualification/runtime-v1
+  files_sha256:
+    final-ordinary.yaml: 37dab6aaf8269b2aefb0052aeb137a9dbc6e3c6115df814bcce12171405a73a2
+    final-backings.yaml: c1356376d1d033db46579e73b38aa55f9454a03a4a15a35e9911788ab03876b3
+    final-ordinary.native.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    final-backings.native.log: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    task5-final-native.log: 08553990727c3745e8e3ca69588d17dc3b01bfaf48271e43c399866351ac84a9
+    task5-final-msrv-native.log: e87c015c70bdf29364620226358d02b8b41e3c1453505a2783e862996af5a81d
+    task5-final-model-tools.log: d28d9e807b6ea2d5f5b892dc6504ad59b106a1e04366bc687df2e9f259acdac1
+    task5-final-generated.log: 5a3bb5426b67c6645302a37a5a07507d2493442fba92a8d326ca0e92a663fd67
+    task5-final-portability.log: 962e1a555bbc71b9003f85a901ca66a952d1226ea8d67474cd69a00110c1b991
+    task5-final-real-replay.log: 5eda8f291ff4dd1e47202305530576c0de31672a022b437672a501b0ad734a9e
+    task5-portable-bindings.log: d09991dd26d427f254ebe7713de954be5f91017676db692610e9f9e5b54a88b5
+not_qualified:
+- Rust text normalization, duration/bucket planning, and complete text-to-PCM synthesis
+- Public C or language synthesis API
+- Execution on Intel macOS, macOS 15, iOS 18, or physical iOS devices
+- iOS application packaging
+- ANE placement, residency, utilization, and performance
+- Perceptual speech quality or parity with the unquantized upstream model
