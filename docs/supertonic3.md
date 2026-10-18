@@ -33,5 +33,29 @@ MLSR_TEST_BUNDLE=/path/to/model-bundle cargo test --locked -p mlsr \
   loads_pinned_external_bundle -- --ignored
 ```
 
-Model-specific frontend, planning, and synthesis are the next implementation
-steps. The public C ABI and language bindings currently expose version queries.
+## Text frontend
+
+`Bundle::encode_text(text, language)` returns the original text, normalized text,
+token count, Int32 IDs, and Float32 mask. Normalization follows the pinned
+upstream ordering, including language tags, symbol replacements, and whitespace
+handling. `unicode-normalization` is pinned to Unicode 15.0 to match the capture;
+Python's whitespace rules are explicit and do not change with Rust's Unicode
+tables. The adapted upstream code retains its MIT notice in the Rust crate.
+
+The first slice accepts at most 64 KiB of raw UTF-8 and 128 normalized Unicode
+scalars including tags. It rejects empty content, unknown languages, unsupported
+scalars, and overlong text; it never truncates or wraps code points to 16 bits.
+Model language tags are accepted independently of qualification: the current
+speech corpus qualifies only English and Korean. Normalized offsets count
+Unicode scalars and must not be treated as UTF-8 bytes or original-text offsets.
+
+Portable tests compare all 19 positive/negative corpus entries against the
+independent upstream frontend fixture. To repeat with the actual tokenizer:
+
+```sh
+MLSR_TEST_BUNDLE=/path/to/model-bundle cargo test --locked -p mlsr \
+  matches_frontend_with_real_tokenizer -- --ignored
+```
+
+Planning and synthesis are the next implementation steps. The public C ABI and
+language bindings currently expose version queries.

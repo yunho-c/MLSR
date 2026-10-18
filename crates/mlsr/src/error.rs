@@ -4,10 +4,45 @@ use std::{fmt, path::PathBuf};
 /// A library operation's result.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Stable categories for invalid synthesis input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InputErrorKind {
+    /// No speech remains before or after normalization.
+    EmptyText,
+    /// The model does not define this language tag.
+    UnsupportedLanguage,
+    /// A normalized Unicode scalar has no valid token.
+    UnsupportedCharacter,
+    /// Normalized text including language tags exceeds the model token limit.
+    TextTooLong,
+    /// Raw UTF-8 exceeds the bounded single-request input size.
+    InputTooLarge,
+}
+impl InputErrorKind {
+    /// Machine-readable name, shared with reference fixtures.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::EmptyText => "empty_text",
+            Self::UnsupportedLanguage => "unsupported_language",
+            Self::UnsupportedCharacter => "unsupported_character",
+            Self::TextTooLong => "text_too_long",
+            Self::InputTooLarge => "input_too_large",
+        }
+    }
+}
+
 /// Errors independent of any host language's exception or allocation model.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// A synthesis input was rejected before invoking a model.
+    Input {
+        /// Stable category.
+        kind: InputErrorKind,
+        /// Owned diagnostic.
+        message: String,
+    },
     /// A local file could not be read or written.
     Io {
         /// Path associated with the operation.
@@ -31,6 +66,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Input { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::Io { path, source } => write!(f, "{}: {source}", path.display()),
             Self::Manifest(message) => write!(f, "model manifest: {message}"),
             Self::Asset { path, message } => write!(f, "asset {}: {message}", path.display()),
