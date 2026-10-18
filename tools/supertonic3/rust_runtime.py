@@ -45,14 +45,22 @@ def output_names(steps):
 
 
 def decode_outputs(descriptors, raw, steps):
-    if set(descriptors) != output_names(steps):
+    return decode_tensor_map(
+        descriptors, raw, {name: "float32" for name in output_names(steps)}
+    )
+
+
+def decode_tensor_map(descriptors, raw, expected_dtypes):
+    """Validate a bounded named tensor transport before comparing any contents."""
+    if set(descriptors) != set(expected_dtypes):
         raise ReferenceError("Rust runtime output inventory changed")
     actual = {}
     for name, descriptor in descriptors.items():
         shape = descriptor["shape"]
         start, length = descriptor["offset"], descriptor["length"]
         if (
-            descriptor["dtype"] != "float32"
+            descriptor["dtype"] not in ("float32", "int32")
+            or descriptor["dtype"] != expected_dtypes[name]
             or not isinstance(shape, list)
             or not shape
             or any(type(dim) is not int or dim < 1 for dim in shape)
@@ -64,7 +72,10 @@ def decode_outputs(descriptors, raw, steps):
         ):
             raise ReferenceError(f"Invalid runtime tensor descriptor: {name}")
         actual[name] = np.frombuffer(
-            raw, dtype="<f4", count=length // 4, offset=start
+            raw,
+            dtype="<f4" if descriptor["dtype"] == "float32" else "<i4",
+            count=length // 4,
+            offset=start,
         ).reshape(shape)
     return actual
 

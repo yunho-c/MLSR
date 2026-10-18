@@ -33,6 +33,10 @@ name = "coreml_replay"
 required-features = ["coreml"]
 
 [[example]]
+name = "coreml_synthesis_replay"
+required-features = ["coreml"]
+
+[[example]]
 name = "coreml_ffi_probe"
 crate-type = ["cdylib", "staticlib"]
 required-features = ["coreml"]

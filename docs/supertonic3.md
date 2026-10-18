@@ -80,5 +80,58 @@ The portable planner tests use `tests/fixtures/supertonic3/planning.yaml`, which
 records raw prediction/speed/duration Float32 bits and decisions extracted from
 the existing capture, including the 127/128/129 and 255/256/257 boundaries.
 
-Complete model orchestration is the next implementation step. The public C ABI
-and language bindings currently expose version queries.
+## Persistent model pipeline
+
+`Pipeline::load(bundle, compute_policy, reuse_output_buffers)` loads the six
+graphs once and uploads M1/F1 voice styles. The pipeline owns four style tensors,
+two writable scalar tensors, and optionally six output buffers (two per bucket).
+`synthesize` takes original text, language, voice, and validated options. It
+computes duration, prepares noise/masks, encodes text, runs VE for the requested
+steps, crops the final latent to its true length, vocodes, and trims PCM.
+The export's VE result already includes integration; no additional Euler step
+is applied in Rust.
+
+The ordinary path reads back the duration scalar, final latent for cropping,
+and waveform. TE and intermediate VE tensors stay native. Synthesis requires
+`&mut self`, so two requests cannot alias the reusable buffers concurrently;
+the pipeline can move between caller threads. Errors drop per-request tensors.
+`shutdown` joins the worker, and owned output PCM remains valid after shutdown
+or destruction. In-flight native calls are synchronous; cancellation belongs
+to the subsequent job API.
+
+`synthesize_with_diagnostics` runs the same logic with optional captured noise
+and records host snapshots of every input/intermediate. This is a qualification
+path, not a performance benchmark. `stats` reports successful loads/predictions
+and native tensor handles; it is not a measurement of physical memory or ANE
+residency.
+
+```sh
+MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release \
+  -p mlsr --example coreml_synthesis_replay --features coreml
+
+python3 -m tools.supertonic3.synthesis_replay \
+  --bundle /path/to/model-bundle --reference /path/to/reference-capture \
+  --output /path/to/new/synthesis-ordinary.yaml
+
+python3 -m tools.supertonic3.synthesis_replay \
+  --bundle /path/to/model-bundle --reference /path/to/reference-capture \
+  --output /path/to/new/synthesis-backings.yaml --output-backings
+```
+
+Each mode runs two passes over 14 cases, comparing all 24 saved tensors per
+case byte-for-byte, checking normalization/frame/bucket decisions, rejecting
+five invalid inputs before inference, and comparing normal versus diagnostic
+PCM for four requests with Rust-generated noise. Boundary cases reuse recorded
+speaking rates; they do not supply precomputed durations or lengths to Rust.
+Reports include source/binary/reference hashes, resource counters, and backing
+reuse observations. Interrupted or failed runs remain non-passing. Existing
+outputs are not overwritten; model bundles and reference captures are verified
+before and after. Rebuild the binary before qualifying a source revision.
+
+The native opt-in test `repeated_requests_error_recovery_thread_move_and_shutdown`
+checks recovery after bad inputs/noise, repeated requests, moving the pipeline
+between threads, option effects, stable tensor counts, and output lifetime.
+It requires the `coreml` feature and `MLSR_TEST_BUNDLE`, and runs with `--ignored`.
+
+The top-level engine API and WAV CLI are the next implementation step. The
+public C ABI and language bindings currently expose version queries.
