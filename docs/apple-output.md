@@ -75,5 +75,7 @@ reproduces the ordering; the following native run passed with one graph open.
 
 Workspace tests, strict clippy, Rust 1.88 compilation and Windows target
 compilation cover the shared code. They do not imply native playback on Windows
-or iOS. Public C/Dart/Go/Python translations and Flutter use of this adapter are
-the following SDK step, not established by these Rust tests.
+or iOS. Public C/Dart/Go/Python translations and Flutter use of this adapter have
+their own [installed SDK and release evidence](developer-api-qualification.md).
+That record includes a refreshed native driver run and keeps its flush/buffer
+measurements separate from inference quiescence and process memory.

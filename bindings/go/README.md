@@ -144,11 +144,12 @@ qualifies a relocated module with real synthesis, `go test -race` and this examp
 
 `sdk_test.go` covers portable catalog/file ownership. Set `MLSR_TEST_MANIFEST`
 and `MLSR_TEST_BUNDLE` for shared-facade tests, and explicitly set
-`MLSR_TEST_NATIVE_OUTPUT=1` for muted native reader/GC/context tests. All three new
-real-model tests passed locally with `go test -race`, including PCM/WAV equality,
-state coalescing, independent cancellation and context-controlled fire-and-forget.
-Final installed-package/multi-language acceptance remains tracked in
-`docs/developer-api-progress.md`.
+`MLSR_TEST_NATIVE_OUTPUT=1` for muted native reader/GC/context tests. The
+[installed SDK qualification](../../docs/developer-api-qualification.md) passes
+with `go test -race`, including exact PCM/WAV, state coalescing, verified model
+ownership and context-controlled fire-and-forget. The
+[developer API example](examples/developer_api/main.go) uses bounded file rendering
+and SIGINT cancellation; `--speak` additionally plays and exports retained speech.
 
 The module path is `github.com/yunho-c/MLSR/bindings/go`. Future release tags for
 this nested module must use the `bindings/go/` prefix, such as

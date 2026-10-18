@@ -3,13 +3,16 @@
 A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
-**Status:** the first Supertonic 3 proof of concept is implemented and
-[qualified on an M4 Pro](docs/poc-qualification.md): Rust synthesis and WAV CLI,
-verified YAML bundles, a persistent cidre/Core ML runtime, installed
-Dart/Go/Python bindings, and a [Flutter speak/stop player](examples/flutter_speak/).
-It supports English/Korean, voices M1/F1, and
-[bounded segment jobs with cancellation](docs/jobs.md). QNN is the next backend;
-other devices, minimum OS versions, and distribution packages need qualification.
+**Status:** the [developer SDK v0](docs/developer-sdk.md) is implemented on top of
+[the qualified Supertonic3 Core ML baseline](docs/poc-qualification.md). Rust, C,
+Dart, Go and Python expose speech controllers, lazy synthesis, bounded rendering,
+native Apple playback, retained seeking and original-text reader alignment. The
+[Flutter reader](examples/flutter_speak/) uses these shared APIs. See the
+[acceptance checklist](docs/developer-api-progress.md) for qualification status.
+
+Real inference/output qualification targets macOS Apple Silicon, English/Korean
+and voices M1/F1. QNN is the next backend; physical iOS, other devices/minimum OS
+versions and published native distribution packages need separate qualification.
 Builds never download model weights.
 
 Flutter applications can [prepare a model asset package](docs/model-delivery.md)
@@ -30,6 +33,7 @@ and the [Core ML runtime](docs/coreml-runtime.md) for its ownership contract.
 crates/mlsr/          Public Rust API and TTS implementation modules
 crates/mlsr-cli/      Local bundle verification and text-to-WAV CLI
 crates/mlsr-ffi/      Shared C ABI adapter
+crates/mlsr-playback/ Optional native output and playback clock adapter
 include/mlsr.h       Generated C header
 bindings/dart/       Dart package, generated FFI, and native build hook
 bindings/flutter/    Flutter asset discovery and model installation adapter

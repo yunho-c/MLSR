@@ -1,6 +1,6 @@
 # MLSR Speak
 
-A local Flutter player for the macOS Apple Silicon proof of concept. Write text,
+A local Flutter player and reader for the macOS Apple Silicon developer SDK. Write text,
 choose English or Korean and voice M1/F1, then speak, stop, or export completed
 speech as a mono Float32 WAV. Replace or enqueue a new script while reading;
 pause, change volume/rate, seek retained audio, and navigate sentences.

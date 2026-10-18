@@ -44,6 +44,7 @@ Validation for this change:
 
 Portable tests cover readiness, explicit locale fallback, unavailable voices,
 Korean/emoji/combining characters, UTF-16 slicing, long-sentence grouping, frozen
-suffix identity, invalid cursors and foreign-model plan rejection. New public
-FFI/language facade translations follow in SDK integration; old layouts and
+suffix identity, invalid cursors and foreign-model plan rejection. The public
+[SDK translations](developer-sdk.md) and [installed-package qualification](developer-api-qualification.md)
+cover readiness, request inspection and original-text spans. Old layouts and
 UTF-8 fields remain unchanged.

@@ -78,5 +78,8 @@ MLSR_TEST_BUNDLE=/absolute/verified/model cargo test -p mlsr --all-features \
   real_reader_seek_navigation_exact_retention_and_completed_replay -- --ignored --nocapture
 ```
 
-This step qualifies shared Rust reader behavior on macOS. Language wrappers,
-Flutter reader UI and installed-package acceptance follow in steps 7–8.
+This test qualifies shared Rust reader behavior on macOS. The
+[combined qualification](developer-api-qualification.md) also covers language
+wrappers, the Flutter reader UI and installed packages. A paused cursor at frame
+zero exposes the first segment's original text range; the shared regression and
+Flutter previous-sentence test cover that boundary.

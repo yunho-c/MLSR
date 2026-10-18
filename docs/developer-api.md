@@ -70,7 +70,7 @@ Catalog existence, verified asset availability and engine readiness are distinct
 
 A frozen segment plan retains original text, sentence/segment IDs, model input,
 and original source ranges. Canonical offsets are half-open UTF-8 bytes. The
-public Dart `TextRange` uses half-open UTF-16 code units into the original string.
+public Dart `SpeechTextRange` uses half-open UTF-16 code units into the original string.
 Both representations are derived from one checked mapping; normalized positions
 must never be used to slice original text. Existing byte-offset fields remain
 documented bytes. Navigation reuses the original plan and original segment seed
@@ -159,7 +159,7 @@ store ownership and are never deleted by session cleanup.
 | seekableRanges | Exactly the retained source-audio intervals available for replay. |
 | estimatedDuration | Nullable prediction for the whole request; partial segment sums are not a whole-request estimate. |
 | duration | Authoritative length from final emitted frames, once all output is known. |
-| activeTextRange | Original text corresponding to the presented segment; no fabricated word timestamps. |
+| activeTextRange | Original text corresponding to the presented segment, or the selected paused cursor including frame zero; no fabricated word timestamps. |
 
 Seek is valid only inside retained ranges. A seek outside them returns an explicit
 result without moving playback. Valid seeks flush/invalidate old scheduled audio,

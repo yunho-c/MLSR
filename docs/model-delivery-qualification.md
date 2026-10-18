@@ -1,13 +1,42 @@
 # Bundled model delivery qualification
 
 The macOS arm64 slice packages the pinned Supertonic3 baseline through Flutter
-assets and loads it without application users entering model paths. A separate
-downstream consumer passed the four release cases below in two fresh-container
-runs on M4 Pro / macOS 27.0.1,
-using Flutter 3.41.4 and the `cpu_and_neural_engine` policy. This qualifies the
-delivery path on that device and OS; mobile adapters and other backends follow.
+assets and loads it without application users entering model paths. The delivery
+path passed its original POC qualification and a new qualification after the
+[developer SDK migration](developer-sdk.md). Both use M4 Pro / macOS 27.0.1,
+Flutter 3.41.4 and the `cpu_and_neural_engine` policy. Mobile adapters and other
+backends follow.
 
-## What the release test establishes
+## Developer SDK requalification
+
+`step8-release-v4` in `~/.cache/mlsr/qualification/developer-api-v0/` passed all
+four release phases using source `b3a64ec`, the shared Rust native player and WAV
+writer, and the public Flutter `Tts`/`Speech` facade. The ordinary UI controller
+also uses those APIs. Direct bundled loading still copies no model files;
+installed-copy loading publishes 29 files / 169,340,543 bytes once and reuses
+them on relaunch. Releasing the caller's model handle leaves Tts's lease active;
+removal succeeds after shutdown. Every phase returns retained bytes and native
+handles to zero.
+
+The relocated, ad-hoc signed release app retains App Sandbox without networking
+entitlements. Its live network and developer-file denial checks pass in a fresh
+container. Both rendering and retained speech match the original English/M1 and
+Korean/F1 reference PCM exactly. The new shared WAV header differs from the old
+demo writer. The expected PCM hashes were extracted after validating the original
+reference WAV hashes; the checker compares exact PCM payloads against them.
+No numerical tolerance was added.
+
+The new release app is 193,492,361 logical bytes. This excludes Core ML caches
+and is not a private APFS allocation measurement. Full source and artifact hashes,
+all four reports and the separate performance/ownership boundaries are indexed
+in the [developer API qualification](developer-api-qualification.md) and its
+[compact summary](../tests/fixtures/developer-api/qualification.json).
+
+## Original POC release qualification
+
+The original downstream consumer passed the four cases below in two
+fresh-container runs. This section preserves that earlier artifact's checks,
+timings and failures; the current checker uses the shared SDK described above.
 
 `tools/qualify_model_delivery.py` copies the Dart and Flutter packages into a
 consumer outside this checkout. Its native hook receives a prebuilt library;
@@ -39,8 +68,8 @@ are separate from the model store. The measured release probe app is about
 private APFS allocation nor a complete installed/cache storage measurement.
 
 Each phase synthesizes English/M1 and Korean/F1 with steps 8, speed 1.05, seed 0.
-The checks require exact WAV hashes against the previous qualified POC, finite
-contiguous PCM, one completion event, bounded muted AVAudioEngine playback,
+The original checks require exact WAV hashes against the previous qualified POC,
+finite contiguous PCM, one completion event, bounded muted AVAudioEngine playback,
 drained completion, stop/cancel quiescence, exclusive WAV export, ordinary
 controller temporary-file cleanup, and zero native handles. Muting exercises the
 real playback queue without claiming a new listening assessment. Forced
@@ -55,7 +84,7 @@ when assets are not directory-addressable is covered by small adapter tests.
 The ordinary controller's English WAV must match the same reference. No audio
 tolerance or automatic retry is used to turn a mismatching run into a pass.
 
-## Evidence and limits
+## Original evidence and limits
 
 Compact hashes and observations are recorded in
 [`model-delivery/qualification-summary.yaml`](../tests/fixtures/model-delivery/qualification-summary.yaml).
@@ -95,9 +124,12 @@ CI has been configured but has not been run for these unpushed commits.
 
 ## Reproduce
 
-Use the existing toolchains and a self-contained bundle with the original pinned
-`mlsr-bundle.yaml`. The parent output directory must exist; the selected output
-must be new and outside the checkout. This is an opt-in real-model check and
+Use the existing toolchains and a model-bundle directory containing the pinned
+payloads and an existing `mlsr-bundle.yaml` for the developer-file denial probe.
+The current checker explicitly supplies the repository's original YAML manifest
+to preparation, so an alternate cache manifest cannot change the catalog pin.
+The parent output directory must exist; the selected output must be new and
+outside the checkout. This is an opt-in real-model check and
 uses disk space for the consumer, generated assets, build, relocated app and
 Core ML caches. It does not download weights or clear existing app/cache data.
 

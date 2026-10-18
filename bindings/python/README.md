@@ -134,8 +134,10 @@ qualifies an installed wheel with real speech, cancellation and a WAV example.
 `tests/test_sdk.py` includes catalog/file/async ownership tests without model
 assets. Set `MLSR_TEST_MANIFEST` and `MLSR_TEST_BUNDLE` for real shared-facade
 stream/render/file equality and cancellation tests; additionally opt into muted
-device tests with `MLSR_TEST_NATIVE_OUTPUT=1`. These SDK checks passed on the local
-macOS Core ML/native-output host. Final multi-language/package qualification is
-tracked in `docs/developer-api-progress.md`.
+device tests with `MLSR_TEST_NATIVE_OUTPUT=1`. The
+[installed SDK qualification](../../docs/developer-api-qualification.md) passes
+the old/new APIs, exact PCM corpus, native reader and model ownership tests.
+The [developer API example](examples/developer_api.py) uses the shared file writer;
+`--speak --muted` additionally exercises native playback and retained export.
 
 Licensed under Apache-2.0; see `LICENSE`.

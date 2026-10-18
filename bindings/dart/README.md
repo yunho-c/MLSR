@@ -176,11 +176,11 @@ qualifies a relocated package/native asset with real inference and this example.
 `test/sdk_test.dart` covers catalog/verified readiness and owned WAV without model
 execution. Set `MLSR_TEST_MANIFEST` and `MLSR_TEST_BUNDLE` for real shared-facade
 tests; additionally opt into muted native playback with `MLSR_TEST_NATIVE_OUTPUT=1`.
-The relocated package passed all four SDK tests on the local macOS host, including
-Korean/emoji/combining-text UTF-16 mapping, exact PCM/WAV equality, bounded state
-observation, pending-done disposal and retained replay. Evidence is under
-`~/.cache/mlsr/qualification/developer-api-v0/step7-dart-v1`; final multi-language
-acceptance remains tracked in `docs/developer-api-progress.md`.
+The [installed SDK qualification](../../docs/developer-api-qualification.md)
+passes the old/new APIs, Korean/emoji/combining-text UTF-16 mapping, exact PCM/WAV,
+bounded state observation, pending-done disposal, retained replay and model lease
+ownership. The [developer API example](example/developer_api.dart) uses the shared
+job/file writer; its optional `speak` argument plays and exports retained speech.
 
 Regenerate bindings from the repository root with
 `python3 tools/dev.py generate`. `tool/generate_bindings.dart` uses ffigen's

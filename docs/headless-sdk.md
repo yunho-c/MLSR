@@ -67,6 +67,6 @@ existing engine, facade render, advanced stream and incremental WAV:
 
 The retained native test log is under
 `~/.cache/mlsr/qualification/developer-api-v0/step3-headless-v1/native-test.log`.
-This establishes the shared headless layer. Speech/controller/output integration,
-FFI and idiomatic language facade adapters, installed-package checks and the full
-acceptance qualification remain subsequent steps.
+This establishes the shared headless layer. The [developer SDK guide](developer-sdk.md)
+covers the implemented speech/output and language surfaces; the
+[acceptance checklist](developer-api-progress.md) tracks their combined qualification.
