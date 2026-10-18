@@ -412,7 +412,11 @@ func TestSDKVerifiedModelReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model, err := OpenModel(context.Background(), os.Getenv("MLSR_TEST_BUNDLE"), ModelDescriptor{CatalogYAML: string(catalog), ID: "supertonic3-coreml-int4-v1", Platform: "macos-arm64"})
+	directory := os.Getenv("MLSR_TEST_VERIFIED_BUNDLE")
+	if directory == "" {
+		directory = os.Getenv("MLSR_TEST_BUNDLE")
+	}
+	model, err := OpenModel(context.Background(), directory, ModelDescriptor{CatalogYAML: string(catalog), ID: "supertonic3-coreml-int4-v1", Platform: "macos-arm64"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,5 +451,33 @@ func TestSDKVerifiedModelReadiness(t *testing.T) {
 	}
 	if nativeHandleCount() != before {
 		t.Fatal("model/facade handle leak")
+	}
+}
+
+func TestRealSDKExportCorpus(t *testing.T) {
+	directory := os.Getenv("MLSR_SDK_OUTPUT")
+	if directory == "" {
+		t.Skip("cross-binding corpus not requested")
+	}
+	if err := os.Mkdir(directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	tts := openSDK(t, false)
+	for index, pair := range [][2]string{{"en", "M1"}, {"en", "F1"}, {"ko", "M1"}, {"ko", "F1"}} {
+		text := "Hello from MLSR."
+		if pair[0] == "ko" {
+			text = "안녕하세요. 반갑습니다."
+		}
+		request := DefaultSpeechRequest(text)
+		request.Locale = pair[0]
+		request.Voice = "supertonic3:" + pair[1]
+		request.Backend.Seed = uint64(1729 + index)
+		file, err := tts.RenderToFile(context.Background(), request, filepath.Join(directory, pair[0]+"_"+pair[1]+".wav"), 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if file.Frames <= 44100 {
+			t.Fatal("unexpectedly short corpus output")
+		}
 	}
 }

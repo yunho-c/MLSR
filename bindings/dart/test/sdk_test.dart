@@ -315,4 +315,37 @@ void main() {
     skip: Platform.environment['MLSR_TEST_NATIVE_OUTPUT'] == null,
     timeout: const Timeout(Duration(minutes: 3)),
   );
+  test(
+    'real SDK cross-binding export corpus',
+    () async {
+      final root = Directory(Platform.environment['MLSR_SDK_OUTPUT']!);
+      expect(await root.exists(), isFalse);
+      await root.create();
+      final tts = await Tts.open(
+        manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
+        bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        options: const TtsOptions(output: OutputMode.headless),
+      );
+      try {
+        final cases = [('en', 'M1'), ('en', 'F1'), ('ko', 'M1'), ('ko', 'F1')];
+        for (var i = 0; i < cases.length; i++) {
+          final (language, voice) = cases[i];
+          final file = await tts.renderToFile(
+            language == 'en' ? 'Hello from MLSR.' : '안녕하세요. 반갑습니다.',
+            '${root.path}/${language}_$voice.wav',
+            options: RequestOptions(
+              locale: language,
+              voice: 'supertonic3:$voice',
+              backend: SupertonicOptions(seed: 1729 + i),
+            ),
+          );
+          expect(file.frames, greaterThan(44100));
+        }
+      } finally {
+        await tts.dispose();
+      }
+    },
+    skip: Platform.environment['MLSR_SDK_OUTPUT'] == null,
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
 }

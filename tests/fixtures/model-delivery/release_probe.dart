@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mlsr_app_models/app_models.dart';
@@ -12,12 +13,37 @@ import 'package:mlsr_flutter/src/model_resources.dart';
 // ignore: implementation_imports
 import 'package:mlsr/src/bindings.g.dart' as native;
 import 'package:mlsr_speak/main.dart' as app;
-import 'package:mlsr_speak/pcm_player.dart';
 import 'package:mlsr_speak/speech_controller.dart';
-import 'package:mlsr_speak/wav_sink.dart';
 
 void require(bool condition, String message) {
   if (!condition) throw StateError(message);
+}
+
+Future<void> waitUntil(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw StateError('UI state timed out');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+String pcmHash(Uint8List bytes) {
+  final view = ByteData.sublistView(bytes);
+  for (var offset = 12; offset + 8 <= bytes.length;) {
+    final length = view.getUint32(offset + 4, Endian.little);
+    require(offset + 8 + length <= bytes.length, 'truncated WAV');
+    if (String.fromCharCodes(bytes.sublist(offset, offset + 4)) == 'data') {
+      return sha256
+          .convert(
+            Uint8List.sublistView(bytes, offset + 8, offset + 8 + length),
+          )
+          .toString();
+    }
+    offset += 8 + length + (length & 1);
+  }
+  throw StateError('missing WAV data');
 }
 
 class ProbeResources implements ModelResources {
@@ -58,10 +84,10 @@ Future<Map<String, int>> inventory(String path) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final speech = SpeechController(muted: true);
+  final speech = DemoController(muted: true);
   runApp(app.SpeakApp(controller: speech));
   final report = <String, Object?>{'passed': false};
-  Engine? engine;
+  Tts? tts;
   Directory? audioDirectory;
   try {
     final phase = Platform.environment['MLSR_DELIVERY_PHASE']!;
@@ -119,28 +145,30 @@ Future<void> main() async {
     audioDirectory = await parent.createTemp('delivery-audio-');
     report['audio_evidence_directory'] = audioDirectory.path;
 
-    // The ordinary controller owns the native player's initial epoch sequence.
-    // Exercise it before the direct probe advances that same platform player.
     final controllerStart = Stopwatch()..start();
     await speech.load();
     report['controller_load_ms'] = controllerStart.elapsedMicroseconds / 1000;
     require(speech.ready, 'release controller loading failed: ${speech.error}');
-    await speech.speak('Hello from MLSR.', 'en', 'M1');
+    final spoken = speech.speak('Hello from MLSR.', 'en', 'M1')!;
     require(
-      speech.error == null && speech.wav != null,
+      (await spoken.done).kind == OutcomeKind.completed,
+      'speech did not complete',
+    );
+    await waitUntil(() => speech.canExport || speech.error != null);
+    require(
+      speech.canExport && speech.error == null,
       'release controller failed: ${speech.error}',
     );
-    final controllerWav = speech.wav!;
+    final controllerPath = '${audioDirectory.path}/controller-export.wav';
+    await speech.exportTo(controllerPath);
+    final controllerBytes = await File(controllerPath).readAsBytes();
     report['controller_wav_sha256'] = sha256
-        .convert(await controllerWav.readAsBytes())
+        .convert(controllerBytes)
         .toString();
-    await WavSink.export(
-      controllerWav,
-      '${audioDirectory.path}/controller-export.wav',
-    );
+    report['controller_pcm_sha256'] = pcmHash(controllerBytes);
     await speech.close();
-    require(!await controllerWav.exists(), 'controller temporary WAV leaked');
-    report['controller_temporary_wav_removed'] = true;
+    require(native.mlsr_live_handles() == 0, 'controller handles leaked');
+    report['controller_handles_released'] = true;
 
     final start = Stopwatch()..start();
     stdout.writeln('MLSR_DELIVERY_STAGE=resolve-model');
@@ -153,7 +181,7 @@ Future<void> main() async {
     report['model_resolution_ms'] = start.elapsedMicroseconds / 1000;
     start.reset();
     try {
-      engine = await Engine.fromModel(model);
+      tts = await Tts.fromModel(model);
     } finally {
       await model.dispose();
     }
@@ -171,94 +199,117 @@ Future<void> main() async {
         report['engine_lease_blocked_removal'] = true;
       }
     }
-    final player = PcmPlayer();
     final outputs = <String, Object?>{};
-    var epoch = (await player.state())['epoch'] as int;
-    epoch++;
     for (final test in [
       ('hello', 'Hello from MLSR.', 'en', 'M1'),
       ('korean', '안녕하세요. 반갑습니다.', 'ko', 'F1'),
     ]) {
-      await player.begin(epoch, muted: true);
-      final sink = await WavSink.create(audioDirectory, epoch);
-      final job = await engine.start(
+      final options = RequestOptions(
+        locale: test.$3,
+        voice: 'supertonic3:${test.$4}',
+      );
+      final rendered = await tts.renderToFile(
         test.$2,
-        language: test.$3,
-        voice: test.$4,
+        '${audioDirectory.path}/${test.$1}-render.wav',
+        options: options,
       );
-      var frames = 0, terminals = 0;
+      final renderedBytes = await File(rendered.path).readAsBytes();
+      final request = tts.speak(
+        test.$2,
+        request: options,
+        options: const SpeechOptions(volume: 0),
+      );
       final clock = Stopwatch()..start();
-      double? firstAudio;
-      await for (final event in job.events) {
-        if (event.kind == EventKind.audio) {
-          firstAudio ??= clock.elapsedMicroseconds / 1000;
-          require(
-            event.startFrame == frames &&
-                event.samples.every((v) => v.isFinite),
-            'invalid PCM',
-          );
-          await sink.add(event.samples);
-          await player.enqueue(epoch, event.samples);
-          frames += event.frames;
+      double? firstBuffered, firstPosition;
+      final observer = request.states.listen((state) {
+        if (state.bufferedUntilFrame > 0) {
+          firstBuffered ??= clock.elapsedMicroseconds / 1000;
         }
-        if (event.terminal) {
-          terminals++;
-          require(event.kind == EventKind.completed, 'synthesis failed');
+        if (state.positionFrame > 0) {
+          firstPosition ??= clock.elapsedMicroseconds / 1000;
         }
-      }
-      require(frames > 44100 && terminals == 1, 'incomplete speech');
-      await player.finish(epoch);
-      final wav = await sink.finish();
-      final bytes = await wav.readAsBytes();
-      final exported = '${audioDirectory.path}/${test.$1}-export.wav';
-      await WavSink.export(wav, exported);
+      });
       try {
-        await WavSink.export(wav, exported);
-        throw StateError('export overwrote a file');
-      } on FileSystemException {
-        /* expected create-exclusive behavior */
+        require(
+          (await request.done).kind == OutcomeKind.completed,
+          'speech failed',
+        );
+        final state = await request.snapshot();
+        require(
+          state.playback == PlaybackPhase.ended &&
+              state.positionFrame == state.durationFrames &&
+              state.durationFrames == rendered.frames,
+          'playback did not drain',
+        );
+        final exported = '${audioDirectory.path}/${test.$1}-export.wav';
+        await tts.writeSpeech(request, exported);
+        final bytes = await File(exported).readAsBytes();
+        require(
+          pcmHash(bytes) == pcmHash(renderedBytes),
+          'retained speech and render PCM differ',
+        );
+        try {
+          await tts.writeSpeech(request, exported);
+          throw StateError('export overwrote a file');
+        } on SynthesisException catch (error) {
+          require(error.code == 'io_error', 'unexpected export error: $error');
+        }
+        require(
+          sha256.convert(await File(exported).readAsBytes()).toString() ==
+              sha256.convert(bytes).toString(),
+          'existing WAV changed',
+        );
+        outputs[test.$1] = {
+          'frames': rendered.frames,
+          'wav_sha256': sha256.convert(bytes).toString(),
+          'pcm_sha256': pcmHash(bytes),
+          'render_pcm_sha256': pcmHash(renderedBytes),
+          'first_buffered_observed_ms': firstBuffered,
+          'first_position_observed_ms': firstPosition,
+          'playback': state.playback.name,
+        };
+      } finally {
+        await observer.cancel();
+        await request.dispose();
       }
-      final state = await player.state();
-      require(
-        state['active'] == false &&
-            state['queuedFrames'] == 0 &&
-            (state['peakQueuedFrames'] as int) <= 22050,
-        'playback did not drain within its bound',
-      );
-      outputs[test.$1] = {
-        'frames': frames,
-        'wav_sha256': sha256.convert(bytes).toString(),
-        'first_audio_ms': firstAudio,
-        'playback': state,
-      };
-      epoch++;
     }
     report['outputs'] = outputs;
 
-    await player.begin(epoch, muted: true);
-    final job = await engine.start(List.filled(12, app.english).join('\n'));
-    final events = StreamIterator(job.events);
-    while (await events.moveNext()) {
-      if (events.current.kind == EventKind.audio) {
-        await player.enqueue(epoch, events.current.samples);
-        break;
-      }
-    }
-    final cancellation = Stopwatch()..start();
-    await player.stop(epoch);
-    final stopped = await player.state();
-    require(
-      stopped['active'] == false && stopped['queuedFrames'] == 0,
-      'stop did not flush playback',
+    final request = tts.speak(
+      List.filled(12, app.english).join('\n'),
+      options: const SpeechOptions(volume: 0),
     );
-    report['stop_to_playback_flush_ms'] =
+    final ready = Completer<void>();
+    final observer = request.states.listen((state) {
+      if ((state.bufferedUntilFrame > 0 || state.completion != null) &&
+          !ready.isCompleted) {
+        ready.complete();
+      }
+    });
+    await ready.future.timeout(const Duration(seconds: 60));
+    final cancellation = Stopwatch()..start();
+    request.cancel();
+    require(
+      (await request.done).reason == CancelReason.requested,
+      'cancellation failed',
+    );
+    report['cancel_to_quiescent_observed_ms'] =
         cancellation.elapsedMicroseconds / 1000;
-    job.cancel();
-    require(await job.wait(timeoutMs: 30000), 'cancellation did not quiesce');
-    await events.cancel();
-    report['stop_to_quiescent_ms'] = cancellation.elapsedMicroseconds / 1000;
-    await engine.dispose();
-    engine = null;
+    require(
+      (await request.snapshot()).playback == PlaybackPhase.stopped,
+      'playback did not stop',
+    );
+    await observer.cancel();
+    await request.dispose();
+    final retained = (await tts.snapshot()).retention;
+    require(
+      retained.usedBytes == 0 && retained.liveStores == 0,
+      'retained audio leaked',
+    );
+    report['retention_peak_bytes'] = retained.peakBytes;
+    report['retention_after_bytes'] = retained.usedBytes;
+    await tts.dispose();
+    tts = null;
 
     if (phase == 'installed_repeat') {
       await ModelStore(storeRoot).remove(descriptor);
@@ -282,11 +333,10 @@ Future<void> main() async {
     report['failure'] = error.toString();
     report['stack'] = stack.toString();
   } finally {
-    await engine?.dispose();
+    await tts?.dispose();
     await speech.close();
     speech.dispose();
-    // Keep probe WAVs as qualification evidence. SpeechController.close above
-    // still verifies cleanup of the ordinary application's temporary audio.
+    // User-owned exports remain as qualification evidence.
   }
   stdout.writeln('MLSR_DELIVERY_RESULT=${jsonEncode(report)}');
   await stdout.flush();

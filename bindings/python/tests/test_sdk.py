@@ -146,6 +146,24 @@ class RealDeveloperAPI(unittest.TestCase):
         with self.assertRaises(TtsError):
             self.tts.speak("headless output is unavailable")
 
+    @unittest.skipUnless(
+        os.environ.get("MLSR_SDK_OUTPUT"), "cross-binding corpus not requested"
+    )
+    def test_sdk_export_corpus(self):
+        root = Path(os.environ["MLSR_SDK_OUTPUT"])
+        root.mkdir()
+        for index, (language, voice) in enumerate(
+            [("en", "M1"), ("en", "F1"), ("ko", "M1"), ("ko", "F1")]
+        ):
+            request = Request(
+                "Hello from MLSR." if language == "en" else "안녕하세요. 반갑습니다.",
+                locale=language,
+                voice="supertonic3:" + voice,
+                backend=SupertonicOptions(seed=1729 + index),
+            )
+            result = self.tts.render_to_file(request, root / f"{language}_{voice}.wav")
+            self.assertGreater(result.frames, 44100)
+
     def test_abandoned_consumer_cancel_and_async_render(self):
         with self.tts.synthesize(self.request) as job:
             with job.audio() as stream:
@@ -259,7 +277,10 @@ class VerifiedModelReadiness(unittest.TestCase):
             "supertonic3-coreml-int4-v1",
             "macos-arm64",
         )
-        model = ModelHandle(os.environ["MLSR_TEST_BUNDLE"], descriptor)
+        model = ModelHandle(
+            os.environ.get("MLSR_TEST_VERIFIED_BUNDLE", os.environ["MLSR_TEST_BUNDLE"]),
+            descriptor,
+        )
         tts = None
         try:
             self.assertEqual(model.voices[0].readiness, "assets_verified")
