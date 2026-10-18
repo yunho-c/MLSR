@@ -120,12 +120,12 @@ fn variants_pin_baseline_weights_interfaces_and_safe_paths() {
 }
 
 // Deliberately tiny graph payloads test integrity only; never used for inference.
-struct Fixture {
-    directory: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) directory: tempfile::TempDir,
     value: Value,
 }
 impl Fixture {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let directory = tempfile::tempdir().unwrap();
         let mut value: Value = serde_yaml_ng::from_str(BASELINE).unwrap();
         let root = directory.path();
@@ -152,7 +152,7 @@ impl Fixture {
         }
         Self { directory, value }
     }
-    fn load(&self) -> Result<Bundle> {
+    pub(crate) fn load(&self) -> Result<Bundle> {
         let manifest = self.directory.path().join("mlsr-bundle.yaml");
         fs::write(&manifest, serde_yaml_ng::to_string(&self.value).unwrap()).unwrap();
         Bundle::load(manifest, self.directory.path())

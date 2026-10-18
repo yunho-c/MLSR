@@ -12,3 +12,6 @@ pub use pipeline::{Diagnostics, Pipeline, SynthesisOutput};
 pub use planning::{PreparedLatent, SynthesisPlan};
 #[cfg(test)]
 pub(crate) use segmentation::segment_text as plan_segments;
+
+#[cfg(test)]
+pub(crate) use bundle::tests::Fixture;

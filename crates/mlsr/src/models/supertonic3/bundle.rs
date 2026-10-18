@@ -172,6 +172,15 @@ impl Voice {
 }
 
 impl Bundle {
+    // Only the store calls this, after verifying the staging tree and atomically
+    // renaming it. Rebase known graph paths without reading the payload twice.
+    pub(crate) fn relocated(mut self, root: PathBuf) -> Self {
+        for path in self.models.values_mut() {
+            *path = root.join(path.strip_prefix(&self.root).expect("verified graph path"));
+        }
+        self.root = root;
+        self
+    }
     /// Open a self-contained local bundle using its conventional manifest name.
     pub fn open(root: impl AsRef<Path>) -> Result<Self> {
         Self::load(root.as_ref().join(BUNDLE_MANIFEST_NAME), root)
@@ -581,4 +590,4 @@ impl Style {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

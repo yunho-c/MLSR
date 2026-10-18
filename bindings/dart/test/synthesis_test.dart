@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:mlsr/mlsr.dart';
 import 'package:mlsr/src/bindings.g.dart' as native;
 import 'package:test/test.dart';
+import 'model_store_cases.dart';
 
 void main() {
+  modelStoreTests();
   test('owned native errors and isolate cleanup without models', () async {
     final before = native.mlsr_live_handles();
     await expectLater(

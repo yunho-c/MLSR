@@ -40,6 +40,21 @@ impl MlsrString {
     }
 }
 
+/// Trusted model catalog and exact selection. All strings are borrowed for the
+/// call. Obtain the catalog from application configuration, not downloaded data.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MlsrModelSpec {
+    /// Must equal sizeof(MlsrModelSpec).
+    pub struct_size: u32,
+    /// YAML catalog, limited to 64 KiB.
+    pub catalog: MlsrString,
+    /// Exact model identifier, limited to 128 UTF-8 bytes.
+    pub id: MlsrString,
+    /// Catalog platform key, such as macos-arm64; limited to 64 bytes.
+    pub platform: MlsrString,
+}
+
 /// Engine settings. Initialize with mlsr_engine_options_default. This v1 layout
 /// is fixed; struct_size rejects incompatible callers before reading fields.
 #[repr(C)]

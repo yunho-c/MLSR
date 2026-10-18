@@ -3,6 +3,8 @@ import 'dart:isolate';
 import 'dart:typed_data';
 import 'synthesis_native.dart';
 
+part 'models.dart';
+
 /// Native failure with a stable category. Terminal inference failures are also
 /// represented by SynthesisEvent.error so the stream retains one final outcome.
 typedef SynthesisException = NativeFailure;
@@ -95,6 +97,35 @@ class Engine {
   Completer<void>? _startsIdle;
   Future<void>? _disposal;
   Engine._(this._adapter, this._handle);
+
+  /// Reuse verified model data and retain its lease independently. The caller
+  /// may dispose the model after this future completes, including on failure.
+  static Future<Engine> fromModel(
+    ModelHandle model, {
+    ComputePolicy computePolicy = ComputePolicy.cpuAndNeuralEngine,
+    bool reuseOutputBuffers = true,
+    int executionVariant = 0,
+  }) => model._use((handle) async {
+    checkModelApi();
+    if (executionVariant < 0 || executionVariant > 0xffffffff) {
+      throw ArgumentError('Invalid variant');
+    }
+    final adapter = await _Adapter.spawn();
+    try {
+      final engine =
+          await adapter.call('openModel', {
+                'model': handle,
+                'policy': computePolicy.index,
+                'reuse': reuseOutputBuffers ? 1 : 0,
+                'variant': executionVariant,
+              })
+              as int;
+      return Engine._(adapter, engine);
+    } catch (_) {
+      adapter.close();
+      rethrow;
+    }
+  });
 
   static Future<Engine> load({
     required String manifest,

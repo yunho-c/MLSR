@@ -7,7 +7,7 @@ native build hook packages code; Rust verifies and owns model lifetimes.
 | Change | Status and completion gate |
 | --- | --- |
 | 1. Bundle discovery and catalog | Implemented: directory discovery, exact-byte YAML identity, pinned catalog; 25 portable Rust tests, 46 model-tool tests, real prepared-bundle discovery, strict Clippy and Rust 1.88 check passed |
-| 2. Rust model store and C/Dart ownership | Pending: atomic installation, concurrency, active-model leases, additive handles |
+| 2. Rust model store and C/Dart ownership | Implemented: verified atomic publication, cross-process locks and model/engine leases; portable Rust/C/Dart tests, real Core ML engine lifetime/synthesis test, strict Clippy, Rust 1.88 and Windows cross-check passed |
 | 3. Generated Flutter asset package | Pending: deterministic CLI preparation, exact inventories, regular files, platform filtering |
 | 4. Flutter model resolution | Pending: native resource lookup, direct loading and streamed installation, open by model ID |
 | 5. Example migration | Pending: bundled baseline, no required paths, existing playback/cancel/export behavior |

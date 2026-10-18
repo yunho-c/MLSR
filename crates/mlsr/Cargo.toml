@@ -25,9 +25,10 @@ unicode-normalization = "=0.1.22"
 unicode-segmentation = "=1.12.0"
 rand_chacha = "=0.9.0"
 rand_distr = "=0.5.1"
-
-[dev-dependencies]
 tempfile = "=3.27.0"
+
+[target.'cfg(any(unix, windows))'.dependencies]
+fs2 = "=0.4.3"
 
 [[example]]
 name = "coreml_replay"

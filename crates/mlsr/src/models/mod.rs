@@ -4,4 +4,5 @@
 //! weights are external assets described by the root `model-manifests/` folder.
 
 pub mod catalog;
+pub mod store;
 pub mod supertonic3;

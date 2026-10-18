@@ -61,6 +61,29 @@ void checkSynthesisApi() {
   }
 }
 
+void checkModelApi() {
+  checkSynthesisApi();
+  if (native.mlsr_features() & 4 == 0) {
+    throw const NativeFailure(
+      'unsupported_abi',
+      'Native model store API is unavailable',
+    );
+  }
+}
+
+Pointer<native.MlsrModelSpec> _modelSpec(
+  Arena arena,
+  Map<String, Object?> args,
+) {
+  final spec = arena<native.MlsrModelSpec>();
+  spec.ref
+    ..struct_size = sizeOf<native.MlsrModelSpec>()
+    ..catalog = _string(arena, args['catalog'] as String)
+    ..id = _string(arena, args['id'] as String)
+    ..platform = _string(arena, args['platform'] as String);
+  return spec;
+}
+
 void cancelNative(int job) => using((arena) {
   final error = arena<Uint64>();
   _check(native.mlsr_job_cancel(job, error), error);
@@ -68,9 +91,13 @@ void cancelNative(int job) => using((arena) {
 
 // Also usable from a fresh cleanup isolate if the original adapter exits.
 void releaseNative(String kind, int handle) {
-  final status = kind == 'engine'
-      ? native.mlsr_engine_release(handle)
-      : native.mlsr_job_release(handle);
+  final status = switch (kind) {
+    'engine' => native.mlsr_engine_release(handle),
+    'job' => native.mlsr_job_release(handle),
+    'model' => native.mlsr_model_release(handle),
+    'installation' => native.mlsr_model_install_release(handle),
+    _ => throw NativeFailure('invalid_operation', 'Unknown release kind $kind'),
+  };
   if (status != 0) {
     throw NativeFailure('release_failed', '$kind release failed');
   }
@@ -81,7 +108,57 @@ Object? nativeOperation(String operation, Map<String, Object?> args) {
     final error = arena<Uint64>();
     final output = arena<Uint64>();
     switch (operation) {
+      case 'modelOpen':
+      case 'storeOpen':
+      case 'installBegin':
+        checkModelApi();
+        final root = _string(arena, args['root'] as String);
+        final spec = _modelSpec(arena, args);
+        final status = switch (operation) {
+          'modelOpen' => native.mlsr_model_open(root, spec, output, error),
+          'storeOpen' => native.mlsr_model_store_open(
+            root,
+            spec,
+            output,
+            error,
+          ),
+          _ => native.mlsr_model_install_begin(root, spec, output, error),
+        };
+        _check(status, error);
+        if (operation != 'installBegin') return output.value;
+        try {
+          final path = arena<native.MlsrString>();
+          _check(
+            native.mlsr_model_install_path(output.value, path, error),
+            error,
+          );
+          return [output.value, _decode(path.ref)];
+        } catch (_) {
+          native.mlsr_model_install_release(output.value);
+          rethrow;
+        }
+      case 'installCommit':
+        _check(
+          native.mlsr_model_install_commit(
+            args['installation'] as int,
+            output,
+            error,
+          ),
+          error,
+        );
+        return output.value;
+      case 'storeRemove':
+        _check(
+          native.mlsr_model_store_remove(
+            _string(arena, args['root'] as String),
+            _modelSpec(arena, args),
+            error,
+          ),
+          error,
+        );
+        return null;
       case 'open':
+      case 'openModel':
         checkSynthesisApi();
         final options = arena<native.MlsrEngineOptions>();
         native.mlsr_engine_options_default(options);
@@ -90,13 +167,20 @@ Object? nativeOperation(String operation, Map<String, Object?> args) {
           ..reuse_output_buffers = args['reuse'] as int
           ..execution_variant = args['variant'] as int;
         _check(
-          native.mlsr_engine_open(
-            _string(arena, args['manifest'] as String),
-            _string(arena, args['bundle'] as String),
-            options,
-            output,
-            error,
-          ),
+          operation == 'openModel'
+              ? native.mlsr_engine_open_model(
+                  args['model'] as int,
+                  options,
+                  output,
+                  error,
+                )
+              : native.mlsr_engine_open(
+                  _string(arena, args['manifest'] as String),
+                  _string(arena, args['bundle'] as String),
+                  options,
+                  output,
+                  error,
+                ),
           error,
         );
         return output.value;
@@ -192,6 +276,12 @@ Object? nativeOperation(String operation, Map<String, Object?> args) {
         return null;
       case 'releaseEngine':
         releaseNative('engine', args['engine'] as int);
+        return null;
+      case 'releaseModel':
+        releaseNative('model', args['model'] as int);
+        return null;
+      case 'releaseInstallation':
+        releaseNative('installation', args['installation'] as int);
         return null;
       default:
         throw NativeFailure('invalid_operation', operation);

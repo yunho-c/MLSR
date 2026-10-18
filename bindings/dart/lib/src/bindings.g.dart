@@ -36,6 +36,26 @@ external int mlsr_engine_open(
   ffi.Pointer<ffi.Uint64> error,
 );
 
+/// Load an engine from a verified model, retaining its lease independently.
+/// Blocking. Does not rehash the baseline payload; optional variants still verify
+/// their own graphs. The caller may release the model after this call returns.
+/// # Safety
+/// Settings (optional) must be readable/aligned; output/error writable/disjoint.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrEngineOptions>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_engine_open_model(
+  int model,
+  ffi.Pointer<MlsrEngineOptions> settings,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
 /// Initialize engine options. Null output returns MLSR_ERROR.
 /// # Safety
 /// A non-null output must point to aligned writable MlsrEngineOptions storage.
@@ -95,7 +115,8 @@ external int mlsr_event_read(
 @ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
 external int mlsr_event_release(int event);
 
-/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target.
+/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
+/// 4 = model ownership and transactional store API.
 @ffi.Native<ffi.Uint32 Function()>()
 external int mlsr_features();
 
@@ -181,6 +202,130 @@ external int mlsr_job_wait(
 /// Number of registry handles, for leak diagnostics; not a memory measurement.
 @ffi.Native<ffi.Uint64 Function()>()
 external int mlsr_live_handles();
+
+/// Begin an exclusive staged installation. Copy/stream the exact manifest and
+/// payload files into the returned installation's path, then commit. Release
+/// aborts an unfinished transaction. Existing versions are never overwritten.
+/// # Safety
+/// Same pointer requirements as mlsr_model_open.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    ffi.Pointer<MlsrModelSpec>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_install_begin(
+  MlsrString store_root,
+  ffi.Pointer<MlsrModelSpec> spec,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Consume the transaction, verify and publish atomically, and return a model
+/// lease. Blocking. Release the installation handle after this call, including
+/// failure; it cannot be committed twice. The model has independent ownership.
+/// # Safety
+/// Output/error must be writable/aligned/disjoint. All host staging writers must
+/// have closed and must never modify that staging path again.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_install_commit(
+  int installation,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Read a borrowed UTF-8 staging path, valid until installation release. It is
+/// no longer a writable installation after commit, whether commit succeeds or
+/// fails. Close all host writers before commit; no concurrent path mutation.
+/// # Safety
+/// Output/error must be writable/aligned/disjoint. Copy the view before releasing
+/// the installation; do not concurrently release while using the borrowed view.
+@ffi.Native<
+  ffi.Int32 Function(
+    ffi.Uint64,
+    ffi.Pointer<MlsrString>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_install_path(
+  int installation,
+  ffi.Pointer<MlsrString> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Release an installation, aborting and cleaning its staging tree if unfinished.
+/// Zero succeeds; stale or wrong-kind handles fail. May perform filesystem I/O.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_model_install_release(int installation);
+
+/// Verify a model in an immutable app-bundled directory, without copying it.
+/// Blocking. Caller must keep the files immutable for all derived engine lives.
+/// # Safety
+/// Spec and strings must be aligned/readable for their declared sizes; output
+/// and optional error must be writable, aligned, and disjoint from inputs.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    ffi.Pointer<MlsrModelSpec>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_open(
+  MlsrString root,
+  ffi.Pointer<MlsrModelSpec> spec,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Release a model lease. Derived engines retain their own lease. Zero succeeds;
+/// stale or wrong-kind handles fail. Does not remove installed files.
+@ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
+external int mlsr_model_release(int model);
+
+/// Open and lease an installed exact model version. Blocking; verifies all files.
+/// A missing release reports model_not_installed. No network or implicit install.
+/// # Safety
+/// Same pointer requirements as mlsr_model_open.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    ffi.Pointer<MlsrModelSpec>,
+    ffi.Pointer<ffi.Uint64>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_store_open(
+  MlsrString store_root,
+  ffi.Pointer<MlsrModelSpec> spec,
+  ffi.Pointer<ffi.Uint64> output,
+  ffi.Pointer<ffi.Uint64> error,
+);
+
+/// Remove an installed version if no model or engine leases it. Missing versions
+/// succeed. Never removes app-bundled files, other versions, or lock files.
+/// # Safety
+/// Spec/strings must be readable as documented above; optional error writable.
+@ffi.Native<
+  ffi.Int32 Function(
+    MlsrString,
+    ffi.Pointer<MlsrModelSpec>,
+    ffi.Pointer<ffi.Uint64>,
+  )
+>()
+external int mlsr_model_store_remove(
+  MlsrString store_root,
+  ffi.Pointer<MlsrModelSpec> spec,
+  ffi.Pointer<ffi.Uint64> error,
+);
 
 /// Returns the library version as a borrowed, NUL-terminated UTF-8 string.
 ///
@@ -360,6 +505,23 @@ final class MlsrJobOptions extends ffi.Struct {
     ..ref.chunk_frames = chunk_frames
     ..ref.max_segment_frames = max_segment_frames
     ..ref.reserved2 = reserved2;
+}
+
+/// Trusted model catalog and exact selection. All strings are borrowed for the
+/// call. Obtain the catalog from application configuration, not downloaded data.
+final class MlsrModelSpec extends ffi.Struct {
+  /// Must equal sizeof(MlsrModelSpec).
+  @ffi.Uint32()
+  external int struct_size;
+
+  /// YAML catalog, limited to 64 KiB.
+  external MlsrString catalog;
+
+  /// Exact model identifier, limited to 128 UTF-8 bytes.
+  external MlsrString id;
+
+  /// Catalog platform key, such as macos-arm64; limited to 64 bytes.
+  external MlsrString platform;
 }
 
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied

@@ -36,6 +36,13 @@ impl InputErrorKind {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// A model installation, lease, or removal could not proceed.
+    ModelStore {
+        /// Stable store failure category.
+        kind: crate::models::store::StoreErrorKind,
+        /// Owned diagnostic.
+        message: String,
+    },
     /// Another request is active on this engine.
     Busy,
     /// This engine has been shut down or its worker failed.
@@ -78,6 +85,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ModelStore { kind, message } => write!(f, "{}: {message}", kind.as_str()),
             Self::Busy => f.write_str("engine_busy: another request is active"),
             Self::Closed => f.write_str("engine_closed: engine is unavailable"),
             Self::Cancelled => f.write_str("cancelled: synthesis was cancelled"),
@@ -97,6 +105,7 @@ impl Error {
     /// Stable machine-readable category for foreign-language adapters.
     pub fn code(&self) -> &'static str {
         match self {
+            Self::ModelStore { kind, .. } => kind.as_str(),
             Self::Busy => "engine_busy",
             Self::Closed => "engine_closed",
             Self::Cancelled => "cancelled",

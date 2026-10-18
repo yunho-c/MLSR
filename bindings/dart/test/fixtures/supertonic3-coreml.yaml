@@ -1,0 +1,349 @@
+# Published Core ML v2 baseline. Asset URLs are source.repository/resolve/source.revision/<file.path>.
+schema_version: 1
+id: supertonic3-coreml-int4-v1
+model: supertonic-3
+model_version: 1.7.3
+source:
+  repository: https://huggingface.co/FluidInference/supertonic-3-coreml
+  revision: 5cd12d1c4cb524e704ce40ba1048e36c2e7ea2fa
+provenance:
+  upstream_model:
+    repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+    revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+    license: OpenRAIL-M
+    license_url: https://huggingface.co/supertone-oss-archive/supertonic-3/blob/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE
+  upstream_preprocessing:
+    repository: https://github.com/yunho-c/supertonic
+    revision: 1e9799e964ea4c0dad7cde993b65c3c813a7b373
+    path: py/helper.py
+    license: MIT
+  integration_reference:
+    repository: https://github.com/yunho-c/FluidAudio
+    revision: e560c6445ffdc42e60c7b282d162aae271f18e2a
+    path: Sources/FluidAudio/TTS/Supertonic3
+    license: Apache-2.0
+  conversion_tooling_reference:
+    repository: https://github.com/FluidInference/mobius
+    revision: 26f5fa8059d5ab3d34449adce6ff6ed86734e522
+    path: models/tts/supertonic-3/coreml
+    license: Apache-2.0
+    role: Reference tooling snapshot, not an attestation of the published v2 export.
+  exporter_revision: null
+  exporter_revision_note: The pinned publisher commit does not identify the exact exporter source revision.
+    Published bytes are reproducible by revision and checksum; rebuilding identical exports from source
+    is not claimed.
+  compiled_build_info:
+    coremlc_version: 3600.25.2
+    coremlc_mil_version: 3600.16.1
+    coremltools_version: '9.0'
+    torch_version_in_text_and_duration_models: 2.10.0
+  publisher_model_card_license_tag: openrail++
+  license_note: The converted model card tag differs from the upstream OpenRAIL-M license. Preserve both
+    declarations; MLSR Apache-2.0 does not relicense model weights.
+runtime:
+  kind: coreml
+  format: mlmodelc
+  specification_version: 9
+  deployment_target: iOS18
+  minimum_os:
+    macos: '15.0'
+    ios: '18.0'
+  first_slice_target: macos-arm64
+  compute_policy: cpu_and_neural_engine
+  placement_note: Permitted compute units, not an assertion that every stage executes on ANE. Minimum
+    OS comes from model specification; only the capture host is exercised.
+contract:
+  sample_rate: 44100
+  channels: 1
+  pcm_dtype: float32
+  batch_size: 1
+  text_tokens: 128
+  text_normalization: NFKD + upstream symbol/whitespace handling + language tags
+  text_offset_unit: Unicode scalar index in normalized text; original text is retained separately
+  oversized_text: reject; never truncate
+  unknown_character: reject; never wrap to uint16 or submit a negative token
+  latent_channels: 144
+  samples_per_latent: 3072
+  latent_buckets: [128, 256, 512]
+  vocoder_latent_range: [4, 512]
+  default_steps: 8
+  default_speed: 1.05
+  duration_policy: Float32 max(0.05, raw_duration / max(speed, 0.05)); reject nonfinite/nonpositive requested
+    speed
+  frame_count_policy: truncate Float32(duration * 44100) toward zero; trim waveform to min(requested_frames,
+    available_frames)
+  latent_length_policy: ceil(requested_frames / 3072); trim VE bucket to true latent length before vocoding
+  ve_output_semantics: denoised_latent is the updated state, including guidance and integration; do not
+    apply another Euler update
+  qualification_languages: [en, ko]
+  voices: [M1, F1]
+integrity:
+  algorithm: sha256
+  scope: Every listed payload file, excluding Finder .DS_Store metadata. Reject unlisted files inside
+    compiled model directories.
+artifacts:
+  duration_predictor:
+    kind: coreml_compiled
+    path: DurationPredictor_v2.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: int32/float32
+    inputs:
+      text_ids:
+        dtype: int32
+        shape: [1, 128]
+      text_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      style_dp:
+        dtype: float32
+        shape: [1, 8, 16]
+    outputs:
+      duration:
+        dtype: float32
+        shape: [1]
+    files:
+    - path: DurationPredictor_v2.mlmodelc/analytics/coremldata.bin
+      sha256: d8bfa7996e1b4c0e26c9c1edc3861f28726bbd30f74d4a7519e69ef78c1b2d1c
+      size_bytes: 243
+    - path: DurationPredictor_v2.mlmodelc/coremldata.bin
+      sha256: f4f1630670632dd149787fb6ea4f934ab915c390a88d87a4e825ca58f041b4b2
+      size_bytes: 426
+    - path: DurationPredictor_v2.mlmodelc/model.mil
+      sha256: 0c9c67236d575b2b8f0077815e0b57a30cc7d770dead3ad068fc060c68e33920
+      size_bytes: 105229
+    - path: DurationPredictor_v2.mlmodelc/weights/weight.bin
+      sha256: 7f709c544087966d6b2538ac50b7a4014d6e1049e21d713cf3bc71c4c5b9307c
+      size_bytes: 1797952
+  text_encoder:
+    kind: coreml_compiled
+    path: TextEncoder_v2.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: int32/float32
+    inputs:
+      text_ids:
+        dtype: int32
+        shape: [1, 128]
+      text_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      style_ttl:
+        dtype: float32
+        shape: [1, 50, 256]
+    outputs:
+      text_emb:
+        dtype: float32
+        shape: [1, 256, 128]
+    files:
+    - path: TextEncoder_v2.mlmodelc/analytics/coremldata.bin
+      sha256: 973b90afda5d837c037cef2dcbbda275f005eeeb55f2712ca6fbcfa68220f5b5
+      size_bytes: 243
+    - path: TextEncoder_v2.mlmodelc/coremldata.bin
+      sha256: c1177e3e03cc4130e5dca18eb007f20573bf95d3938abf62ab2d3470b04cbe7f
+      size_bytes: 432
+    - path: TextEncoder_v2.mlmodelc/model.mil
+      sha256: b0fd5d9a34a301221194a90aa2ba9133b34ed981209f5e6c7b89733c1491074b
+      size_bytes: 158547
+    - path: TextEncoder_v2.mlmodelc/weights/weight.bin
+      sha256: 7c7afa5d02426a8a363c9cef0e27ce64a5c57a67d1a59f60aac0ac58ffb9877f
+      size_bytes: 18022016
+  ve_128:
+    kind: coreml_compiled
+    path: VectorEstimatorVariants/VectorEstimator_v2_L128_int4.mlmodelc
+    precision:
+      weights: 4-bit k-means palettization; some weights remain float16
+      activations: float16
+      interface: float32
+    latent_bucket: 128
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape: [1, 144, 128]
+      text_emb:
+        dtype: float32
+        shape: [1, 256, 128]
+      style_ttl:
+        dtype: float32
+        shape: [1, 50, 256]
+      latent_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      text_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      current_step:
+        dtype: float32
+        shape: [1]
+      total_step:
+        dtype: float32
+        shape: [1]
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape: [1, 144, 128]
+    files:
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L128_int4.mlmodelc/analytics/coremldata.bin
+      sha256: d86b6a6763b342d1e4921ea055e6dfbad082f76643d1a403cce66d2aa2974a2c
+      size_bytes: 243
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L128_int4.mlmodelc/coremldata.bin
+      sha256: 2e3b78de95e365609e870fe6af76c5f5e87c1a6787871cf3954d445af085f85f
+      size_bytes: 553
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L128_int4.mlmodelc/model.mil
+      sha256: 889e69177fea30c276cbff98e752275fddb2a80085a5b30db128b20cad8773a7
+      size_bytes: 373376
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L128_int4.mlmodelc/weights/weight.bin
+      sha256: c6173731642fd2eb40f759a970d4cdea459c0368cc37a29d0b4c1d19fd1ca90a
+      size_bytes: 32166112
+  ve_256:
+    kind: coreml_compiled
+    path: VectorEstimatorVariants/VectorEstimator_v2_L256_int4.mlmodelc
+    precision:
+      weights: 4-bit k-means palettization; some weights remain float16
+      activations: float16
+      interface: float32
+    latent_bucket: 256
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape: [1, 144, 256]
+      text_emb:
+        dtype: float32
+        shape: [1, 256, 128]
+      style_ttl:
+        dtype: float32
+        shape: [1, 50, 256]
+      latent_mask:
+        dtype: float32
+        shape: [1, 1, 256]
+      text_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      current_step:
+        dtype: float32
+        shape: [1]
+      total_step:
+        dtype: float32
+        shape: [1]
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape: [1, 144, 256]
+    files:
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L256_int4.mlmodelc/analytics/coremldata.bin
+      sha256: 80775fe9f4b06a17dd7ac9454daf62181ac260df24f4e197bd1a9914d0ba24db
+      size_bytes: 243
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L256_int4.mlmodelc/coremldata.bin
+      sha256: 7cb6db0a28a0efa6e50248f9ecdb07b4ae8a7e078873eadb2a87f476a310d758
+      size_bytes: 553
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L256_int4.mlmodelc/model.mil
+      sha256: 750a25ff6939e27506348a62b8ef14e34495356fb73ba4925f1f7be8d6b953fe
+      size_bytes: 373595
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L256_int4.mlmodelc/weights/weight.bin
+      sha256: e9574dcce25fd7d3f4a68b2257f74fea5227ccd9e6843d53f0e9f5476aa8dc87
+      size_bytes: 32167200
+  ve_512:
+    kind: coreml_compiled
+    path: VectorEstimatorVariants/VectorEstimator_v2_L512_int4.mlmodelc
+    precision:
+      weights: 4-bit k-means palettization; some weights remain float16
+      activations: float16
+      interface: float32
+    latent_bucket: 512
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape: [1, 144, 512]
+      text_emb:
+        dtype: float32
+        shape: [1, 256, 128]
+      style_ttl:
+        dtype: float32
+        shape: [1, 50, 256]
+      latent_mask:
+        dtype: float32
+        shape: [1, 1, 512]
+      text_mask:
+        dtype: float32
+        shape: [1, 1, 128]
+      current_step:
+        dtype: float32
+        shape: [1]
+      total_step:
+        dtype: float32
+        shape: [1]
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape: [1, 144, 512]
+    files:
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L512_int4.mlmodelc/analytics/coremldata.bin
+      sha256: 439f6850aff99365baae7651e0859e65fde08280fbb6ddb18a7d6fc5cc905d31
+      size_bytes: 243
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L512_int4.mlmodelc/coremldata.bin
+      sha256: d8f370e473dafa80fdb00ba827eb87b46b123e5fab8c7c41f7e014140c4d9fce
+      size_bytes: 553
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L512_int4.mlmodelc/model.mil
+      sha256: 9173a49f4489ac5317e750cc565a4919786052375031284c4216a55fc523c621
+      size_bytes: 373595
+    - path: VectorEstimatorVariants/VectorEstimator_v2_L512_int4.mlmodelc/weights/weight.bin
+      sha256: 75621d8dcab2fb486fcf7424bf44f472c84f55fdabe5b9b9a5fa781447c7a860
+      size_bytes: 32168224
+  vocoder:
+    kind: coreml_compiled
+    path: Vocoder.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    inputs:
+      latent:
+        dtype: float32
+        shape: [1, 144, L]
+    outputs:
+      wav:
+        dtype: float32
+        shape: [1, 3072*L]
+    files:
+    - path: Vocoder.mlmodelc/analytics/coremldata.bin
+      sha256: 4fe1b825137629a96dc58a1339bc4ece32041b755f99d638f21a153f2e7faed6
+      size_bytes: 243
+    - path: Vocoder.mlmodelc/coremldata.bin
+      sha256: dbf54fc98879ee1c9a213452e16d09367f3c34ad489b175bcae7ef5f74f8d121
+      size_bytes: 388
+    - path: Vocoder.mlmodelc/model.mil
+      sha256: 5f57d6b16a4ee7237e046a423c265aa2c487857eb0003bba1c89fa66e577353f
+      size_bytes: 75626
+    - path: Vocoder.mlmodelc/weights/weight.bin
+      sha256: b45e4c17a45cc4de30dcedae9f662548aa35f8f9763632c342b8bbef3089fcee
+      size_bytes: 50672512
+  tts_config:
+    kind: configuration
+    path: tts.json
+    files:
+    - path: tts.json
+      sha256: 42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09
+      size_bytes: 8253
+  unicode_indexer:
+    kind: tokenizer
+    path: unicode_indexer.json
+    files:
+    - path: unicode_indexer.json
+      sha256: 9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f
+      size_bytes: 277676
+  voice_M1:
+    kind: voice_style
+    path: voice_styles/M1.json
+    files:
+    - path: voice_styles/M1.json
+      sha256: e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b
+      size_bytes: 291748
+  voice_F1:
+    kind: voice_style
+    path: voice_styles/F1.json
+    files:
+    - path: voice_styles/F1.json
+      sha256: bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2
+      size_bytes: 292046
