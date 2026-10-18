@@ -22,19 +22,35 @@ discarded queue contents. Synthesis completion does not mean playback completion
 
 ## Text policy
 
-The complete request is limited to 64 KiB of UTF-8. Paragraphs are split at
-newlines, then sentences with pinned Unicode segmentation. Oversized sentences
-prefer whitespace boundaries and otherwise use extended grapheme boundaries.
-Each segment is independently normalized, including language tags and terminal
-punctuation, and must fit 128 tokens. All segments are checked against the real
-tokenizer before the first model call. Unsupported input fails the job explicitly.
+The complete request is limited to 64 KiB of UTF-8. Text is split at newlines,
+then sentences using pinned Unicode rules with common English titles (`Dr.`,
+`Mr.`, `Mrs.`, `Ms.`, `Prof.`) kept with the following name. Synthesis and reader
+navigation share those boundaries; separate sentences are never packed into one
+model segment.
+
+Supertonic3 segments target at most 70 source graphemes, or 57 for Korean and
+Japanese, excluding surrounding whitespace. These quality targets are separate
+from the hard limit of 128 normalized Unicode tokens, including language tags
+and terminal punctuation. Normalization can expand text, so the token limit can
+require smaller segments. All segments are checked against the real tokenizer
+before the first model call. Unsupported input fails explicitly.
+
+When a sentence exceeds a limit, the splitter prefers the last comma, semicolon
+or colon (including CJK forms) that leaves a substantial prefix, then a word
+boundary, then an extended grapheme boundary. Numeric separators in `1,234` and
+`12:30` are not clause breaks. Word splits move earlier when possible to avoid
+leaving a tail shorter than one-third of the character target. This is a bounded
+heuristic, not a grammatical parser. Source punctuation stays with its clause;
+forced word splits still use the model's existing terminal-punctuation rules.
 
 The prefix scan is capped at 4 KiB to bound work on removable content. Empty
 normalized spans are skipped; a single grapheme that cannot fit a segment is
 rejected. These skips can leave gaps between source spans, but spoken ranges are
 exact original substrings and are never truncated. Seed `s` produces segment `n`
 with seed `s.wrapping_add(n)`; changing segmentation therefore changes noise and
-prosody. A paragraph stream is not promised to match one unsegmented utterance.
+prosody. A paragraph stream is not promised to match one unsegmented utterance,
+and new plans may change across library versions. A frozen plan and its suffixes
+retain their original segment IDs and seeds for their lifetime.
 
 ## Backpressure and cancellation
 

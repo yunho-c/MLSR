@@ -14,7 +14,7 @@ pub const SUPPORTED_LANGUAGES: &[&str] = &[
     "en", "ko", "ja", "ar", "bg", "cs", "da", "de", "el", "es", "et", "fi", "fr", "hi", "hr", "hu",
     "id", "it", "lt", "lv", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv", "tr", "uk", "vi",
 ];
-const TOKEN_LIMIT: usize = 128;
+pub(super) const TOKEN_LIMIT: usize = 128;
 
 /// Original/normalized text and validated, padded model inputs.
 #[derive(Clone, Debug)]

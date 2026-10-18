@@ -311,8 +311,18 @@ fn real_frozen_suffix_preserves_seeded_pcm() {
     let bundle = Bundle::open(root).unwrap();
     let plan = Arc::new(
         bundle
-            .plan_text("Hello from MLSR.\nThis is another sentence.", "en")
+            .plan_text(
+                "Hello from MLSR.\nBut I’m left feeling dissatisfied, I want to know more, I want to understand this psychology/philosophy, I want to know more about Adler.\nThe next sentence is kept intact.",
+                "en",
+            )
             .unwrap(),
+    );
+    assert_eq!(plan.sentences()[1].segments().len(), 3);
+    assert_eq!(
+        plan.segments()[plan.sentences()[1].segments().end - 1]
+            .original()
+            .trim(),
+        "I want to know more about Adler."
     );
     let engine = Engine::from_bundle(bundle, EngineOptions::default()).unwrap();
     let start = plan.sentences()[1].segments().start;

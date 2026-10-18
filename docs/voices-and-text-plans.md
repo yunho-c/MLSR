@@ -32,6 +32,10 @@ indices for sentence navigation.
 `Utf16Map` rejects interior UTF-8 bytes, interior surrogate pairs, reversed spans
 and out-of-range offsets. Source slicing never uses normalized-text offsets.
 The existing 64 KiB raw input and bounded, grapheme-safe segmentation limits apply.
+Supertonic3's [text policy](jobs.md#text-policy) uses conservative character
+targets and clause boundaries while independently enforcing the model's token
+limit. Chunk boundaries may change with library versions; sentence navigation
+and seeded suffixes remain consistent within each frozen plan.
 
 Validation for this change:
 

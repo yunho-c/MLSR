@@ -13,6 +13,7 @@ API usage, start with the [public documentation](../README.md).
 | [Apple output](apple-output.md) | Native playback implementation, clock behavior and adapter qualification |
 | [Execution variants](execution-variants.md) | Experimental graphs, routing, parity, benchmarking and quantization candidates |
 | [Playback feasibility probe](playback-probe.md) | Initial native clock, completion and pitch-preservation investigation |
+| [Text segmentation](text-segmentation.md) | Clause boundaries, conservative text limits and speech-quality regression evidence |
 
 ## Implementation and qualification records
 
