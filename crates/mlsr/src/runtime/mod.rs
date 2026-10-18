@@ -1,4 +1,7 @@
 //! Inference execution and target-specific integration.
 //!
-//! No runtime has been selected yet. Add optional runtime dependencies and
-//! target-gated implementations as each backend is introduced and tested.
+//! Core ML is the first backend. Its optional dependency is enabled by the
+//! `coreml` feature on macOS and iOS only. Model execution is being implemented.
+
+#[cfg(all(feature = "coreml", any(target_os = "macos", target_os = "ios")))]
+mod coreml;

@@ -75,5 +75,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo +1.85.0 check --locked -p mlsr -p mlsr-ffi
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - run: cargo +1.88.0 check --locked -p mlsr -p mlsr-ffi --all-features
+
+  coreml:
+    name: Core ML (${{ matrix.rust }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, '1.88.0']
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+      IPHONEOS_DEPLOYMENT_TARGET: '18.0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          targets: aarch64-apple-ios, aarch64-apple-ios-sim
+      - name: Test the native adapter without downloading model weights
+        run: cargo +${{ matrix.rust }} test --locked -p mlsr -p mlsr-ffi --features coreml
+      - name: Link iOS device and simulator libraries
+        run: |
+          cargo +${{ matrix.rust }} build --locked -p mlsr-ffi --features coreml --target aarch64-apple-ios
+          cargo +${{ matrix.rust }} build --locked -p mlsr-ffi --features coreml --target aarch64-apple-ios-sim

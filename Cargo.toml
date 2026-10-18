@@ -6,12 +6,22 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "Apache-2.0"
 repository = "https://github.com/yunho-c/MLSR"
 
 [workspace.dependencies]
 mlsr = { path = "crates/mlsr", version = "0.1.0" }
+cidre = { version = "=0.29.0", default-features = false, features = ["ml", "macos_15_0", "ios_18_0"] }
+
+# Rust/LLVM debug stripping can produce dylibs that macOS 27 rejects, including
+# host procedural macros: https://github.com/rust-lang/rust/issues/157750.
+# Keep native artifacts loadable; revisit with a qualified fixed toolchain.
+[profile.dev]
+strip = "none"
+
+[profile.release]
+strip = "none"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

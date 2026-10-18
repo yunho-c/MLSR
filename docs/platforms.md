@@ -20,8 +20,9 @@ that it has passed. Current tests exercise version queries only.
 
 ## Toolchains
 
-- Production Rust crates declare Rust 1.85+ and edition 2024. Development uses
-  the stable channel; CI also checks the two production crates on 1.85.0.
+- Production Rust crates declare Rust 1.88+ and edition 2024. Development uses
+  the stable channel; CI also checks the production crates and Core ML feature
+  on 1.88.0.
 - Python package: Python 3.10+. Development commands: Python 3.11+.
 - Go package: Go 1.22+, cgo enabled, and a compatible native C toolchain.
 - Dart package: Dart 3.11+, Cargo, and the Rust target for the host.
@@ -34,3 +35,18 @@ CI uses MSVC Rust output and GCC/MinGW for C/cgo consumers of the DLL.
 
 GPU/NPU acceleration, runtime dependency bundling, supported minimum OS versions,
 and release artifacts must be documented alongside each implemented backend.
+
+## Core ML build boundary
+
+`cargo build -p mlsr-ffi --features coreml` enables the pinned `cidre` bindings
+on macOS/iOS. Default builds and non-Apple targets do not depend on Apple
+frameworks. Both shared and static C libraries are built. The runtime adapter
+is being implemented; this feature alone does not provide synthesis.
+
+Use `MACOSX_DEPLOYMENT_TARGET=15.0` and `IPHONEOS_DEPLOYMENT_TARGET=18.0` for
+Core ML builds, matching the pinned model manifest. iOS device and simulator
+compile/link jobs are configured separately from actual device qualification.
+Rust 1.88 is the minimum declared by cidre 0.29.0. Debug stripping is explicitly
+disabled because affected Rust/LLVM toolchains produce dylibs rejected by the
+macOS 27 loader ([upstream issue](https://github.com/rust-lang/rust/issues/157750)).
+No Swift runtime adapter or separate MLSR system-binding crate is needed.
