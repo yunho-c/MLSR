@@ -11,7 +11,7 @@ native build hook packages code; Rust verifies and owns model lifetimes.
 | 3. Generated Flutter asset package | Implemented: offline CLI preparation, exact inventories, regular files, notices, platform filters and Dart constants; deterministic/negative fixture tests, real 29-file package hash audit, Flutter Pub/analyze, strict Clippy and Rust 1.88 check passed |
 | 4. Flutter model resolution | Implemented: macOS registrar lookup, direct loading, bounded native file streaming and leased installation; Dart fixture tests and Swift type checking passed; actual app resource placement/full-size native streaming are qualified in steps 5–6 |
 | 5. Example migration | Implemented: bundled baseline opens automatically, no required paths, retry/license UI; real direct and materialized integration tests passed playback/cancel/export/cleanup with byte-identical English/Korean WAVs versus the previous POC; release app builds with App Sandbox |
-| 6. Downstream release qualification | Pending: separate consumer, relocated offline release app, fresh app data, no developer cache/checkout dependency |
+| 6. Downstream release qualification | Implemented: two separate fresh-container release runs each passed all four direct/install/relaunch cases after relocation; developer files and network denied, reference WAVs exact, zero leaked handles; [evidence and limits](model-delivery-qualification.md) |
 
 Completion requires the built release app to synthesize after relocation with
 fresh application data, offline, without manual paths or access to the developer

@@ -74,8 +74,10 @@ Apple Silicon suite.
 Add `--dart-define=MLSR_TEST_MATERIALIZE=true` to exercise the full-size native
 streaming path into Application Support. This is an integration-test option;
 the ordinary app loads immutable bundled resources directly. Small portable
-delivery tests live in `bindings/flutter`. Relocated offline release qualification
-is tracked separately in [delivery progress](../../docs/model-delivery-progress.md).
+delivery tests live in `bindings/flutter`. The separate downstream release check
+tests a relocated app with fresh data and denied access to developer files and
+the network; see [release qualification](../../docs/model-delivery-qualification.md)
+for evidence and reproduction commands.
 
 The example is Apache-2.0. Fraunces and Manrope are bundled under the SIL Open
 Font License; exact upstream revisions and hashes are in

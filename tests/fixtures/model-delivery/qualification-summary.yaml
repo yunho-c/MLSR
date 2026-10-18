@@ -1,0 +1,167 @@
+schema_version: 1
+qualified_date: '2026-10-18'
+passed: true
+scope:
+  hardware: Apple M4 Pro
+  os: macOS 27.0.1
+  flutter: 3.41.4
+  dart: 3.11.1
+  compute_policy: cpu_and_neural_engine
+  runtime_source_commit: df524b791b3e4c5a25bb3a709303bdd0acdff577
+  native_input_sha256: 95543e38dcf1ad448f011f85b1f4c0d1f430305f070c9b27135b731cd6d69adc
+  minimum_os_qualified: false
+  remote_ci_verified: false
+  notarized: false
+model:
+  id: supertonic3-coreml-int4-v1
+  manifest_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+  files_including_manifest: 29
+  bytes_including_manifest: 169340543
+  expected_wav_sha256:
+    hello: 2e531ccb505d74a524338131a424f61fba853efcbffd2dacaee380b0112245d3
+    korean: cb75390773f1248a1eb21f9634e935d0c11aa5e075ba45e599f3a54f813c16a5
+runs:
+- report: ~/.cache/mlsr/qualification/model-delivery-v1/step6-release-v4/report.json
+  report_sha256: 8e75b8321981a0cd2af6d197d0a7cfc49a7f6d57fca076cba8b50557a46d2911
+  bundle_identifier: dev.mlsr.delivery.run32714482b697
+  container_absent_before_launch: true
+  release_app_logical_bytes: 192629197
+  qualification_sources:
+    tools/qualify_model_delivery.py: fea278f82c24dbc16c9ababcb8bb86f249093b0b276f114024fe063e4f3c9948
+    tests/fixtures/model-delivery/release_probe.dart: 488d21b4d8aca5b2ef04cfd2aab94b256b34cdd30ee07f63a455cfe157f4197b
+  phases:
+    automatic_first:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 14548.09
+      model_resolution_ms: 307.823
+      engine_load_ms: 135.885
+      stop_to_playback_flush_ms: 8.478
+      stop_to_quiescent_ms: 10.931
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+    automatic_repeat:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 426.32
+      model_resolution_ms: 311.954
+      engine_load_ms: 133.127
+      stop_to_playback_flush_ms: 15.536
+      stop_to_quiescent_ms: 16.547
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+    installed_first:
+      copied_files: 29
+      copied_bytes: 169340543
+      controller_load_ms: 425.468
+      model_resolution_ms: 411.693
+      engine_load_ms: 14208.339
+      stop_to_playback_flush_ms: 9.472
+      stop_to_quiescent_ms: 9.835
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+      engine_lease_blocked_removal: true
+    installed_repeat:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 426.873
+      model_resolution_ms: 317.205
+      engine_load_ms: 135.776
+      stop_to_playback_flush_ms: 3.383
+      stop_to_quiescent_ms: 3.854
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+      engine_lease_blocked_removal: true
+      removed_after_shutdown: true
+- report: ~/.cache/mlsr/qualification/model-delivery-v1/step6-release-v5/report.json
+  report_sha256: a95900e3d94e759a513f39e45644373bde32c9b666b89859212ff486fe69366f
+  bundle_identifier: dev.mlsr.delivery.run670d088250ec
+  container_absent_before_launch: true
+  release_app_logical_bytes: 192629197
+  qualification_sources:
+    tools/qualify_model_delivery.py: 053c6193f7e128991e5f9f880ad3a9ad79617dcc51cad86045639e229d66bf2d
+    tests/fixtures/model-delivery/release_probe.dart: 488d21b4d8aca5b2ef04cfd2aab94b256b34cdd30ee07f63a455cfe157f4197b
+  phases:
+    automatic_first:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 14832.997
+      model_resolution_ms: 311.725
+      engine_load_ms: 135.172
+      stop_to_playback_flush_ms: 11.37
+      stop_to_quiescent_ms: 12.35
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+    automatic_repeat:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 421.715
+      model_resolution_ms: 312.757
+      engine_load_ms: 134.698
+      stop_to_playback_flush_ms: 10.109
+      stop_to_quiescent_ms: 10.729
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+    installed_first:
+      copied_files: 29
+      copied_bytes: 169340543
+      controller_load_ms: 423.814
+      model_resolution_ms: 386.707
+      engine_load_ms: 14399.571
+      stop_to_playback_flush_ms: 7.936
+      stop_to_quiescent_ms: 8.331
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+      engine_lease_blocked_removal: true
+    installed_repeat:
+      copied_files: 0
+      copied_bytes: 0
+      controller_load_ms: 426.882
+      model_resolution_ms: 310.117
+      engine_load_ms: 137.237
+      stop_to_playback_flush_ms: 4.556
+      stop_to_quiescent_ms: 4.933
+      handles_after: 0
+      reference_wavs_exact: true
+      developer_file_reads_denied: 3
+      network_denied: true
+      controller_temporary_wav_removed: true
+      engine_lease_blocked_removal: true
+      removed_after_shutdown: true
+additional_local_validation:
+- Rust workspace, C ABI, Python, Go and Dart portable checks passed
+- Rust 1.88 and Windows model-store cross-check passed
+- Real Core ML engine retains installed-model lease after model-handle release
+- Generated Flutter package inventories, deterministic preparation and negative fixtures passed
+- Flutter adapter fixture tests and Swift type checking passed
+- Example direct and installed-copy integration tests passed; reference WAVs exact
+limits:
+- Only macOS arm64 delivery was qualified; other devices and minimum OS still need validation
+- Muted playback exercises the real audio queue, not a new listening assessment
+- Fresh app data does not imply all OS caches were cold
+- First-engine timings later in each phase follow ordinary controller loading
+- Prototype v2/v3 first-launch PCM differed; v3 logged Core ML E5RT errors and matched the reference
+  on relaunch; cause unresolved
+- Exact WAV gates remain enabled; no retry or numerical tolerance converts a failed run to a pass
+- Ad-hoc signed release artifact; no notarization, App Store or remote CI claim

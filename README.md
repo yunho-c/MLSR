@@ -12,6 +12,12 @@ It supports English/Korean, voices M1/F1, and
 other devices, minimum OS versions, and distribution packages need qualification.
 Builds never download model weights.
 
+Flutter applications can [prepare a model asset package](docs/model-delivery.md)
+and open `AppModels.supertonic3` without runtime model paths. Direct bundled
+loading and verified installation passed a
+[relocated, offline release qualification](docs/model-delivery-qualification.md)
+on macOS arm64.
+
 A pinned Supertonic 3 Core ML reference bundle and development-only
 [capture/replay tools](tools/supertonic3/README.md) establish the baseline for
 the Rust synthesis implementation. The model manifest uses YAML.
