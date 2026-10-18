@@ -102,6 +102,8 @@ impl OwnedEvent {
     }
 }
 pub(crate) enum Entry {
+    Model(mlsr::models::store::ModelHandle),
+    Installation(OwnedInstallation),
     Engine(Engine),
     Job(Job),
     Event(OwnedEvent),
@@ -109,6 +111,8 @@ pub(crate) enum Entry {
 }
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Kind {
+    Model,
+    Installation,
     Engine,
     Job,
     Event,
@@ -117,12 +121,18 @@ pub(crate) enum Kind {
 impl Entry {
     fn kind(&self) -> Kind {
         match self {
+            Self::Model(_) => Kind::Model,
+            Self::Installation(_) => Kind::Installation,
             Self::Engine(_) => Kind::Engine,
             Self::Job(_) => Kind::Job,
             Self::Event(_) => Kind::Event,
             Self::Error(_) => Kind::Error,
         }
     }
+}
+pub(crate) struct OwnedInstallation {
+    pub path: String,
+    pub transaction: Mutex<Option<mlsr::models::store::Installation>>,
 }
 #[derive(Default)]
 struct Registry {

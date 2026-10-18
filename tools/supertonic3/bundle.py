@@ -283,8 +283,21 @@ def prepare_bundle(
     output: Path,
     mode: str = "symlink",
     download: bool = False,
+    *,
+    manifest_bytes: bytes | None = None,
 ) -> dict:
-    """Build a new verified bundle without overwriting any existing directory."""
+    """Build a new bundle; preserve supplied YAML bytes for file-hash identity."""
+    if manifest_bytes is None:
+        # Programmatic fixtures may supply only a mapping. Production CLI calls
+        # pass the original file bytes, which optional model variants pin.
+        manifest_bytes = yaml.safe_dump(
+            manifest, sort_keys=False, allow_unicode=True
+        ).encode("utf-8")
+    try:
+        if yaml.load(manifest_bytes, Loader=UniqueKeyLoader) != manifest:
+            raise ReferenceError("Original manifest bytes differ from parsed manifest")
+    except yaml.YAMLError as error:
+        raise ReferenceError("Invalid original manifest bytes") from error
     if output.exists() or output.is_symlink():
         raise ReferenceError(f"Output already exists; use verify-bundle: {output}")
     if mode not in ("symlink", "copy"):
@@ -323,7 +336,7 @@ def prepare_bundle(
             else:
                 raise ReferenceError(f"Unknown preparation mode: {mode}")
         result = verify_bundle(manifest, staging)
-        write_yaml(staging / "mlsr-bundle.yaml", manifest)
+        (staging / "mlsr-bundle.yaml").write_bytes(manifest_bytes)
         # A concurrent destination must not be replaced, even if it is empty.
         output.mkdir()
         try:

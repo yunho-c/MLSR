@@ -19,5 +19,8 @@ qnn = ["mlsr/qnn"]
 [dependencies]
 mlsr.workspace = true
 
+[dev-dependencies]
+tempfile = "=3.27.0"
+
 [lints]
 workspace = true

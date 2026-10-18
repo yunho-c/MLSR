@@ -33,7 +33,10 @@ int main(int argc,char **argv) {
     MlsrHandle engine=0,job=0,error=0,event=0,retained=0;
     MlsrEngineOptions engine_options;
     assert(mlsr_engine_options_default(&engine_options)==MLSR_OK);
-    if(argc==4){assert(strcmp(argv[3],"qnn_htp")==0);engine_options.compute_policy=2;assert(mlsr_features()&4);}
+    assert(mlsr_features() & MLSR_FEATURE_JOBS);
+    assert(mlsr_features() & MLSR_FEATURE_MODEL_STORE);
+    if(argc==4){assert(strcmp(argv[3],"qnn_htp")==0);engine_options.compute_policy=2;assert(mlsr_features()&MLSR_FEATURE_QNN_HTP);}
+    printf("features=%u\n", mlsr_features());
     MlsrStatus status=mlsr_engine_open(str(argv[1]),str(argv[2]),&engine_options,&engine,&error);ok(status,error);
     MlsrJobOptions options;mlsr_job_options_default(&options);
     options.queue_frames=4096;options.chunk_frames=1024;

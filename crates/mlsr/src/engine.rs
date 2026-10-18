@@ -156,8 +156,19 @@ impl Engine {
     }
     /// Load a verified bundle, which must remain immutable while the engine lives.
     pub fn from_bundle(bundle: Bundle, options: EngineOptions) -> Result<Self> {
-        Self::with_backend(Box::new(Pipeline::load_variant(
-            bundle,
+        Self::from_model(
+            crate::models::store::ModelHandle::from_bundle(bundle),
+            options,
+        )
+    }
+    /// Load an already verified model without hashing its payload again. The
+    /// engine retains the model's store lease until native shutdown completes.
+    pub fn from_model(
+        model: crate::models::store::ModelHandle,
+        options: EngineOptions,
+    ) -> Result<Self> {
+        Self::with_backend(Box::new(Pipeline::load_model(
+            model,
             options.compute_policy,
             options.reuse_output_buffers,
             options.execution_variant,

@@ -1,0 +1,7 @@
+schema_version: 1
+models:
+  - id: supertonic3-coreml-int4-v1
+    backend: coreml
+    platforms: [macos-arm64]
+    manifest_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+    asset_path: models/supertonic3-coreml-int4-v1

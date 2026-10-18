@@ -10,6 +10,7 @@ import 'package:integration_test/integration_test.dart';
 // ignore: implementation_imports
 import 'package:mlsr/src/bindings.g.dart' as native;
 import 'package:mlsr_speak/main.dart';
+import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_speak/speech_controller.dart';
 
 void main() {
@@ -18,11 +19,7 @@ void main() {
   testWidgets('real voices, responsive UI, bounded playback, stop/reuse and WAV', (
     tester,
   ) async {
-    const manifest = String.fromEnvironment('MLSR_MANIFEST');
-    const bundle = String.fromEnvironment('MLSR_BUNDLE');
     const output = String.fromEnvironment('MLSR_TEST_OUTPUT');
-    expect(manifest, isNotEmpty);
-    expect(bundle, isNotEmpty);
     expect(output, isNotEmpty);
     final directory = Directory(output);
     expect(await directory.exists(), isFalse);
@@ -66,7 +63,11 @@ void main() {
     }
 
     try {
-      final loading = speech.load(manifest, bundle);
+      final loading = speech.load(
+        delivery: const bool.fromEnvironment('MLSR_TEST_MATERIALIZE')
+            ? ModelDelivery.installedCopy
+            : ModelDelivery.automatic,
+      );
       await until(() => !speech.loading);
       await loading;
       expect(speech.ready, isTrue, reason: speech.error);

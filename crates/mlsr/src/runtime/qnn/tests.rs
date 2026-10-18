@@ -1,7 +1,12 @@
 use crate::{
-    config::SynthesisOptions,
-    models::supertonic3::{Bundle, Pipeline},
-    runtime::{ComputePolicy, DType, Error, HostTensor, Session, TensorData},
+    config::{EngineOptions, SynthesisOptions},
+    engine::{Engine, SynthesisRequest},
+    models::{
+        catalog::ModelCatalog,
+        store::{ModelStore, StoreErrorKind},
+        supertonic3::{BUNDLE_MANIFEST_NAME, Bundle, BundleManifest, Pipeline},
+    },
+    runtime::{BackendKind, ComputePolicy, DType, Error, HostTensor, Session, TensorData},
 };
 use std::path::Path;
 
@@ -13,6 +18,90 @@ pub(super) fn bundle() -> Bundle {
         root,
     )
     .unwrap()
+}
+
+#[test]
+#[ignore = "requires external QNN bundle and physical X2 Elite"]
+fn leased_model_routes_qnn_matches_pcm_and_releases_files_after_engine_drop() {
+    let source = bundle();
+    let manifest = BundleManifest::read(source.root().join(BUNDLE_MANIFEST_NAME)).unwrap();
+    let catalog = ModelCatalog::parse(include_bytes!(
+        "../../../../../model-manifests/catalog-qnn-experimental.yaml"
+    ))
+    .unwrap();
+    let descriptor = catalog.resolve(manifest.id(), "windows-arm64").unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let store = ModelStore::new(temp.path().join("모델-é")).unwrap();
+    let transaction = store.begin(descriptor).unwrap();
+    std::fs::write(
+        transaction.path().join(BUNDLE_MANIFEST_NAME),
+        manifest.bytes(),
+    )
+    .unwrap();
+    for file in manifest.files() {
+        let target = transaction.path().join(&file.path);
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+        std::fs::copy(source.root().join(&file.path), target).unwrap();
+    }
+    let model = transaction.commit().unwrap();
+    assert_eq!(model.backend(), BackendKind::QnnHtp);
+    assert!(model.model_path("ve_96").unwrap().starts_with(model.root()));
+    assert!(model.model_path("ve_96").unwrap().is_file());
+    assert!(matches!(
+        Engine::from_model(model.clone(), EngineOptions::default()),
+        Err(crate::error::Error::InvalidOptions(_))
+    ));
+    let settings = EngineOptions {
+        compute_policy: ComputePolicy::QnnHtp,
+        ..EngineOptions::default()
+    };
+    let cases = [
+        ("Hello from MLSR.", "en", "M1"),
+        ("Hello from MLSR.", "en", "F1"),
+        ("안녕하세요.", "ko", "M1"),
+        ("안녕하세요.", "ko", "F1"),
+    ];
+    let request = |(text, language, voice)| SynthesisRequest {
+        text,
+        language,
+        voice,
+        options: SynthesisOptions::new(8, 1.05, 42).unwrap(),
+    };
+    let baseline = Engine::from_bundle(source, settings).unwrap();
+    let expected: Vec<_> = cases
+        .iter()
+        .map(|&case| baseline.synthesize(request(case)).unwrap())
+        .collect();
+    baseline.shutdown().unwrap();
+    drop(baseline);
+    let engine = Engine::from_model(model.clone(), settings).unwrap();
+    drop(model);
+    assert!(matches!(
+        store.remove(descriptor),
+        Err(crate::error::Error::ModelStore {
+            kind: StoreErrorKind::InUse,
+            ..
+        })
+    ));
+    let actual: Vec<_> = cases
+        .iter()
+        .map(|&case| engine.synthesize(request(case)).unwrap())
+        .collect();
+    assert_eq!(engine.runtime_stats().unwrap().model_loads, 4);
+    // Drop must join native shutdown before releasing the store's file lease.
+    drop(engine);
+    assert!(store.remove(descriptor).unwrap());
+    for (expected, actual) in expected.iter().zip(&actual) {
+        assert!(!actual.pcm().is_empty());
+        assert_eq!(actual.pcm(), expected.pcm());
+    }
+    assert!(matches!(
+        store.open(descriptor),
+        Err(crate::error::Error::ModelStore {
+            kind: StoreErrorKind::NotInstalled,
+            ..
+        })
+    ));
 }
 
 #[test]

@@ -9,6 +9,26 @@
 #include <stdlib.h>
 
 /**
+ * Synthesis job API is available.
+ */
+#define MLSR_FEATURE_JOBS 1
+
+/**
+ * Core ML backend is built for this target.
+ */
+#define MLSR_FEATURE_COREML 2
+
+/**
+ * Model ownership and transactional store API is available.
+ */
+#define MLSR_FEATURE_MODEL_STORE 4
+
+/**
+ * Experimental QNN HTP backend is built for this target.
+ */
+#define MLSR_FEATURE_QNN_HTP 8
+
+/**
  * Success, timeout/end, or failure. On failure read/release the error handle.
  */
 typedef int32_t MlsrStatus;
@@ -181,6 +201,29 @@ typedef struct {
 } MlsrEventInfo;
 
 /**
+ * Trusted model catalog and exact selection. All strings are borrowed for the
+ * call. Obtain the catalog from application configuration, not downloaded data.
+ */
+typedef struct {
+  /**
+   * Must equal sizeof(MlsrModelSpec).
+   */
+  uint32_t struct_size;
+  /**
+   * YAML catalog, limited to 64 KiB.
+   */
+  MlsrString catalog;
+  /**
+   * Exact model identifier, limited to 128 UTF-8 bytes.
+   */
+  MlsrString id;
+  /**
+   * Catalog platform key, such as macos-arm64; limited to 64 bytes.
+   */
+  MlsrString platform;
+} MlsrModelSpec;
+
+/**
  * Operation succeeded; a pull returned an event.
  */
 #define MLSR_OK 0
@@ -220,7 +263,7 @@ uint32_t mlsr_abi_version(void);
 const char *mlsr_version(void);
 
 /**
- * Feature bits: 1 = job API, 2 = Core ML, 4 = QNN HTP built for this target.
+ * Bitmask of MLSR_FEATURE_* capabilities built for this target.
  */
 uint32_t mlsr_features(void);
 
@@ -351,6 +394,97 @@ MlsrStatus mlsr_error_read(MlsrHandle error, MlsrErrorInfo *output, uintptr_t in
  * Release an owned error diagnostic. Zero is a no-op.
  */
 MlsrStatus mlsr_error_release(MlsrHandle error);
+
+/**
+ * Verify a model in an immutable app-bundled directory, without copying it.
+ * Blocking. Caller must keep the files immutable for all derived engine lives.
+ * # Safety
+ * Spec and strings must be aligned/readable for their declared sizes; output
+ * and optional error must be writable, aligned, and disjoint from inputs.
+ */
+MlsrStatus mlsr_model_open(MlsrString root,
+                           const MlsrModelSpec *spec,
+                           MlsrHandle *output,
+                           MlsrHandle *error);
+
+/**
+ * Open and lease an installed exact model version. Blocking; verifies all files.
+ * A missing release reports model_not_installed. No network or implicit install.
+ * # Safety
+ * Same pointer requirements as mlsr_model_open.
+ */
+MlsrStatus mlsr_model_store_open(MlsrString store_root,
+                                 const MlsrModelSpec *spec,
+                                 MlsrHandle *output,
+                                 MlsrHandle *error);
+
+/**
+ * Begin an exclusive staged installation. Copy/stream the exact manifest and
+ * payload files into the returned installation's path, then commit. Release
+ * aborts an unfinished transaction. Existing versions are never overwritten.
+ * # Safety
+ * Same pointer requirements as mlsr_model_open.
+ */
+MlsrStatus mlsr_model_install_begin(MlsrString store_root,
+                                    const MlsrModelSpec *spec,
+                                    MlsrHandle *output,
+                                    MlsrHandle *error);
+
+/**
+ * Read a borrowed UTF-8 staging path, valid until installation release. It is
+ * no longer a writable installation after commit, whether commit succeeds or
+ * fails. Close all host writers before commit; no concurrent path mutation.
+ * # Safety
+ * Output/error must be writable/aligned/disjoint. Copy the view before releasing
+ * the installation; do not concurrently release while using the borrowed view.
+ */
+MlsrStatus mlsr_model_install_path(MlsrHandle installation, MlsrString *output, MlsrHandle *error);
+
+/**
+ * Consume the transaction, verify and publish atomically, and return a model
+ * lease. Blocking. Release the installation handle after this call, including
+ * failure; it cannot be committed twice. The model has independent ownership.
+ * # Safety
+ * Output/error must be writable/aligned/disjoint. All host staging writers must
+ * have closed and must never modify that staging path again.
+ */
+MlsrStatus mlsr_model_install_commit(MlsrHandle installation,
+                                     MlsrHandle *output,
+                                     MlsrHandle *error);
+
+/**
+ * Remove an installed version if no model or engine leases it. Missing versions
+ * succeed. Never removes app-bundled files, other versions, or lock files.
+ * # Safety
+ * Spec/strings must be readable as documented above; optional error writable.
+ */
+MlsrStatus mlsr_model_store_remove(MlsrString store_root,
+                                   const MlsrModelSpec *spec,
+                                   MlsrHandle *error);
+
+/**
+ * Load an engine from a verified model, retaining its lease independently.
+ * Blocking. Does not rehash the baseline payload; optional variants still verify
+ * their own graphs. The caller may release the model after this call returns.
+ * # Safety
+ * Settings (optional) must be readable/aligned; output/error writable/disjoint.
+ */
+MlsrStatus mlsr_engine_open_model(MlsrHandle model,
+                                  const MlsrEngineOptions *settings,
+                                  MlsrHandle *output,
+                                  MlsrHandle *error);
+
+/**
+ * Release a model lease. Derived engines retain their own lease. Zero succeeds;
+ * stale or wrong-kind handles fail. Does not remove installed files.
+ */
+MlsrStatus mlsr_model_release(MlsrHandle model);
+
+/**
+ * Release an installation, aborting and cleaning its staging tree if unfinished.
+ * Zero succeeds; stale or wrong-kind handles fail. May perform filesystem I/O.
+ */
+MlsrStatus mlsr_model_install_release(MlsrHandle installation);
 
 #ifdef __cplusplus
 }  // extern "C"

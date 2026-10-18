@@ -89,8 +89,23 @@ Cargo. The bridge and backend DLLs must remain loadable for every native host.
 Python uses `MLSR_DLL_DIRECTORIES` from this helper to register the explicit
 dependency directories with Windows' DLL loader.
 Select `ComputePolicy::QnnHtp`, CLI `--compute-policy qnn-htp`, or C ABI compute
-policy `2`. Feature bit `4` reports the compiled QNN capability. The ABI layout
+policy `2`. Feature bit `8` (`MLSR_FEATURE_QNN_HTP`) reports the compiled QNN capability. The ABI layout
 and default Core ML selection are unchanged.
+
+The model ownership/store API uses feature bit `4`. Rebuild native libraries and
+bindings together when updating from the earlier experimental QNN branch, which
+used that bit for QNN before integrating model delivery.
+
+For leased models, explicitly load
+[`catalog-qnn-experimental.yaml`](../model-manifests/catalog-qnn-experimental.yaml)
+with `ModelCatalog::parse` and resolve `supertonic3-qnn-superfast-v1` for
+`windows-arm64`. Supply the self-contained bundle (including `mlsr-bundle.yaml`)
+to `ModelHandle::open` or a `ModelStore` installation, then call
+`Engine::from_model` with `ComputePolicy::QnnHtp`. C callers use
+`mlsr_engine_open_model` with compute policy `2`; Dart callers use
+`Engine.fromModel` with `ComputePolicy.qnnHtp`. Engine ownership keeps the store
+lease until native shutdown completes. The builtin qualified catalog still
+contains only Core ML; the Flutter resource plugin remains macOS-only.
 
 One Rust worker owns persistent ExecuTorch modules, their contexts, typed host
 allocations and cached tensor handles. The narrow C++ bridge validates PTE

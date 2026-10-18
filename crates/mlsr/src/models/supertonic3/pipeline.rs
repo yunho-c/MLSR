@@ -30,7 +30,7 @@ struct NativeVoice {
 /// output buffers. Synthesis needs exclusive access; move the pipeline between
 /// caller threads if needed. All native work stays on its runtime worker.
 pub struct Pipeline {
-    bundle: Bundle,
+    bundle: crate::models::store::ModelHandle,
     session: Session,
     models: BTreeMap<String, Model>,
     voices: BTreeMap<String, NativeVoice>,
@@ -118,6 +118,20 @@ impl Pipeline {
     /// match the compiled-in YAML pins; baseline loading needs no extra assets.
     pub fn load_variant(
         bundle: Bundle,
+        policy: ComputePolicy,
+        reuse_output_buffers: bool,
+        variant: ExecutionVariant,
+    ) -> Result<Self> {
+        Self::load_model(
+            crate::models::store::ModelHandle::from_bundle(bundle),
+            policy,
+            reuse_output_buffers,
+            variant,
+        )
+    }
+    /// Retain a verified model and its lease through native session shutdown.
+    pub(crate) fn load_model(
+        bundle: crate::models::store::ModelHandle,
         policy: ComputePolicy,
         reuse_output_buffers: bool,
         variant: ExecutionVariant,
@@ -514,6 +528,14 @@ impl Pipeline {
             },
             trace,
         ))
+    }
+}
+
+impl Drop for Pipeline {
+    fn drop(&mut self) {
+        // A lease may be released before fields finish dropping. Explicitly join
+        // first, including standalone pipelines and early engine shutdown paths.
+        let _ = self.session.shutdown();
     }
 }
 

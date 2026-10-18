@@ -94,7 +94,12 @@ def main():
         result = {"valid": True, "bundle_id": manifest["id"]}
     elif args.command == "prepare":
         result = prepare_bundle(
-            manifest, args.source, args.output, args.mode, args.download
+            manifest,
+            args.source,
+            args.output,
+            args.mode,
+            args.download,
+            manifest_bytes=args.manifest.read_bytes(),
         )
     elif args.command == "verify-bundle":
         result = verify_bundle(manifest, args.bundle)

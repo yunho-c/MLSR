@@ -13,6 +13,15 @@ pub const MLSR_END: MlsrStatus = 2;
 /// Failure; optional error output owns its diagnostic.
 pub const MLSR_ERROR: MlsrStatus = -1;
 
+/// Synthesis job API is available.
+pub const MLSR_FEATURE_JOBS: u32 = 1;
+/// Core ML backend is built for this target.
+pub const MLSR_FEATURE_COREML: u32 = 2;
+/// Model ownership and transactional store API is available.
+pub const MLSR_FEATURE_MODEL_STORE: u32 = 4;
+/// Experimental QNN HTP backend is built for this target.
+pub const MLSR_FEATURE_QNN_HTP: u32 = 8;
+
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
 /// before asynchronous use. Output views live until their owning handle release.
 #[repr(C)]
@@ -38,6 +47,21 @@ impl MlsrString {
             len: value.len(),
         }
     }
+}
+
+/// Trusted model catalog and exact selection. All strings are borrowed for the
+/// call. Obtain the catalog from application configuration, not downloaded data.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MlsrModelSpec {
+    /// Must equal sizeof(MlsrModelSpec).
+    pub struct_size: u32,
+    /// YAML catalog, limited to 64 KiB.
+    pub catalog: MlsrString,
+    /// Exact model identifier, limited to 128 UTF-8 bytes.
+    pub id: MlsrString,
+    /// Catalog platform key, such as macos-arm64; limited to 64 bytes.
+    pub platform: MlsrString,
 }
 
 /// Engine settings. Initialize with mlsr_engine_options_default. This v1 layout

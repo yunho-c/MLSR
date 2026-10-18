@@ -16,6 +16,12 @@ numerical screen; see the [QNN qualification report](docs/qnn-qualification.md).
 Other devices, minimum OS versions, and distribution packages need qualification.
 Builds never download model weights.
 
+Flutter applications can [prepare a model asset package](docs/model-delivery.md)
+and open `AppModels.supertonic3` without runtime model paths. Direct bundled
+loading and verified installation passed a
+[relocated, offline release qualification](docs/model-delivery-qualification.md)
+on macOS arm64.
+
 A pinned Supertonic 3 Core ML reference bundle and development-only
 [capture/replay tools](tools/supertonic3/README.md) establish the baseline for
 the Rust synthesis implementation. The model manifest uses YAML.
@@ -30,6 +36,7 @@ crates/mlsr-cli/      Local bundle verification and text-to-WAV CLI
 crates/mlsr-ffi/      Shared C ABI adapter
 include/mlsr.h       Generated C header
 bindings/dart/       Dart package, generated FFI, and native build hook
+bindings/flutter/    Flutter asset discovery and model installation adapter
 bindings/go/         Go module using cgo
 bindings/python/     Python package using ctypes
 examples/flutter_speak/ macOS Flutter playback and WAV export example

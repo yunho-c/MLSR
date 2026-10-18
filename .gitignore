@@ -3,6 +3,7 @@
 /ignore/
 .DS_Store
 .dart_tool/
+.mlsr/
 build/
 __pycache__/
 *.py[cod]

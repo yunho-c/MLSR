@@ -14,6 +14,8 @@ use std::{
 
 const BASELINE: &str = include_str!("../../../../../model-manifests/supertonic3-coreml.yaml");
 const QNN: &str = include_str!("../../../../../model-manifests/supertonic3-qnn-superfast.yaml");
+/// Filename at the root of a self-contained model bundle.
+pub const BUNDLE_MANIFEST_NAME: &str = "mlsr-bundle.yaml";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
 const METADATA_LIMIT: u64 = 4 * 1024 * 1024;
 const VARIANTS: &str =
@@ -64,12 +66,83 @@ struct Artifact {
     outputs: Value,
     files: Vec<LockedFile>,
 }
+/// One immutable payload file named by a validated bundle manifest.
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct LockedFile {
-    path: String,
+pub struct LockedFile {
+    /// Validated path relative to the model bundle root.
+    pub path: String,
+    /// Lowercase SHA-256 of the exact payload bytes.
+    pub sha256: String,
+    /// Expected payload length.
+    pub size_bytes: u64,
+}
+
+/// Parsed model contract retaining the original YAML bytes and their identity.
+/// Parsing checks interfaces and paths; verification additionally checks payloads.
+#[derive(Debug)]
+pub struct BundleManifest {
+    bytes: Vec<u8>,
     sha256: String,
-    size_bytes: u64,
+    parsed: Manifest,
+}
+impl BundleManifest {
+    /// Parse a bounded YAML contract. No model files or runtime are opened.
+    pub fn parse(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() as u64 > MANIFEST_LIMIT {
+            return Err(Error::Manifest("manifest exceeds 1 MiB".into()));
+        }
+        Ok(Self {
+            parsed: parse_manifest(bytes)?,
+            sha256: format!("{:x}", Sha256::digest(bytes)),
+            bytes: bytes.to_vec(),
+        })
+    }
+    /// Read a bounded YAML contract, retaining its exact bytes.
+    pub fn read(path: impl AsRef<Path>) -> Result<Self> {
+        Self::parse(&read_limited(path.as_ref(), MANIFEST_LIMIT)?)
+    }
+    /// The baseline contract embedded in this library; weights remain external.
+    pub fn baseline() -> Self {
+        Self::parse(BASELINE.as_bytes()).expect("checked-in baseline manifest")
+    }
+    /// Original YAML bytes. Copy these when packaging; do not reserialize them.
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+    /// SHA-256 of the original YAML file, distinct from a semantic/canonical hash.
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+    /// Bundle identifier declared by this contract.
+    pub fn id(&self) -> &str {
+        &self.parsed.id
+    }
+    /// Runtime required by the validated graph and tensor contracts.
+    pub fn backend(&self) -> BackendKind {
+        if self.parsed.runtime["kind"] == "qnn" {
+            BackendKind::QnnHtp
+        } else {
+            BackendKind::CoreMl
+        }
+    }
+    /// Every payload file in the validated contract.
+    pub fn files(&self) -> impl Iterator<Item = &LockedFile> {
+        self.parsed.artifacts.values().flat_map(|a| &a.files)
+    }
+    /// Check a trusted expected file hash before opening any payloads.
+    pub fn require_sha256(&self, expected: &str) -> Result<()> {
+        if !hex(expected, 64) || expected != self.sha256 {
+            return Err(Error::Manifest(
+                "manifest SHA-256 differs from the pinned identity".into(),
+            ));
+        }
+        Ok(())
+    }
+    /// Verify all payloads and parse owned conditioning/tokenizer data.
+    pub fn verify(&self, root: impl AsRef<Path>) -> Result<Bundle> {
+        Bundle::verify_manifest(self, root.as_ref())
+    }
 }
 
 /// A fully checked local Supertonic 3 bundle. Loading never uses the network.
@@ -111,15 +184,35 @@ impl Voice {
 }
 
 impl Bundle {
+    // Only the store calls this, after verifying the staging tree and atomically
+    // renaming it. Rebase known graph paths without reading the payload twice.
+    pub(crate) fn relocated(mut self, root: PathBuf) -> Self {
+        for path in self.models.values_mut() {
+            *path = root.join(path.strip_prefix(&self.root).expect("verified graph path"));
+        }
+        self.root = root;
+        self
+    }
+    /// Open a self-contained local bundle using its conventional manifest name.
+    pub fn open(root: impl AsRef<Path>) -> Result<Self> {
+        Self::load(root.as_ref().join(BUNDLE_MANIFEST_NAME), root)
+    }
+    /// Open a self-contained bundle after checking a trusted manifest file hash.
+    pub fn open_pinned(root: impl AsRef<Path>, manifest_sha256: &str) -> Result<Self> {
+        let manifest = BundleManifest::read(root.as_ref().join(BUNDLE_MANIFEST_NAME))?;
+        manifest.require_sha256(manifest_sha256)?;
+        manifest.verify(root)
+    }
     /// Verify a YAML manifest and every listed payload, then parse small assets.
     /// File symlinks are supported and checked by their target bytes. Unexpected
     /// files and nested directory symlinks inside compiled graphs are rejected;
     /// regular `.DS_Store` files are ignored. No inference model is loaded yet.
     pub fn load(manifest_path: impl AsRef<Path>, root: impl AsRef<Path>) -> Result<Self> {
-        let manifest_path = manifest_path.as_ref();
-        let bytes = read_limited(manifest_path, MANIFEST_LIMIT)?;
-        let manifest = parse_manifest(&bytes)?;
-        let root = fs::canonicalize(root.as_ref()).map_err(|source| io(root.as_ref(), source))?;
+        BundleManifest::read(manifest_path)?.verify(root)
+    }
+    fn verify_manifest(description: &BundleManifest, root: &Path) -> Result<Self> {
+        let manifest = &description.parsed;
+        let root = fs::canonicalize(root).map_err(|source| io(root, source))?;
         if !root.is_dir() {
             return Err(asset(&root, "expected a bundle directory"));
         }
@@ -172,17 +265,13 @@ impl Bundle {
             );
         }
         Ok(Self {
-            backend: if manifest.runtime["kind"] == "qnn" {
-                BackendKind::QnnHtp
-            } else {
-                BackendKind::CoreMl
-            },
-            id: manifest.id,
+            backend: description.backend(),
+            id: manifest.id.clone(),
             root,
             models,
             indexer,
             voices,
-            manifest_sha256: format!("{:x}", Sha256::digest(&bytes)),
+            manifest_sha256: description.sha256.clone(),
         })
     }
     /// Bundle identifier recorded by the manifest.
@@ -192,6 +281,10 @@ impl Bundle {
     /// Runtime required by the pinned graph and tensor contracts.
     pub fn backend(&self) -> BackendKind {
         self.backend
+    }
+    /// SHA-256 of the original manifest bytes used to verify this bundle.
+    pub fn manifest_sha256(&self) -> &str {
+        &self.manifest_sha256
     }
     /// Canonical local bundle directory.
     pub fn root(&self) -> &Path {
@@ -537,4 +630,4 @@ impl Style {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

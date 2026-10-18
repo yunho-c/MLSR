@@ -13,6 +13,9 @@ use std::{
     time::Duration,
 };
 
+mod model;
+pub use model::*;
+
 // All pointer entry points share the header's pointer validity, alignment and
 // non-aliasing preconditions. Handles themselves can be stale/arbitrary safely.
 unsafe fn input<'a>(value: MlsrString, max: usize) -> ApiResult<&'a str> {
@@ -84,25 +87,28 @@ fn release(handle: MlsrHandle, kind: Kind) -> MlsrStatus {
     }
 }
 
-/// Feature bits: 1 = job API, 2 = Core ML, 4 = QNN HTP built for this target.
+/// Bitmask of MLSR_FEATURE_* capabilities built for this target.
 #[unsafe(no_mangle)]
 pub extern "C" fn mlsr_features() -> u32 {
-    1 | if cfg!(all(
-        feature = "coreml",
-        any(target_os = "macos", target_os = "ios")
-    )) {
-        2
-    } else {
-        0
-    } | if cfg!(all(
-        feature = "qnn",
-        target_os = "windows",
-        target_arch = "aarch64"
-    )) {
-        4
-    } else {
-        0
-    }
+    MLSR_FEATURE_JOBS
+        | MLSR_FEATURE_MODEL_STORE
+        | if cfg!(all(
+            feature = "coreml",
+            any(target_os = "macos", target_os = "ios")
+        )) {
+            MLSR_FEATURE_COREML
+        } else {
+            0
+        }
+        | if cfg!(all(
+            feature = "qnn",
+            target_os = "windows",
+            target_arch = "aarch64"
+        )) {
+            MLSR_FEATURE_QNN_HTP
+        } else {
+            0
+        }
 }
 /// Number of registry handles, for leak diagnostics; not a memory measurement.
 #[unsafe(no_mangle)]
@@ -152,36 +158,35 @@ pub unsafe extern "C" fn mlsr_engine_open(
     unsafe {
         guard(error, || {
             clear_handle(output)?;
-            let settings = options(settings)?;
-            let policy = match settings.compute_policy {
-                0 => ComputePolicy::CpuOnly,
-                1 => ComputePolicy::CpuAndNeuralEngine,
-                2 => ComputePolicy::QnnHtp,
-                _ => return Err(ApiError::invalid("unknown compute policy")),
-            };
-            if settings.reuse_output_buffers > 1 {
-                return Err(ApiError::invalid("unsupported engine settings"));
-            }
-            let execution_variant = match settings.execution_variant {
-                0 => mlsr::config::ExecutionVariant::Baseline,
-                1 => mlsr::config::ExecutionVariant::Fused8,
-                2 => mlsr::config::ExecutionVariant::Fused8ExperimentalVocoder,
-                _ => return Err(ApiError::invalid("unknown execution variant")),
-            };
-            let engine = Engine::load(
-                input(manifest, 32768)?,
-                input(bundle, 32768)?,
-                EngineOptions {
-                    compute_policy: policy,
-                    reuse_output_buffers: settings.reuse_output_buffers != 0,
-                    execution_variant,
-                },
-            )?;
+            let settings = engine_options(options(settings)?)?;
+            let engine = Engine::load(input(manifest, 32768)?, input(bundle, 32768)?, settings)?;
             let id = handles::insert(Entry::Engine(engine))?;
             output.write(id);
             Ok(MLSR_OK)
         })
     }
+}
+fn engine_options(settings: MlsrEngineOptions) -> ApiResult<EngineOptions> {
+    let compute_policy = match settings.compute_policy {
+        0 => ComputePolicy::CpuOnly,
+        1 => ComputePolicy::CpuAndNeuralEngine,
+        2 => ComputePolicy::QnnHtp,
+        _ => return Err(ApiError::invalid("unknown compute policy")),
+    };
+    if settings.reuse_output_buffers > 1 {
+        return Err(ApiError::invalid("unsupported engine settings"));
+    }
+    let execution_variant = match settings.execution_variant {
+        0 => mlsr::config::ExecutionVariant::Baseline,
+        1 => mlsr::config::ExecutionVariant::Fused8,
+        2 => mlsr::config::ExecutionVariant::Fused8ExperimentalVocoder,
+        _ => return Err(ApiError::invalid("unknown execution variant")),
+    };
+    Ok(EngineOptions {
+        compute_policy,
+        reuse_output_buffers: settings.reuse_output_buffers != 0,
+        execution_variant,
+    })
 }
 /// Cancel/join an engine's work, without releasing its handle. Idempotent.
 /// # Safety

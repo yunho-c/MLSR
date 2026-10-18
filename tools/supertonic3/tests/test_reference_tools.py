@@ -8,6 +8,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+import yaml
 from unittest.mock import patch
 
 import numpy as np
@@ -169,6 +170,25 @@ class BundleTests(unittest.TestCase):
         with self.assertRaises(ReferenceError):
             prepare_bundle(self.manifest, [self.source], output, mode="copy")
         self.assertEqual(sentinel.read_text(), "preserve")
+
+    def test_prepare_preserves_original_yaml_bytes(self):
+        original = (
+            "# retain comments and formatting\n" + yaml.safe_dump(self.manifest)
+        ).encode()
+        output = self.root / "exact-yaml"
+        prepare_bundle(
+            self.manifest, [self.source], output, mode="copy", manifest_bytes=original
+        )
+        self.assertEqual((output / "mlsr-bundle.yaml").read_bytes(), original)
+        bad_output = self.root / "mismatched-yaml"
+        with self.assertRaisesRegex(ReferenceError, "differ"):
+            prepare_bundle(
+                self.manifest,
+                [self.source],
+                bad_output,
+                manifest_bytes=b"id: different\n",
+            )
+        self.assertFalse(bad_output.exists())
 
     def test_missing_source_does_not_download_implicitly(self):
         with patch("tools.supertonic3.bundle.urlopen") as network:

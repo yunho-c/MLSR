@@ -13,8 +13,9 @@ so app packagers can relocate the library and rewrite its load commands.
 `mlsr_abi_version()` still returns `1`; `mlsr_version()` returns a borrowed,
 NUL-terminated UTF-8 string valid while the library is loaded. These original
 queries are unchanged. Bindings check the ABI before interpreting layouts.
-`mlsr_features()` reports bit 1 for the job API and bit 2 for an Apple build
-with Core ML enabled, and bit 4 for Windows ARM64 with QNN enabled. Building the
+`mlsr_features()` reports `MLSR_FEATURE_JOBS` (1), `MLSR_FEATURE_COREML` (2)
+on Apple builds with Core ML enabled, `MLSR_FEATURE_MODEL_STORE` (4), and
+`MLSR_FEATURE_QNN_HTP` (8) on Windows ARM64 with QNN enabled. Building the
 portable API does not supply a TTS backend. `compute_policy` selects `0` Core ML
 CPU, `1` Core ML CPU/Neural Engine, or `2` QNN HTP. ABI version and layouts remain
 unchanged. QNN accepts only execution variant `0` with its separately pinned

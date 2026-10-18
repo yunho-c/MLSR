@@ -193,6 +193,20 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  mlsr_app_models:
+    dependency: "direct main"
+    description:
+      path: ".mlsr/model_assets"
+      relative: true
+    source: path
+    version: "0.1.0"
+  mlsr_flutter:
+    dependency: "direct main"
+    description:
+      path: "../../bindings/flutter"
+      relative: true
+    source: path
+    version: "0.1.0"
   path:
     dependency: transitive
     description:
@@ -344,4 +358,4 @@ packages:
     version: "3.1.4"
 sdks:
   dart: ">=3.11.1 <4.0.0"
-  flutter: ">=3.18.0-18.0.pre.54"
+  flutter: ">=3.41.0"

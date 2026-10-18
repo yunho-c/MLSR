@@ -15,8 +15,10 @@ $bundlePath = (Resolve-Path -LiteralPath $Bundle).Path
 $outputPath = [IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $outputPath | Out-Null
 $manifest = Join-Path $projectRoot 'model-manifests/supertonic3-qnn-superfast.yaml'
+$catalog = Join-Path $projectRoot 'model-manifests/catalog-qnn-experimental.yaml'
 $native = Join-Path $projectRoot 'target/release'
 $report = [ordered]@{ passed = $false; host = 'Windows ARM64'; manifest_sha256 = (Get-FileHash $manifest).Hash.ToLower(); checks = @() }
+$report.experimental_catalog_sha256 = (Get-FileHash $catalog).Hash.ToLower()
 
 function Invoke-Check([string]$Name, [string]$Program, [string[]]$Arguments) {
     & $Program @Arguments 2>&1 | Tee-Object -FilePath (Join-Path $outputPath "$Name.log")
@@ -65,21 +67,29 @@ try {
 
     $dartRoot = Join-Path $outputPath 'dart-project'
     New-Item -ItemType Directory -Path (Join-Path $dartRoot 'test') | Out-Null
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'bindings/dart/test/synthesis_test.dart') -Destination (Join-Path $dartRoot 'test/synthesis_test.dart')
+    foreach ($file in @('synthesis_test.dart', 'model_store_cases.dart', 'model_fixture.dart')) {
+        Copy-Item -LiteralPath (Join-Path $projectRoot "bindings/dart/test/$file") -Destination (Join-Path $dartRoot "test/$file")
+    }
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'bindings/dart/test/fixtures') -Destination (Join-Path $dartRoot 'test/fixtures') -Recurse
     # JSON is valid YAML and preserves arbitrary Windows paths without shell
     # interpolation. A consuming package exercises the actual native-asset hook.
     @{
         name = 'mlsr_qnn_binding_smoke'
         environment = @{ sdk = '>=3.11.0 <4.0.0' }
         dependencies = @{ mlsr = @{ path = (Join-Path $projectRoot 'bindings/dart') } }
-        dev_dependencies = @{ test = '^1.33.0' }
+        dev_dependencies = @{ test = '^1.33.0'; crypto = '^3.0.7'; yaml = '^3.1.4' }
         hooks = @{ user_defines = @{ mlsr = @{ qnn = $true } } }
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $dartRoot 'pubspec.yaml') -Encoding utf8
     $env:MLSR_TEST_OUTPUT = Join-Path $outputPath 'dart-pcm'
+    $env:MLSR_TEST_DELIVERY_BUNDLE = $bundlePath
+    $env:MLSR_TEST_DELIVERY_CATALOG = $catalog
+    $env:MLSR_TEST_DELIVERY_ID = 'supertonic3-qnn-superfast-v1'
+    $env:MLSR_TEST_DELIVERY_PLATFORM = 'windows-arm64'
     Push-Location $dartRoot
     try {
         Invoke-Check 'dart-get' $Dart @('pub', 'get')
         Invoke-Check 'dart' $Dart @('test', '-r', 'expanded')
+        $report.leased_model_engine_passed = $true
     } finally { Pop-Location }
     $report.pcm = @()
     foreach ($name in @('en_M1', 'en_F1', 'ko_M1', 'ko_F1')) {
