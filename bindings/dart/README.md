@@ -1,8 +1,88 @@
 # MLSR for Dart
 
 `dart:ffi` bindings to MLSR's Rust library, generated with `ffigen`. Requires
-Dart 3.11+. Persistent engines expose bounded PCM streams, cancellation and
-explicit cleanup. Real synthesis currently requires macOS arm64 and Core ML.
+Dart 3.11+. The shared `Tts` facade provides native speech, independent
+controllers, reader controls, bounded rendering and lazy synthesis. Real
+synthesis and native output are currently qualified on macOS arm64.
+
+```dart
+final tts = await Tts.open(manifest: manifestPath, bundle: bundlePath);
+try {
+  final speech = tts.speak('Hello from MLSR.'); // Immediate handle; native PCM path.
+  try {
+    speech.setPlaybackRate(1.25); // Independent of synthesis; preserves pitch.
+    await speech.done;          // Actual output drain, not just synthesis EOF.
+    await tts.writeSpeech(speech, 'spoken.wav'); // Retained PCM; no inference.
+  } finally {
+    await speech.dispose();
+  }
+  final clip = await tts.render('Export me.');
+  await clip.writeWav('clip.wav');
+  await tts.renderToFile('Incremental export.', 'stream.wav');
+} finally {
+  await tts.dispose();
+}
+```
+
+`RequestOptions` freezes locale, stable voice ID (such as `supertonic3:F1`), public
+speaking rate and typed `SupertonicOptions`. Normal speaking rate is 1.0;
+`speech.request()` / `job.request()` report effective model settings separately.
+`getVoices()` discovers catalog-only metadata; `model.getVoices()` reports verified
+assets and `tts.getVoices()` loaded-engine readiness. Locale fallback is explicit.
+Use `Tts.fromModel` with the existing verified `ModelHandle`, or
+`FlutterMlsr.openTts(model: AppModels.supertonic3)` for automatic offline delivery.
+
+The default `speak` mode replaces that controller's active and queued speech.
+`mode: SpeakMode.enqueue` keeps FIFO order; `tts.createController()` creates a
+separate scope sharing the inference lane and budgets. The controller exposes
+native capabilities. Speech supports pause/resume, volume, pitch-preserving rate,
+retained-frame `seek`, previous/next sentence and original-sentence navigation.
+Navigation returns a new `Speech` when inference restarts. `replayFrom` creates a
+new identity sharing a completed recording; the original `done` is immutable.
+
+`speech.snapshot()` is an independent state read. Each `speech.states` access
+creates a new single-subscription coalesced stream. Pausing a subscription stops
+polling, so it cannot grow an event queue. States include source-frame position,
+buffered end, seekable ranges, whole estimate/final duration and original text
+alignment. `activeTextRange.start/end` use Dart UTF-16 indices; `utf8` is explicit.
+No word timestamps are invented. `done` resolves cancellation with its first
+reason; failure raises `SynthesisException` with category/stage/request/backend.
+
+Advanced synthesis is lazy until audio is listened to or `start()` is called:
+
+```dart
+final job = tts.synthesize(text, options: const RequestOptions(locale: 'ko'));
+try {
+  // snapshot(), states and done do not start inference or consume audio.
+  await for (final chunk in job.audio) {
+    await consumePcm(chunk.audio.samples, chunk.audio.format.sampleRate);
+  }
+  await job.done;
+} finally {
+  await job.dispose();
+}
+```
+
+Cancelling an audio subscription cancels unfinished generation as `consumerDropped`.
+Cancelling a state subscription affects only that observer. An async `listen`
+callback does not itself backpressure Dart; use `await for` or pause explicitly.
+For independently cancellable exports, create a job and use `tts.collect(job)` /
+`tts.writeJob(job, path)` while retaining its direct `cancel()` control. Dart
+Futures themselves do not provide cancellation. Speak/control calls are short
+native admission operations; polling uses a persistent adapter isolate, while
+render/file/cleanup use separate workers so they cannot starve cancellation/state.
+
+Always await disposal for deterministic cleanup. SDK finalizers are a fallback:
+discarded Speech handles preserve fire-and-forget playback, while discarded
+unconsumed synthesis jobs cancel. Owner disposal joins work and writers; live
+child handles retain final outcomes until their own disposal. Clips own Dart
+Float32 samples independently. Collection defaults to 32 MiB, file export to 30
+minutes, with explicit queue/lookahead/storage budgets. Existing files are
+preserved; only owned partial files are removed. `AudioClip.writeWav` copies PCM
+to a worker/native buffer; `renderToFile` streams directly without full collection.
+
+The original low-level `Engine` / `Job` API retains its raw speed, event offsets
+and explicit-disposal behavior:
 
 ```dart
 final engine = await Engine.load(manifest: manifestPath, bundle: bundlePath);
@@ -56,11 +136,14 @@ hooks:
   user_defines:
     mlsr:
       coreml: true
+      apple-output: true
 ```
 
-This opts into a macOS 15+ Core ML build. The default hook build supplies the
-portable ABI without a synthesis backend. `coreml` is currently a macOS host
-build option; it does not configure iOS packaging.
+This opts into a macOS 15+ Core ML/native-output build. Omit `apple-output` for a
+headless native build, or set `TtsOptions(output: OutputMode.headless)` per facade.
+The default hook supplies the portable ABI without synthesis or native output.
+Both feature options currently support macOS host builds; they do not configure
+iOS packaging.
 
 The [Flutter speak/stop example](../../examples/flutter_speak/README.md) uses this
 hook with Flutter 3.41.4. Supported hook/code-assets ranges allow that SDK's pinned
@@ -89,6 +172,15 @@ With a Core ML library configured, run `dart run example/synthesize.dart
 and streams a new WAV file. From the repository root,
 `tools/check_synthesis_bindings.py --bundle /path/to/bundle --output-dir /new/path`
 qualifies a relocated package/native asset with real inference and this example.
+
+`test/sdk_test.dart` covers catalog/verified readiness and owned WAV without model
+execution. Set `MLSR_TEST_MANIFEST` and `MLSR_TEST_BUNDLE` for real shared-facade
+tests; additionally opt into muted native playback with `MLSR_TEST_NATIVE_OUTPUT=1`.
+The relocated package passed all four SDK tests on the local macOS host, including
+Korean/emoji/combining-text UTF-16 mapping, exact PCM/WAV equality, bounded state
+observation, pending-done disposal and retained replay. Evidence is under
+`~/.cache/mlsr/qualification/developer-api-v0/step7-dart-v1`; final multi-language
+acceptance remains tracked in `docs/developer-api-progress.md`.
 
 Regenerate bindings from the repository root with
 `python3 tools/dev.py generate`. `tool/generate_bindings.dart` uses ffigen's

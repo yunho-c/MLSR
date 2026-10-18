@@ -11,6 +11,13 @@ Future<void> main(List<String> args) async {
     if (coreml is! bool) {
       throw FormatException('MLSR coreml must be true or false.');
     }
+    final appleOutput = input.userDefines['apple-output'] ?? false;
+    if (appleOutput is! bool) {
+      throw FormatException('MLSR apple-output must be true or false.');
+    }
+    if (appleOutput && config.targetOS != OS.macOS) {
+      throw UnsupportedError('The current native output hook supports macOS.');
+    }
     if (coreml && config.targetOS != OS.macOS) {
       throw UnsupportedError('The current Core ML build hook supports macOS.');
     }
@@ -88,7 +95,7 @@ Future<void> main(List<String> args) async {
           cargoEnvironment[compilerKey] = await xcrun('--find');
         }
         cargoEnvironment['MACOSX_DEPLOYMENT_TARGET'] =
-            coreml && config.macOS.targetVersion < 15
+            (coreml || appleOutput) && config.macOS.targetVersion < 15
             ? '15.0'
             : '${config.macOS.targetVersion}.0';
       }
@@ -102,7 +109,10 @@ Future<void> main(List<String> args) async {
           '--release',
           '--package',
           'mlsr-ffi',
-          if (coreml) ...['--features', 'coreml'],
+          if (coreml || appleOutput) ...[
+            '--features',
+            [if (coreml) 'coreml', if (appleOutput) 'apple-output'].join(','),
+          ],
           '--target',
           target,
           '--target-dir',

@@ -21,6 +21,26 @@ enum ModelDelivery { automatic, installedCopy }
 
 /// Convenience entry point for generated AppModels selections.
 abstract final class FlutterMlsr {
+  /// Open the shared developer facade using the same verified offline delivery.
+  /// The optional native output remains lazy until the first speech request.
+  static Future<Tts> openTts({
+    required BundledModel model,
+    TtsOptions options = const TtsOptions(),
+    ComputePolicy computePolicy = ComputePolicy.cpuAndNeuralEngine,
+    bool reuseOutputBuffers = true,
+    int executionVariant = 0,
+    ModelDelivery delivery = ModelDelivery.automatic,
+    void Function(ModelLoadProgress)? onProgress,
+  }) => const FlutterModelLoader().openTts(
+    model: model,
+    options: options,
+    computePolicy: computePolicy,
+    reuseOutputBuffers: reuseOutputBuffers,
+    executionVariant: executionVariant,
+    delivery: delivery,
+    onProgress: onProgress,
+  );
+
   static Future<Engine> open({
     required BundledModel model,
     ComputePolicy computePolicy = ComputePolicy.cpuAndNeuralEngine,
@@ -45,6 +65,34 @@ class FlutterModelLoader {
     this.resources = const NativeModelResources(),
     this.installWaitTimeout = const Duration(seconds: 30),
   });
+
+  Future<Tts> openTts({
+    required BundledModel model,
+    TtsOptions options = const TtsOptions(),
+    ComputePolicy computePolicy = ComputePolicy.cpuAndNeuralEngine,
+    bool reuseOutputBuffers = true,
+    int executionVariant = 0,
+    ModelDelivery delivery = ModelDelivery.automatic,
+    void Function(ModelLoadProgress)? onProgress,
+  }) async {
+    final handle = await loadModel(
+      model: model,
+      delivery: delivery,
+      onProgress: onProgress,
+    );
+    try {
+      onProgress?.call(const ModelLoadProgress(ModelLoadStage.loading));
+      return await Tts.fromModel(
+        handle,
+        options: options,
+        computePolicy: computePolicy,
+        reuseOutputBuffers: reuseOutputBuffers,
+        executionVariant: executionVariant,
+      );
+    } finally {
+      await handle.dispose();
+    }
+  }
 
   Future<Engine> open({
     required BundledModel model,

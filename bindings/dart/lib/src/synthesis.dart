@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'synthesis_native.dart';
 
 part 'models.dart';
+part 'sdk_types.dart';
+part 'sdk.dart';
 
 /// Native failure with a stable category. Terminal inference failures are also
 /// represented by SynthesisEvent.error so the stream retains one final outcome.
@@ -326,9 +328,7 @@ class _Adapter {
       if (error == null) {
         completer.complete(values[1]);
       } else {
-        completer.completeError(
-          SynthesisException(error[0] as String, error[1] as String),
-        );
+        completer.completeError(SynthesisException.fromMessage(error));
       }
     });
     _errors.listen(

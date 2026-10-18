@@ -100,6 +100,25 @@ void main() {
     await fixture.dispose();
     await store.delete(recursive: true);
   });
+  test('developer facade failure releases verified delivery ownership', () async {
+    final progress = <ModelLoadStage>[];
+    await expectLater(
+      FlutterModelLoader(resources: resources).openTts(
+        model: model,
+        options: const TtsOptions(maxRequests: 0),
+        onProgress: (value) => progress.add(value.stage),
+      ),
+      code('invalid_options'),
+    );
+    expect(progress, [
+      ModelLoadStage.locating,
+      ModelLoadStage.verifying,
+      ModelLoadStage.loading,
+    ]);
+    expect(resources.copies, 0);
+    expect(resources.storeQueries, 0);
+    expect(native.mlsr_live_handles(), before);
+  });
   test('direct resources verify without copying or creating a store', () async {
     final progress = <ModelLoadStage>[];
     final handle = await FlutterModelLoader(
