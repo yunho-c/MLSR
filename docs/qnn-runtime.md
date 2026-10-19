@@ -143,8 +143,8 @@ The [2026-10-18 qualification report](qnn-qualification.md) records passing
 real-device stage replay, model reuse, buffer ownership, native failure recovery,
 Unicode paths, public jobs, C/Python/Go/Dart and HTP profiling. MLSR matches the
 existing QNN runner byte for byte. **Six of twelve canonical ONNX comparisons
-fail the fixed numerical screen.** Keep this preset experimental until model
-quality and listening qualification pass.
+fail the fixed numerical screen.** These are diagnostics, not a perceptual
+verdict. Keep this preset experimental pending subjective listening qualification.
 
 The job contract remains [the current Rust contract](jobs.md): one active job,
 bounded output, UTF-8 byte source offsets and cancellation independent of the
@@ -196,6 +196,17 @@ cargo test --locked --release -p mlsr --features qnn --test qnn_sdk -- --ignored
 
 ```powershell
 ./tools/check_qnn_bindings.ps1 -Bundle $bundle -OutputDirectory ignore/qnn-bindings-new -Python C:/tools/python-arm64/python.exe -Go C:/tools/go-arm64/bin/go.exe -Dart C:/tools/dart-arm64/bin/dart.exe -CCompiler C:/tools/llvm-mingw/bin/aarch64-w64-mingw32-clang.exe
+```
+
+To qualify an installed Python wheel and relocated Go package, use a host Python
+with pip/setuptools and a fresh output directory outside the checkout. The
+consumer Python must be ARM64. Embedded Python is supported by copying its runtime
+and replacing only that copy's search path with the installed package. The SDK
+and FastRPC driver stay external runtime prerequisites; native MLSR/bridge DLLs
+and headers are copied alongside the consumers.
+
+```powershell
+python tools/check_qnn_packages.py --bundle $bundle --python C:/tools/python-arm64/python.exe --go C:/tools/go-arm64/bin/go.exe --cc C:/tools/llvm-mingw/bin/aarch64-w64-mingw32-clang.exe --output C:/qualification/qnn-installed-new --reference-report ignore/qnn-bindings-new/sdk-pcm.json
 ```
 
 Record device/OS/toolchain, power source and thermal measurement limitations in

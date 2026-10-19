@@ -1,9 +1,10 @@
 # QNN Superfast integration qualification — 2026-10-18
 
 The Windows ARM64 integration passes adapter, ownership, lifecycle, HTP execution
-and native binding checks. **The Superfast preset fails the canonical numerical
-screen and remains experimental.** This milestone does not establish production
-speech quality. The [machine-readable snapshot](../tests/fixtures/supertonic3/qnn-summary.yaml)
+and native binding checks. **The Superfast preset remains experimental pending
+subjective listening qualification.** Six canonical numerical comparisons exceed
+the recorded thresholds; those results are retained as diagnostics and do not
+determine perceptual quality. The [machine-readable snapshot](../tests/fixtures/supertonic3/qnn-summary.yaml)
 records measurements, exact hashes and retained evidence locations.
 
 ## Target and configuration
@@ -225,6 +226,34 @@ rerun on this Windows host. Raw evidence is retained under
 `ignore/qnn-sdk-bindings-20261018-final/`, `ignore/qnn-sdk-replay-20261018/`,
 `ignore/qnn-sdk-jobs-20261018.json` and `ignore/qnn-sdk-*.log`.
 
+## Installed packages and CI — 2026-10-18
+
+The [installed-package snapshot](../tests/fixtures/supertonic3/qnn-installed-summary.json)
+qualifies a built Python wheel and a relocated Go package against the real QNN
+backend. Consumers, headers, MLSR DLL, bridge and ExecuTorch delegate are copied
+outside the checkout. The Python import probe verifies the installed package and
+feature mask 45. The embedded ARM64 Python runtime has its own isolated search
+path, including for child processes; no source-package path remains. QAIRT and
+FastRPC remain explicitly installed runtime prerequisites.
+
+Twelve Python and nine Go tests pass, including lazy jobs, cancellation, cleanup,
+verified-model leases and SDK exports. Each suite skips its Apple-only output
+test. All four EN/KO M1/F1 SDK WAV payloads and legacy PCM match the earlier
+qualification byte for byte; both installed/relocated public examples match too.
+The native DLL, bridge, manifest and model artifacts are unchanged. Evidence is
+retained in `C:/Users/hocbu/.cache/mlsr/qnn-installed-20261018/`.
+
+[CI run 39177132548](https://github.com/yunho-c/MLSR/actions/runs/39177132548)
+passes all nine jobs, including native/package checks on Linux/macOS/Windows,
+Flutter fixtures and Core ML/Apple compilation on stable Rust and Rust 1.88.
+Apple counter concurrency tests run without opening an audio device; a physical
+Apple playback check was not available on this Windows host.
+
+The current quality decision is to retain the existing Superfast artifacts and
+use subjective listening evaluation to determine perceptual qualification. The
+six numerical-screen failures and unchanged thresholds remain in the historical
+snapshots. No numerical pass or listening result is claimed by this package pass.
+
 ## Reproduction and retained evidence
 
 Follow [QNN setup and commands](qnn-runtime.md). The YAML snapshot hashes the core
@@ -245,7 +274,7 @@ replay, job, profile, binding and environment reports. Retained evidence include
   `ignore/qnn-profile-20261018-final/compile-options.json`: environment snapshots
   and decoded PTE options. Earlier captures remain alongside them.
 
-The next model-quality work is to investigate trajectory drift and the short
-fixed-vocoder failure, then qualify revised artifact hashes and listening results.
-This integration provides reproducible failure cases for that work. Unsupported
+The next model-quality work is subjective listening evaluation of the existing
+pinned preset; paired QNN/canonical WAVs are retained with the numerical evidence.
+This integration provides reproducible cases for that evaluation. Unsupported
 steps/shapes/variants fail explicitly; no fallback or replacement preset is used.
