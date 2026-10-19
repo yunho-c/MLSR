@@ -403,15 +403,23 @@ fn a_document_longer_than_the_cache_plays_to_the_end_with_one_cached_segment() {
         state.allow_drain = true;
     }
     speech.resume().unwrap();
-    // This moves 160 seconds of PCM through a one-segment cache in debug CI.
-    // Keep a bounded deadlock check without making throughput a test contract.
-    let done = speech
-        .wait(Duration::from_secs(30))
-        .unwrap_or_else(|| panic!("reader did not finish: {:?}", speech.snapshot()));
+    // Bound forward progress through each segment of this twenty-segment cache
+    // regression. Its total runtime depends on the host's scheduler and file I/O;
+    // a stalled segment or final drain must still fail within a bounded time.
+    for segment in 1..=20 {
+        wait(&speech, |state| state.position_frame >= segment * SEGMENT);
+    }
+    let done = speech.wait(Duration::from_secs(3)).unwrap_or_else(|| {
+        panic!(
+            "reader reached the document end but did not complete: {:?}",
+            speech.snapshot(),
+        )
+    });
     assert!(matches!(done.outcome, Outcome::Completed), "{done:?}");
     assert_eq!(done.frames, 20 * SEGMENT);
     assert_eq!(calls.load(Ordering::SeqCst), 20);
     let state = speech.snapshot();
+    assert_eq!(state.position_frame, 20 * SEGMENT);
     assert_eq!(state.duration_frames, Some(20 * SEGMENT));
     assert!(!state.recording_complete);
     assert_eq!(tts.retention_stats().peak_bytes, SEGMENT * 4);
