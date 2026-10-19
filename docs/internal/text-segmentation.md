@@ -3,6 +3,11 @@
 The current policy is documented in [synthesis jobs](../jobs.md#text-policy).
 This record explains the quality change and the limits of its validation.
 
+The sections below record the T=128 policy at `2299689`. The recommended
+T=384 FP16 release now keeps complete sentences together; see the
+[promotion record](supertonic3-fp16-promotion.md). Legacy bundles still use the
+policy recorded here.
+
 ## Motivation
 
 A user-provided 737-character English/M1 passage produced missing words and

@@ -58,6 +58,33 @@ class ManifestTests(unittest.TestCase):
                 url = asset_url(self.manifest, entry["path"])
                 self.assertIn("/resolve/5cd12d1c4cb524e704ce40ba1048e36c2e7ea2fa/", url)
 
+    def test_local_fp16_export_has_consistent_axes_and_cannot_fake_a_download(self):
+        manifest = load_manifest(ROOT / "model-manifests/supertonic3-coreml-fp16.yaml")
+        self.assertEqual(manifest["contract"]["text_tokens"], 384)
+        with self.assertRaisesRegex(ReferenceError, "no published download"):
+            asset_url(manifest, "tts.json")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.yaml"
+            manifest["artifacts"]["ve_128"]["inputs"]["text_emb"]["shape"][-1] = 128
+            write_yaml(path, manifest)
+            with self.assertRaisesRegex(ReferenceError, "Tensor interface"):
+                load_manifest(path)
+
+    def test_expanded_frontend_matches_independent_upstream_fixture(self):
+        corpus = load_corpus(ROOT / "tests/fixtures/supertonic3/fp16-corpus.yaml")
+        path = ROOT / "tests/fixtures/supertonic3/fp16-frontend.yaml"
+        expected = load_yaml(path)
+        indexer = [-1] * 65536
+        for case in expected["cases"].values():
+            for character, token in zip(
+                case.get("normalized_text", ""), case.get("tokens", [])
+            ):
+                indexer[ord(character)] = token
+        self.assertEqual(
+            len(check_frontend(corpus, indexer, path, capacity=384)),
+            len(corpus["cases"]),
+        )
+
     def test_duplicate_yaml_keys_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "duplicate.yaml"

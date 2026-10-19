@@ -68,7 +68,7 @@ def freeze(manifest, corpus, upstream, bundle, output):
             continue
         normalized = processor._preprocess_text(case["text"], case["language"])
         ids, _ = processor([case["text"]], [case["language"]])
-        if len(normalized) > 128 or (ids < 0).any():
+        if len(normalized) > manifest["contract"]["text_tokens"] or (ids < 0).any():
             raise ReferenceError(
                 f"Positive corpus case cannot fit this export: {case['id']}"
             )

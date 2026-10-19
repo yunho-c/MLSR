@@ -147,13 +147,18 @@ impl VoiceCatalog {
         manifest: &str,
         readiness: VoiceReadiness,
     ) -> Self {
-        static QUALIFIED_MANIFEST: OnceLock<String> = OnceLock::new();
-        let qualified_languages = if manifest
-            == QUALIFIED_MANIFEST.get_or_init(|| {
-                crate::models::supertonic3::BundleManifest::baseline()
-                    .sha256()
-                    .into()
-            }) {
+        static QUALIFIED_MANIFESTS: OnceLock<[String; 2]> = OnceLock::new();
+        let qualified_languages = if QUALIFIED_MANIFESTS
+            .get_or_init(|| {
+                use crate::models::supertonic3::BundleManifest;
+                [
+                    BundleManifest::baseline().sha256().into(),
+                    BundleManifest::recommended().sha256().into(),
+                ]
+            })
+            .iter()
+            .any(|hash| hash == manifest)
+        {
             vec!["en".into(), "ko".into()]
         } else {
             Vec::new()
@@ -266,6 +271,14 @@ mod tests {
         assert_eq!(voice.readiness(), VoiceReadiness::CatalogOnly);
         assert_eq!(voice.languages().len(), 31);
         assert_eq!(voice.qualified_languages(), &["en", "ko"]);
+        assert_eq!(
+            BundleManifest::recommended()
+                .voice_catalog()
+                .get("supertonic3:M1")
+                .unwrap()
+                .qualified_languages(),
+            &["en", "ko"]
+        );
         assert!(!voice.requires_network());
         assert!(!voice.capabilities().word_alignment);
         let fixture = Fixture::new();

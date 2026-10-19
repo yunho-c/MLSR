@@ -30,6 +30,17 @@ fn discovers_bundles_and_pins_original_manifest_bytes() {
 }
 
 #[test]
+fn recommended_profile_rejects_mixed_text_axes_and_unknown_capacities() {
+    let manifest = BundleManifest::recommended();
+    assert_eq!(manifest.id(), "supertonic3-coreml-fp16-t384-v1");
+    let mut value: serde_json::Value = serde_yaml_ng::from_slice(manifest.bytes()).unwrap();
+    value["artifacts"]["text_encoder"]["outputs"]["text_emb"]["shape"][2] = 128.into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
+    value["contract"]["text_tokens"] = 512.into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
+}
+
+#[test]
 fn manifest_inventory_preserves_identity_and_rejects_oversized_input() {
     let baseline = BundleManifest::baseline();
     assert_eq!(baseline.bytes(), BASELINE.as_bytes());

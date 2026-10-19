@@ -15,6 +15,7 @@ struct Playback {
     ended_input: bool,
     applied: Desired,
     system_paused: bool,
+    seek_notification_pending: bool,
 }
 struct Pending {
     start: u64,
@@ -157,6 +158,7 @@ fn play(
         ended_input: false,
         applied: desired,
         system_paused: false,
+        seek_notification_pending: false,
     };
     loop {
         let cancelled = lock(&control.state).snapshot.cancellation;
@@ -189,6 +191,7 @@ fn play(
             playback.pending = None;
             playback.cursor = frame;
             playback.ended_input = false;
+            playback.seek_notification_pending = true;
             lock(&control.state).snapshot.position_frame = frame;
         }
         pump(control, &mut playback, output.as_mut(), current_epoch)?;
@@ -218,7 +221,16 @@ fn play(
                 }
                 apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
             }
-            publish(control, &playback, &snapshot);
+            // Seeking rebases snapshot.position_frame before pumping retained
+            // audio. Notify observers even if every other field is unchanged
+            // (for example, a paused seek within an already generated segment).
+            publish(
+                control,
+                &playback,
+                &snapshot,
+                playback.seek_notification_pending,
+            );
+            playback.seek_notification_pending = false;
             if playback.ended_input && snapshot.drained {
                 let mut state = lock(&control.state);
                 if let Some(frames) = state.snapshot.duration_frames {
@@ -378,7 +390,7 @@ fn apply_controls(
     playback.applied = desired;
     Ok(())
 }
-fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
+fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot, seek_applied: bool) {
     let synthesis = control.job.snapshot();
     let mut state = lock(&control.state);
     let previous = state.snapshot.clone();
@@ -428,7 +440,7 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
                 utf16: segment.utf16_span(),
             })
         });
-    if state.snapshot != previous {
+    if seek_applied || state.snapshot != previous {
         control.publish(&mut state);
     }
 }

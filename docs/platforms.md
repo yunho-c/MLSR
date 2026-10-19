@@ -7,6 +7,10 @@ Dart/Go/Python synthesis packages and a Flutter playback example. The
 [POC qualification](internal/poc-qualification.md) records the exact host, artifacts,
 timing boundaries, and remaining device/release gates.
 
+The recommended model is now the [T=384 FP16 Core ML release](internal/supertonic3-fp16-promotion.md).
+Its native replay and Flutter checks are recorded separately; the older POC's
+INT4 benchmarks and ANE traces do not establish FP16 performance.
+
 | Target | Scaffold configuration | Validation |
 | --- | --- | --- |
 | macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML; Flutter player | Full text-to-PCM parity, installed C/Dart/Go/Python checks, real Flutter playback/cancel/export, release app build/signature checks, warm benchmark and process-attributed ANE traces on M4 Pro/macOS 27.0.1 |

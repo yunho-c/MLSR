@@ -692,6 +692,47 @@ fn cancellation_consumed_between_enqueues_keeps_the_healthy_output() {
 }
 
 #[test]
+fn paused_seek_within_one_segment_publishes_a_new_state() {
+    let factory = Factory::new(false, true);
+    let (engine, _) = crate::engine::fake_engine();
+    let tts = Tts::with_output(
+        engine,
+        QueueOptions::default(),
+        factory,
+        AudioPolicy::Managed,
+    )
+    .unwrap();
+    let speech = tts
+        .speak(
+            request(&tts, "A single sentence."),
+            SpeechOptions::new(1.0, 0.0, true).unwrap(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&speech, |s| {
+        s.synthesis == SynthesisPhase::Terminal && s.buffered_until_frame == 42000
+    });
+    let mut states = speech.states();
+    assert!(matches!(
+        states.poll(Duration::ZERO),
+        SpeechStatePoll::Snapshot(_)
+    ));
+    assert!(matches!(
+        states.poll(Duration::from_millis(20)),
+        SpeechStatePoll::Timeout
+    ));
+    speech.seek(4096).unwrap();
+    let SpeechStatePoll::Snapshot(state) = states.poll(Duration::from_secs(3)) else {
+        panic!("a paused seek must notify observers even when its segment is unchanged");
+    };
+    assert_eq!(state.position_frame, 4096);
+    assert_eq!(state.playback, PlaybackPhase::Paused);
+    assert_eq!(state.active_text_range.unwrap().segment_id, 0);
+    speech.cancel();
+    assert!(speech.wait(Duration::from_secs(3)).is_some());
+}
+
+#[test]
 fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
     let factory = Factory::new(false, true);
     let (engine, calls) = crate::engine::fake_engine();

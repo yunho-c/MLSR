@@ -28,12 +28,14 @@ then sentences using pinned Unicode rules with common English titles (`Dr.`,
 navigation share those boundaries; separate sentences are never packed into one
 model segment.
 
-Supertonic3 segments target at most 70 source graphemes, or 57 for Korean and
-Japanese, excluding surrounding whitespace. These quality targets are separate
-from the hard limit of 128 normalized Unicode tokens, including language tags
-and terminal punctuation. Normalization can expand text, so the token limit can
-require smaller segments. All segments are checked against the real tokenizer
-before the first model call. Unsupported input fails explicitly.
+The recommended Supertonic3 FP16 bundle accepts 384 normalized Unicode tokens,
+including language tags and terminal punctuation. A complete sentence that fits
+this window stays in one model invocation. Oversized sentences use a fallback
+target of 300 source graphemes, or 120 for Korean/Japanese, and must still fit
+the normalized-token limit. The legacy T=128 INT4 bundle retains its 70/57
+source-grapheme targets. Normalization can expand text, especially Korean.
+All segments are checked against the real tokenizer before the first model call.
+Unsupported input fails explicitly; no text is truncated.
 
 When a sentence exceeds a limit, the splitter prefers the last comma, semicolon
 or colon (including CJK forms) that leaves a substantial prefix, then a word

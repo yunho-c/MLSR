@@ -13,6 +13,8 @@ use std::{
 };
 
 const BASELINE: &str = include_str!("../../../../../model-manifests/supertonic3-coreml.yaml");
+const RECOMMENDED: &str =
+    include_str!("../../../../../model-manifests/supertonic3-coreml-fp16.yaml");
 /// Filename at the root of a self-contained model bundle.
 pub const BUNDLE_MANIFEST_NAME: &str = "mlsr-bundle.yaml";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
@@ -99,9 +101,13 @@ impl BundleManifest {
     pub fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::parse(&read_limited(path.as_ref(), MANIFEST_LIMIT)?)
     }
-    /// The baseline contract embedded in this library; weights remain external.
+    /// The legacy T=128 INT4 baseline, retained for reproducibility and variants.
     pub fn baseline() -> Self {
         Self::parse(BASELINE.as_bytes()).expect("checked-in baseline manifest")
+    }
+    /// The recommended T=384 FP16 Core ML release; weights remain external.
+    pub fn recommended() -> Self {
+        Self::parse(RECOMMENDED.as_bytes()).expect("checked-in recommended manifest")
     }
     /// Original YAML bytes. Copy these when packaging; do not reserialize them.
     pub fn bytes(&self) -> &[u8] {
@@ -161,6 +167,7 @@ pub struct Bundle {
     voices: BTreeMap<String, Voice>,
     manifest_sha256: String,
     revision: String,
+    text_capacity: usize,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -272,11 +279,18 @@ impl Bundle {
             voices,
             manifest_sha256: description.sha256.clone(),
             revision: manifest.source.revision.clone(),
+            text_capacity: manifest.contract["text_tokens"]
+                .as_u64()
+                .expect("validated capacity") as usize,
         })
     }
     /// Bundle identifier recorded by the manifest.
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// Fixed normalized-token capacity declared by all text-conditioned graphs.
+    pub fn text_capacity(&self) -> usize {
+        self.text_capacity
     }
     /// SHA-256 of the original manifest bytes used to verify this bundle.
     pub fn manifest_sha256(&self) -> &str {
@@ -353,7 +367,16 @@ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
         serde_yaml_ng::from_slice(bytes).map_err(|e| Error::Manifest(e.to_string()))?;
     let manifest: Manifest =
         serde_yaml_ng::from_value(value).map_err(|e| Error::Manifest(e.to_string()))?;
-    let baseline: Manifest = serde_yaml_ng::from_str(BASELINE).expect("checked-in manifest schema");
+    let profile = match manifest.contract.get("text_tokens").and_then(Value::as_u64) {
+        Some(128) => BASELINE,
+        Some(384) => RECOMMENDED,
+        _ => {
+            return Err(Error::Manifest(
+                "unsupported normalized-text capacity".into(),
+            ));
+        }
+    };
+    let baseline: Manifest = serde_yaml_ng::from_str(profile).expect("checked-in manifest schema");
     validate_manifest(&manifest, &baseline)?;
     Ok(manifest)
 }

@@ -189,6 +189,13 @@ mod tests {
     #[test]
     fn builtin_pins_exact_baseline_and_qualified_platform() {
         let catalog = ModelCatalog::builtin();
+        let recommended = BundleManifest::recommended();
+        catalog
+            .resolve(recommended.id(), "macos-arm64")
+            .unwrap()
+            .verify_manifest(&recommended)
+            .unwrap();
+        assert!(catalog.resolve(recommended.id(), "ios-arm64").is_err());
         let manifest = BundleManifest::baseline();
         let model = catalog.resolve(manifest.id(), "macos-arm64").unwrap();
         model.verify_manifest(&manifest).unwrap();

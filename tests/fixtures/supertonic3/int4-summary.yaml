@@ -1,0 +1,124 @@
+schema_version: 1
+kind: supertonic3_int4_candidate
+date: '2026-10-18'
+status: implemented and runtime checked; not promoted
+bundle_id: supertonic3-coreml-int4-t384-candidate-v1
+manifest_sha256: cf56273c99789f1e09de6c8fd8e6d3c8a8323ffe35e57b4c492cfc8510c34336
+base_manifest_sha256: 4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49
+model_format: coreml
+text_capacity: 384
+latent_buckets:
+- 128
+- 256
+- 512
+quantization:
+  method: k-means palettization
+  bits: 4
+  weight_threshold: 2048
+  stages:
+  - ve_128
+  - ve_256
+  - ve_512
+  activations: float16
+  other_stages: byte-identical to FP16 release
+  warnings: NumPy/scikit-learn matrix warnings retained in export log; all captured
+    tensors and audio finite
+payload_bytes: 170100274
+fp16_payload_bytes: 456965584
+payload_reduction_percent: 62.776130204151215
+evidence_root: /Users/yunhocho/.cache/mlsr/experiments/supertonic3-t384-20261018
+evidence:
+  coreml-int4-candidate/quantization.yaml:
+    sha256: c1c97b3a39590915ff1e4b5e6d41aab3099c1829d2b9084ef4a868da8724db10
+    status: complete
+  int4-reference/reference.yaml:
+    sha256: ae52f3865303f2a55b6b8643cef0d290fb4f0521bb2b8c8ba6d13a14a37c5762
+  int4-rust-backings.yaml:
+    sha256: 1c3b1d6d469d96bcf7635d61e844ec71ad6911fb6bfaeab1708b39e645f316e2
+    passed: true
+    tensor_comparisons: 768
+    all_tensors_exact: true
+    passes: 2
+  int4-rust-ordinary.yaml:
+    sha256: 80ae185901d227796b6b5b52898e3681bf451170a695eee833dcdfba767c4ca9
+    passed: true
+    tensor_comparisons: 768
+    all_tensors_exact: true
+    passes: 2
+  int4-vs-fp16.yaml:
+    sha256: 5a746e07e2c03852a4115ef6b687d8f94e07c869543cee0028c8a859c10c4e12
+    status: complete
+  int4-native-render.json:
+    sha256: 9d4a82dd9627e48dc14b44de87087ad72f6c88d870136c5945a9cc73c23b940e
+    passed: true
+  int4-placement.json:
+    sha256: f5935cc671df57d5fc5b315126bcad207cc2e65e4f9001a593257ca427922fd9
+  int4-benchmark.json:
+    sha256: 2b2303da40680a83b2dd62fb6ff7d445679e5d649d007e5111c4042121533129
+matched_capture:
+  cases: 16
+  conditioning_actual_noise_duration_and_shapes: exact
+  final_valid_latent_nrmse_range:
+  - 0.41375848480988014
+  - 1.2172583440363882
+  waveform_nrmse_range:
+  - 1.063534910419017
+  - 1.364844991646419
+  interpretation: numerical errors only; perceptual acceptance requires listening
+local_performance_observation:
+  scope: small paired local observation; complete Tts.render including Rust and Python
+    PCM transfer; six sentences, M1 English, 8 steps, speed 1.05, seed 0; one warm-up
+    then three runs per fresh process; peak RSS includes loading and warm-up; existing
+    OS caches; not isolated host or ANE residency evidence
+  host: Apple M4 Pro / macOS 27.0.1
+  power: "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=35782755)\t84%;\
+    \ discharging; 10:18 remaining present: true"
+  concurrency: No other task-owned inference was active; another MLSR profile app
+    was open. Host was not isolated.
+  order:
+  - fp16
+  - int4
+  - int4
+  - fp16
+  results:
+    fp16:
+      warm_renders: 6
+      median_seconds: 0.4451302915113047
+      min_seconds: 0.4428459999617189
+      max_seconds: 0.4511352919507772
+      peak_process_rss_bytes:
+      - 220774400
+      - 209338368
+      load_seconds:
+      - 0.9947118751006201
+      - 0.902311124955304
+    int4:
+      warm_renders: 6
+      median_seconds: 0.42840770847396925
+      min_seconds: 0.42567879194393754
+      max_seconds: 0.4335266250418499
+      peak_process_rss_bytes:
+      - 204881920
+      - 206700544
+      load_seconds:
+      - 0.4358151250053197
+      - 0.434963040985167
+  median_time_reduction_percent: 3.7567838801890963
+  claim_boundary: one English/M1 passage; battery operation; not a general speedup,
+    steady memory, or ANE residency claim
+compute_plans: all counted estimator operations assigned to ANE in all three buckets;
+  static placement only
+audio:
+  passed: true
+  frames: 2082770
+  segments: 6
+  wav: /Users/yunhocho/Downloads/MLSR-M1-CoreML-INT4-T384-candidate.wav
+  wav_sha256: bbf3ac4fe3e83b60cba5c3b1d277f27e27066e3812f53b2c364220c044ea7384
+  pcm_sha256: 764378357cbe304f02e5223dc76ba27ef5b12bcfdce1a5ba7d273adfa0e2d953
+  handles_before: 0
+  handles_after: 0
+  listening: pending
+remaining:
+- listen to paired FP16/INT4 audio
+- broader perceptual/intelligibility evaluation
+- representative device and performance qualification before default promotion

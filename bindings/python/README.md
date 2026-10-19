@@ -14,7 +14,7 @@ environment variable before the first call; the loaded library is cached.
 ```python
 import mlsr
 
-with mlsr.Tts("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as tts:
+with mlsr.Tts("model-manifests/supertonic3-coreml-fp16.yaml", "/path/to/bundle") as tts:
     print(tts.voices)  # Stable IDs and loaded-engine readiness.
     with tts.speak("Hello from MLSR.") as speech:
         speech.set_playback_rate(1.25)  # Pitch-preserving, independent of synthesis.
@@ -94,7 +94,7 @@ raw speed and event meanings:
 ```python
 import mlsr
 
-with mlsr.Engine("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as engine:
+with mlsr.Engine("model-manifests/supertonic3-coreml-fp16.yaml", "/path/to/bundle") as engine:
     with engine.start("Hello from MLSR.", language="en", voice="M1") as job:
         for event in job:
             if event.kind == "audio":
@@ -117,7 +117,7 @@ From the repository root, build the native library and run the WAV example:
 MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release -p mlsr-ffi --features coreml
 MLSR_LIBRARY_PATH="$PWD/target/release/libmlsr_ffi.dylib" \
   PYTHONPATH=bindings/python/src python3 bindings/python/examples/synthesize.py \
-  --manifest model-manifests/supertonic3-coreml.yaml --bundle /path/to/bundle \
+  --manifest model-manifests/supertonic3-coreml-fp16.yaml --bundle /path/to/bundle \
   --output hello.wav --cancel-first
 ```
 

@@ -100,7 +100,8 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         raise ReferenceError("Model source must pin a full Git revision")
     repository = source.get("repository", "")
     if not re.fullmatch(
-        r"https://huggingface\.co/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
+        r"https://huggingface\.co/(?:spaces/)?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+        repository,
     ):
         raise ReferenceError("Expected a Hugging Face model repository URL")
     contract = manifest.get("contract", {})
@@ -108,12 +109,14 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         "sample_rate": 44100,
         "channels": 1,
         "batch_size": 1,
-        "text_tokens": 128,
         "latent_channels": 144,
         "samples_per_latent": 3072,
     }
     if any(contract.get(k) != v for k, v in expected.items()):
         raise ReferenceError("Unsupported Supertonic 3 tensor/audio contract")
+    capacity = contract.get("text_tokens")
+    if type(capacity) is not int or capacity not in (128, 384):
+        raise ReferenceError("Expected a qualified 128 or 384 token text window")
     if contract.get("latent_buckets") != [128, 256, 512]:
         raise ReferenceError("Expected the pinned 128/256/512 VE buckets")
     if contract.get("vocoder_latent_range") != [4, 512]:
@@ -181,8 +184,8 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         return {"dtype": "float32", "shape": shape}
 
     text = {
-        "text_ids": {"dtype": "int32", "shape": [1, 128]},
-        "text_mask": f32([1, 1, 128]),
+        "text_ids": {"dtype": "int32", "shape": [1, capacity]},
+        "text_mask": f32([1, 1, capacity]),
     }
     interfaces = {
         "duration_predictor": (
@@ -191,7 +194,7 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         ),
         "text_encoder": (
             {**text, "style_ttl": f32([1, 50, 256])},
-            {"text_emb": f32([1, 256, 128])},
+            {"text_emb": f32([1, 256, capacity])},
         ),
         "vocoder": ({"latent": f32([1, 144, "L"])}, {"wav": f32([1, "3072*L"])}),
     }
@@ -200,10 +203,10 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         interfaces[f"ve_{bucket}"] = (
             {
                 "noisy_latent": latent,
-                "text_emb": f32([1, 256, 128]),
+                "text_emb": f32([1, 256, capacity]),
                 "style_ttl": f32([1, 50, 256]),
                 "latent_mask": f32([1, 1, bucket]),
-                "text_mask": f32([1, 1, 128]),
+                "text_mask": f32([1, 1, capacity]),
                 "current_step": f32([1]),
                 "total_step": f32([1]),
             },
@@ -273,6 +276,10 @@ def verify_bundle(manifest: dict, root: Path) -> dict:
 
 
 def asset_url(manifest: dict, path: str) -> str:
+    if manifest.get("provenance", {}).get("local_export"):
+        raise ReferenceError(
+            "This local Core ML export has no published download; provide verified local assets"
+        )
     source = manifest["source"]
     return f"{source['repository']}/resolve/{source['revision']}/{quote(relative_path(path), safe='/')}"
 

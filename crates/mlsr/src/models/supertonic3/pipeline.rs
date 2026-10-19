@@ -347,7 +347,7 @@ impl Pipeline {
                 ("style_ttl", &native_voice.ttl),
             ],
             "text_emb",
-            &[1, 256, 128],
+            &[1, 256, self.bundle.text_capacity()],
         )?;
         observer.checkpoint()?;
         self.snapshot(diagnostic, &mut trace, "text_emb", &embedding)?;

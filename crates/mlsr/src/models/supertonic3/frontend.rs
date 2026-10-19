@@ -38,11 +38,11 @@ impl EncodedText {
     pub fn token_count(&self) -> usize {
         self.tokens
     }
-    /// Int32 [1, 128] token IDs, padded with zeros.
+    /// Int32 [1, text_capacity] token IDs, padded with zeros.
     pub fn ids(&self) -> &HostTensor {
         &self.ids
     }
-    /// Float32 [1, 1, 128] mask, one for real tokens and zero for padding.
+    /// Float32 [1, 1, text_capacity] mask, one for tokens and zero for padding.
     pub fn mask(&self) -> &HostTensor {
         &self.mask
     }
@@ -50,9 +50,9 @@ impl EncodedText {
 impl Bundle {
     /// Apply the pinned frontend and reject unsupported or oversized text.
     /// The raw UTF-8 request is limited to 64 KiB; normalized text including
-    /// language tags must fit 128 Unicode scalars. Nothing is truncated.
+    /// language tags must fit the bundle's text capacity. Nothing is truncated.
     pub fn encode_text(&self, text: &str, language: &str) -> Result<EncodedText> {
-        encode(text, language, self.unicode_indexer())
+        encode_with_capacity(text, language, self.unicode_indexer(), self.text_capacity())
     }
 }
 
@@ -64,7 +64,7 @@ fn input(kind: Kind, message: impl Into<String>) -> Error {
 }
 
 /// Apply Unicode 15.0 NFKD, the pinned symbol rules, whitespace, and language tags.
-/// Token lookup and the 128-token model limit are applied by `Bundle::encode_text`.
+/// Token lookup and the bundle's text capacity are applied by `Bundle::encode_text`.
 pub fn normalize_text(text: &str, language: &str) -> Result<String> {
     if !SUPPORTED_LANGUAGES.contains(&language) {
         return Err(input(
@@ -159,17 +159,27 @@ pub fn normalize_text(text: &str, language: &str) -> Result<String> {
     Ok(format!("<{language}>{normalized}</{language}>"))
 }
 
+#[cfg(test)]
 fn encode(text: &str, language: &str, indexer: &[i32]) -> Result<EncodedText> {
+    encode_with_capacity(text, language, indexer, TOKEN_LIMIT)
+}
+
+fn encode_with_capacity(
+    text: &str,
+    language: &str,
+    indexer: &[i32],
+    capacity: usize,
+) -> Result<EncodedText> {
     let normalized = normalize_text(text, language)?;
     let tokens = normalized.chars().count();
-    if tokens > TOKEN_LIMIT {
+    if tokens > capacity {
         return Err(input(
             Kind::TextTooLong,
-            format!("{tokens} normalized tokens exceed {TOKEN_LIMIT}; no truncation"),
+            format!("{tokens} normalized tokens exceed {capacity}; no truncation"),
         ));
     }
-    let mut ids = vec![0; TOKEN_LIMIT];
-    let mut mask = vec![0.; TOKEN_LIMIT];
+    let mut ids = vec![0; capacity];
+    let mut mask = vec![0.; capacity];
     for (offset, c) in normalized.chars().enumerate() {
         let id = indexer
             .get(c as usize)
@@ -191,8 +201,8 @@ fn encode(text: &str, language: &str, indexer: &[i32]) -> Result<EncodedText> {
         original: text.into(),
         normalized,
         tokens,
-        ids: HostTensor::new(vec![1, TOKEN_LIMIT], TensorData::I32(ids))?,
-        mask: HostTensor::new(vec![1, 1, TOKEN_LIMIT], TensorData::F32(mask))?,
+        ids: HostTensor::new(vec![1, capacity], TensorData::I32(ids))?,
+        mask: HostTensor::new(vec![1, 1, capacity], TensorData::F32(mask))?,
     })
 }
 

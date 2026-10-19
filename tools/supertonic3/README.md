@@ -1,4 +1,59 @@
-# Supertonic 3 baseline tools
+# Supertonic 3 model tools
+
+## Recommended FP16 bundle
+
+The app and `BundleManifest::recommended()` select the boundary-corrected
+T=384 FP16 release. ONNX is only a development conversion/reference format;
+MLSR executes Core ML. The remaining sections document the retained legacy
+T=128 INT4 baseline and default reference-tool arguments.
+
+Build the FP16 exports using the [context experiment](../../docs/internal/supertonic3-context-experiment.md#reproducing-the-experiment).
+In addition to the main export, export the short estimator with
+`context_coreml export --latent-buckets 128 --stage vector_estimator`, using
+the same ONNX inputs, corrected probe and conversion settings. Then create a
+new candidate manifest and symlinked bundle:
+
+```sh
+python3 -m tools.supertonic3.package_context \
+  --models /path/to/coreml-boundary-fp16 \
+  --short-models /path/to/coreml-boundary-fp16-l128 \
+  --legacy-bundle /path/to/verified/legacy-bundle \
+  --output /path/to/new/fp16-bundle \
+  --manifest /path/to/new/candidate.yaml
+
+python3 -m tools.supertonic3 \
+  --manifest model-manifests/supertonic3-coreml-fp16.yaml \
+  verify-bundle --bundle /path/to/fp16-bundle
+```
+
+The legacy bundle supplies verified tokenizer/configuration and M1/F1 styles.
+Exported graph files must match the checked-in release inventory to use its
+catalog identity; independently rebuilt compiled files are not promised to be
+byte-identical. A new candidate requires review, qualification and new catalog
+pins. Do not overwrite the release manifest to bypass verification. There is
+no published download for these local compiled exports.
+
+For new captures, also pass `--corpus tests/fixtures/supertonic3/fp16-corpus.yaml`
+and `--frontend tests/fixtures/supertonic3/fp16-frontend.yaml`; replay and
+verification use the same corpus and explicit FP16 manifest.
+
+To build the separate four-bit candidate from those exact FP16 exports:
+
+```sh
+python3 -m tools.supertonic3.quantize_context \
+  --manifest model-manifests/supertonic3-coreml-fp16.yaml \
+  --bundle /path/to/verified/fp16-bundle \
+  --models /path/to/coreml-boundary-fp16 \
+  --short-models /path/to/coreml-boundary-fp16-l128 \
+  --output /path/to/new/int4-candidate
+```
+
+This compresses estimator weights only and emits a candidate `bundle/mlsr-bundle.yaml`
+with exact file pins. It requires Core ML Tools' optimization dependencies,
+including scikit-learn. It never changes the shipping catalog or Flutter default.
+See the [candidate results and remaining listening gate](../../docs/internal/supertonic3-fp16-promotion.md#four-bit-candidate).
+
+## Legacy baseline
 
 These development-only tools implement milestone 1: pin published model bytes,
 prepare a verified local bundle, and capture/replay real reference fixtures.
@@ -15,6 +70,10 @@ are outside this baseline.
 
 Use an existing Python 3.11+ interpreter. No command creates an environment or
 installs packages automatically.
+
+The separate [larger-context experiment](../../docs/internal/supertonic3-context-experiment.md)
+provides official ONNX segmentation controls and T=384 Core ML export/replay tools.
+It records padding and precision differences without replacing this baseline.
 
 - Manifest, file-integrity, and portable tests: `requirements.txt` (PyYAML/NumPy).
 - Real inference: macOS Apple Silicon and `requirements-coreml.txt`, including
