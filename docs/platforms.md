@@ -6,6 +6,10 @@ Core ML and qualified on macOS arm64, including the public C ABI and installed
 Dart/Go/Python synthesis packages and a Flutter playback example. The
 [POC qualification](internal/poc-qualification.md) records the exact host, artifacts,
 timing boundaries, and remaining device/release gates.
+The [experimental QNN integration](qnn-qualification.md) additionally executes on
+Windows ARM64/X2 Elite. Its native adapter, headless developer SDK and lifecycle are validated; the
+Superfast preset's subjective listening qualification remains pending. Canonical
+numerical differences are retained as diagnostics, not a perceptual verdict.
 
 The recommended model is now the [T=384 FP16 Core ML release](internal/supertonic3-fp16-promotion.md).
 Its native replay and Flutter checks are recorded separately; the older POC's
@@ -15,10 +19,10 @@ INT4 benchmarks and ANE traces do not establish FP16 performance.
 | --- | --- | --- |
 | macOS arm64 | Rust engine/CLI; shared/static libraries; optional Core ML; Flutter player | Full text-to-PCM parity, installed C/Dart/Go/Python checks, real Flutter playback/cancel/export, release app build/signature checks, warm benchmark and process-attributed ANE traces on M4 Pro/macOS 27.0.1 |
 | macOS x64 | Host builds; optional Core ML | Cross-compiled/linked locally; inference not executed |
-| Linux x64, glibc | Native host builds; CI job configured | Awaiting CI run |
+| Linux x64, glibc | Native host builds | Portable C/Dart/Go/Python and installed-package CI passed |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
-| Windows x64, MSVC Rust | Native host builds; CI job configured | All-target/all-feature Rust cross-check passed; native execution and CI run unverified |
-| Windows arm64, MSVC Rust | Dart target mapping configured | Not locally tested; C/Go toolchain needs qualification |
+| Windows x64, MSVC Rust | Native host builds | All-target/all-feature Rust cross-check and portable C/Dart/Go/Python installed-package CI passed |
+| Windows arm64, MSVC Rust | Optional QNN/ExecuTorch bridge; headless Rust/C/Dart/Go/Python SDK | Real X2 Elite SoC 88/HTP V81 execution, exact adapter replay, four QAIRT HTP profiles, lazy jobs/cancellation, model ownership, WAV/PCM parity and text plans; native speech output unavailable; experimental model fails canonical screen |
 | iOS arm64 / simulator | Core ML shared/static artifacts, minimum iOS 18 | Cross-compiled/linked locally; device execution and app packaging unqualified |
 | Android | Future runtime and target-specific packaging | Not implemented |
 | Browser / WebAssembly | Future dedicated binding and compatible runtime | Not implemented |

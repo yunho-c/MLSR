@@ -197,7 +197,7 @@ impl Store {
             // request length and avoids native-endian/alignment assumptions.
             let mut scratch = [0u8; 16384];
             for samples in audio.samples().chunks(scratch.len() / 4) {
-                for (sample, bytes) in samples.iter().zip(scratch.chunks_exact_mut(4)) {
+                for (sample, bytes) in samples.iter().zip(scratch.as_chunks_mut::<4>().0) {
                     bytes.copy_from_slice(&sample.to_le_bytes());
                 }
                 file.write_all(&scratch[..samples.len() * 4])?;
@@ -248,8 +248,10 @@ impl Store {
             file.read_exact(&mut scratch[..count * 4]).map_err(io)?;
             samples.extend(
                 scratch[..count * 4]
-                    .chunks_exact(4)
-                    .map(|b| f32::from_le_bytes(b.try_into().expect("four bytes"))),
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .map(|b| f32::from_le_bytes(*b)),
             );
             remaining -= count;
         }

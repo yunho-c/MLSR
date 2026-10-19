@@ -2,3 +2,5 @@
 *.png binary
 *.wav binary
 *.onnx binary
+# This release is identified by its original serialized bytes, including CRLF.
+model-manifests/supertonic3-qnn-superfast.yaml -text -eol whitespace=cr-at-eol

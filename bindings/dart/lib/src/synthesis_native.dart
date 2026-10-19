@@ -80,7 +80,8 @@ native.MlsrString _string(Arena arena, String text) {
 }
 
 void checkSynthesisApi() {
-  if (native.mlsr_abi_version() != 1 || native.mlsr_features() & 1 == 0) {
+  if (native.mlsr_abi_version() != 1 ||
+      native.mlsr_features() & native.MLSR_FEATURE_JOBS == 0) {
     throw const NativeFailure(
       'unsupported_abi',
       'Native synthesis API is unavailable',
@@ -90,7 +91,7 @@ void checkSynthesisApi() {
 
 void checkModelApi() {
   checkSynthesisApi();
-  if (native.mlsr_features() & 4 == 0) {
+  if (native.mlsr_features() & native.MLSR_FEATURE_MODEL_STORE == 0) {
     throw const NativeFailure(
       'unsupported_abi',
       'Native model store API is unavailable',

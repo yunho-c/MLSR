@@ -110,6 +110,7 @@ def replay(
         ROOT / "Cargo.lock",
         ROOT / "crates/mlsr/Cargo.toml",
         ROOT / "crates/mlsr/examples/coreml_synthesis_replay.rs",
+        ROOT / "crates/mlsr/examples/support/synthesis_replay.rs",
         *list((ROOT / "crates/mlsr/src").rglob("*.rs")),
         *list(Path(__file__).parent.glob("*.py")),
     }

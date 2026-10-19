@@ -82,7 +82,7 @@ def test_c():
         ROOT / "include",
         "-L",
         NATIVE,
-        "-lmlsr_ffi",
+        "-l:mlsr_ffi.dll.lib" if os.name == "nt" else "-lmlsr_ffi",
         *flags,
         "-o",
         executable,

@@ -16,6 +16,7 @@ from tools.supertonic3.bundle import ReferenceError, load_yaml, write_yaml
 from tools.supertonic3.reference import compare_tensors
 from tools.supertonic3.rust_runtime import (
     Worker,
+    decode_tensor_map,
     decode_outputs,
     output_names,
     replay_rust,
@@ -23,6 +24,19 @@ from tools.supertonic3.rust_runtime import (
 
 
 class RustRuntimeTests(unittest.TestCase):
+    def test_qnn_int64_transport_preserves_full_width_and_checks_byte_count(self):
+        values = np.array([-(2**63), 0, 2**63 - 1], dtype="<i8")
+        descriptor = {
+            "ids": {"shape": [1, 3], "dtype": "int64", "offset": 0, "length": 24}
+        }
+        decoded = decode_tensor_map(descriptor, values.tobytes(), {"ids": "int64"})
+        self.assertEqual(decoded["ids"].tobytes(), values.tobytes())
+        with self.assertRaises(ReferenceError):
+            decode_tensor_map(descriptor, values.tobytes(), {"ids": "int32"})
+        descriptor["ids"]["length"] = 12
+        with self.assertRaises(ReferenceError):
+            decode_tensor_map(descriptor, values.tobytes(), {"ids": "int64"})
+
     def payload(self):
         raw = bytearray()
         descriptors = {}
@@ -92,14 +106,18 @@ class RustRuntimeTests(unittest.TestCase):
             binary.write_bytes(b"test binary receipt")
             (root / "reference.yaml").write_text("fixture: placeholder\n")
             output = root / "result.yaml"
-            with patch(
-                "tools.supertonic3.rust_runtime.platform.system", return_value="Darwin"
-            ), patch("tools.supertonic3.rust_runtime.verify_bundle"), patch(
-                "tools.supertonic3.rust_runtime.verify_reference",
-                return_value={"compute_policy": "cpu_only", "cases": []},
-            ), patch(
-                "tools.supertonic3.rust_runtime.Worker"
-            ) as worker:
+            with (
+                patch(
+                    "tools.supertonic3.rust_runtime.platform.system",
+                    return_value="Darwin",
+                ),
+                patch("tools.supertonic3.rust_runtime.verify_bundle"),
+                patch(
+                    "tools.supertonic3.rust_runtime.verify_reference",
+                    return_value={"compute_policy": "cpu_only", "cases": []},
+                ),
+                patch("tools.supertonic3.rust_runtime.Worker") as worker,
+            ):
                 worker.return_value.call.side_effect = RuntimeError(
                     "controlled worker failure"
                 )
@@ -129,10 +147,14 @@ class RustRuntimeTests(unittest.TestCase):
                 "--replay-report",
                 str(evidence),
             ]
-            with patch("sys.argv", args), patch(
-                "tools.supertonic3.reference.verify_reference",
-                return_value={"cases": []},
-            ), patch("tools.supertonic3.reference.compact_summary", return_value={}):
+            with (
+                patch("sys.argv", args),
+                patch(
+                    "tools.supertonic3.reference.verify_reference",
+                    return_value={"cases": []},
+                ),
+                patch("tools.supertonic3.reference.compact_summary", return_value={}),
+            ):
                 with self.assertRaisesRegex(ReferenceError, "runtime-only"):
                     cli.main()
             self.assertFalse((root / "summary.yaml").exists())

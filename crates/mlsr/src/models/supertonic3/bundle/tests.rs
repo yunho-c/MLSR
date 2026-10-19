@@ -2,6 +2,51 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn qnn_manifest_pins_program_semantics_and_target() {
+    let manifest = parse_manifest(QNN.as_bytes()).unwrap();
+    assert_eq!(manifest.artifacts.len(), 14);
+    assert_eq!(manifest.runtime["htp_arch"], 81);
+    for (pointer, value) in [
+        ("/runtime/target_soc", json!(42)),
+        ("/contract/supported_steps", json!([5, 8])),
+        ("/contract/text_tokens", json!(384)),
+        ("/contract/noise_capacity", json!(96)),
+        ("/artifacts/ve_96/outputs/output/shape", json!([2, 144, 96])),
+        (
+            "/artifacts/duration_predictor/inputs/text_ids/dtype",
+            json!("int32"),
+        ),
+        ("/artifacts/vocoder/files/0/sha256", json!("0".repeat(64))),
+        ("/artifacts/ve_96_metadata/path", json!("../outside.json")),
+    ] {
+        let mut value_map: Value = serde_yaml_ng::from_str(QNN).unwrap();
+        *value_map.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            parse_manifest(serde_yaml_ng::to_string(&value_map).unwrap().as_bytes()).is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires the prepared external QNN Superfast bundle"]
+fn loads_pinned_qnn_bundle() {
+    let root = std::env::var_os("MLSR_QNN_TEST_BUNDLE").expect("MLSR_QNN_TEST_BUNDLE");
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../model-manifests/supertonic3-qnn-superfast.yaml");
+    let bundle = Bundle::load(manifest, root).unwrap();
+    assert_eq!(bundle.backend(), BackendKind::QnnHtp);
+    assert_eq!(bundle.voices().collect::<Vec<_>>(), ["F1", "M1"]);
+    assert!(bundle.model_path("ve_96").unwrap().is_file());
+    assert!(bundle.model_path("ve_128").is_err());
+    assert!(
+        bundle
+            .variant_models(crate::config::ExecutionVariant::Fused8)
+            .is_err()
+    );
+}
+
+#[test]
 fn discovers_bundles_and_pins_original_manifest_bytes() {
     let fixture = Fixture::new();
     let root = fixture.directory.path();
@@ -37,6 +82,9 @@ fn recommended_profile_rejects_mixed_text_axes_and_unknown_capacities() {
     value["artifacts"]["text_encoder"]["outputs"]["text_emb"]["shape"][2] = 128.into();
     assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
     value["contract"]["text_tokens"] = 512.into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
+    let mut value: serde_json::Value = serde_yaml_ng::from_slice(manifest.bytes()).unwrap();
+    value["runtime"]["kind"] = "qnn".into();
     assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
 }
 

@@ -4,7 +4,7 @@ use crate::{
     engine::Engine,
     error::{Error, InputErrorKind, Result},
     text::TextPlan,
-    voice::ResolvedVoice,
+    voice::{ResolvedVoice, VoiceCatalog},
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub enum BackendOptions {
     /// Supertonic diffusion steps and deterministic per-request noise seed.
     Supertonic3 {
-        /// Denoising steps, 1..=64.
+        /// Denoising steps, 1..=64. QNN Superfast requires exactly 8.
         steps: u32,
         /// Original segment n uses seed.wrapping_add(n), including navigation.
         seed: u64,
@@ -56,6 +56,15 @@ impl RequestOptions {
         let BackendOptions::Supertonic3 { steps, seed } = self.backend;
         SynthesisOptions::new(steps, self.speaking_rate * 1.05, seed)
     }
+    fn validate_backend(self, backend: &str) -> Result<()> {
+        let options = self.effective_synthesis_options()?;
+        if backend == "qnn" && options.steps() != 8 {
+            return Err(Error::InvalidOptions(
+                "QNN Superfast requires exactly 8 denoising steps".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 impl Default for RequestOptions {
     fn default() -> Self {
@@ -90,7 +99,7 @@ impl Request {
                 message: "empty request".into(),
             });
         }
-        options.effective_synthesis_options()?;
+        options.validate_backend(voice.voice().backend())?;
         Ok(Self {
             text: text.into(),
             voice,
@@ -139,14 +148,21 @@ impl Request {
     pub fn start_segment(&self) -> usize {
         self.resume.as_ref().map_or(0, |(_, start)| *start)
     }
-    pub(crate) fn prepare(&self, engine: &Engine) -> Result<(Arc<TextPlan>, usize)> {
-        let catalog = engine.voice_catalog()?;
+    pub(crate) fn validate_for(&self, catalog: &VoiceCatalog) -> Result<()> {
         let voice = catalog.get(self.voice.voice().id())?;
-        if voice.manifest_sha256() != self.voice.voice().manifest_sha256() {
+        if voice.manifest_sha256() != self.voice.voice().manifest_sha256()
+            || voice.backend() != self.voice.voice().backend()
+        {
             return Err(Error::VoiceUnavailable(
                 "selected voice belongs to a different model release".into(),
             ));
         }
+        self.options.validate_backend(voice.backend())
+    }
+    pub(crate) fn prepare(&self, engine: &Engine) -> Result<(Arc<TextPlan>, usize)> {
+        let catalog = engine.voice_catalog()?;
+        self.validate_for(&catalog)?;
+        let voice = catalog.get(self.voice.voice().id())?;
         if let Some(plan) = &self.resume {
             return Ok(plan.clone());
         }
@@ -165,6 +181,29 @@ impl Request {
 mod tests {
     use super::*;
     use crate::{models::supertonic3::BundleManifest, voice::VoiceFallback};
+    #[test]
+    fn qnn_settings_and_model_identity_are_validated_before_admission() {
+        let catalog = BundleManifest::parse(include_bytes!(
+            "../../../model-manifests/supertonic3-qnn-superfast.yaml"
+        ))
+        .unwrap()
+        .voice_catalog();
+        let voice = catalog.resolve("en", None, VoiceFallback::Strict).unwrap();
+        assert_eq!(voice.voice().backend(), "qnn");
+        assert!(voice.voice().qualified_languages().is_empty());
+        let seven =
+            RequestOptions::new(1.0, BackendOptions::Supertonic3 { steps: 7, seed: 0 }).unwrap();
+        assert!(matches!(
+            Request::new("Hello.", voice.clone(), seven),
+            Err(Error::InvalidOptions(_))
+        ));
+        let request = Request::new("Hello.", voice, RequestOptions::default()).unwrap();
+        request.validate_for(&catalog).unwrap();
+        assert!(matches!(
+            request.validate_for(&BundleManifest::baseline().voice_catalog()),
+            Err(Error::VoiceUnavailable(_))
+        ));
+    }
     #[test]
     fn rates_are_normalized_once_and_requests_own_their_input() {
         assert_eq!(

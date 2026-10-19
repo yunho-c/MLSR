@@ -10,6 +10,13 @@ downloads assets. The original eager/busy-on-conflict `Engine` API is unchanged.
 Supertonic's raw speed 1.05; steps and seed use typed `BackendOptions`. Effective
 low-level options are available for reproducing results.
 
+QNN Superfast requires eight steps. Requests reject other step counts before
+queue admission or speech replacement, and reject voices from another model
+release. Fixed text/latent limits still produce typed failures; the SDK does not
+silently split extra segments or select another preset. Voice metadata and
+structured failures identify the actual backend (`qnn` or `coreml`). See
+[QNN setup and qualification](qnn-runtime.md) for headless Windows ARM64 usage.
+
 `tts.synthesize(request)` immediately returns a lazy `SynthesisJob`. Observing
 `snapshot()`, `states()` or `wait()` does not start it. Calling `audio()` claims
 the sole consumer and starts generation; `start()` can explicitly start without

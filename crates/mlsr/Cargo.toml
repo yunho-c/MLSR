@@ -11,6 +11,7 @@ publish = false
 [features]
 default = []
 coreml = ["dep:cidre"]
+qnn = []
 apple-output = ["dep:mlsr-playback", "mlsr-playback/apple"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -46,6 +47,14 @@ required-features = ["coreml"]
 [[example]]
 name = "coreml_trace"
 required-features = ["coreml"]
+
+[[example]]
+name = "qnn_synthesis_replay"
+required-features = ["qnn"]
+
+[[example]]
+name = "qnn_qualification"
+required-features = ["qnn"]
 
 [[example]]
 name = "coreml_ffi_probe"

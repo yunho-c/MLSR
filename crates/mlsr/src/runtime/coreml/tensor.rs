@@ -31,10 +31,13 @@ fn dimensions(values: &ns::Array<ns::Number>) -> Result<Vec<usize>> {
         .collect()
 }
 
-pub(super) fn native_dtype(dtype: DType) -> ml::MultiArrayDType {
+pub(super) fn native_dtype(dtype: DType) -> Result<ml::MultiArrayDType> {
     match dtype {
-        DType::F32 => ml::MultiArrayDType::F32,
-        DType::I32 => ml::MultiArrayDType::I32,
+        DType::F32 => Ok(ml::MultiArrayDType::F32),
+        DType::I32 => Ok(ml::MultiArrayDType::I32),
+        DType::I64 => Err(Error::InvalidTensor(
+            "Core ML does not support Int64 tensors".into(),
+        )),
     }
 }
 
@@ -120,10 +123,11 @@ impl<'a> Layout<'a> {
 impl NativeTensor {
     pub(in crate::runtime) fn zeros(shape: &[usize], dtype: DType) -> Result<Self> {
         element_count(shape)?;
+        let dtype = native_dtype(dtype)?;
         pool(|| {
             let shape = numbers(shape);
             let array = fallible("allocate tensor", || {
-                ml::MultiArray::with_shape(&shape, native_dtype(dtype))
+                ml::MultiArray::with_shape(&shape, dtype)
             })?;
             let mut tensor = Self::from_native(array)?;
             let mut result = Err(Error::InvalidTensor("no mutable native buffer".into()));
@@ -209,6 +213,11 @@ impl NativeTensor {
         let source = match host.data() {
             TensorData::F32(v) => v.as_ptr().cast::<u8>(),
             TensorData::I32(v) => v.as_ptr().cast::<u8>(),
+            TensorData::I64(_) => {
+                return Err(Error::InvalidTensor(
+                    "Core ML does not support Int64 tensors".into(),
+                ));
+            }
         };
         pool(|| {
             let mut result = Err(Error::InvalidTensor("no mutable native buffer".into()));
@@ -265,10 +274,20 @@ impl NativeTensor {
         let mut data = match self.dtype {
             DType::F32 => TensorData::F32(storage::<f32>(count)?),
             DType::I32 => TensorData::I32(storage::<i32>(count)?),
+            DType::I64 => {
+                return Err(Error::InvalidTensor(
+                    "Core ML does not support Int64 tensors".into(),
+                ));
+            }
         };
         let dest = match &mut data {
             TensorData::F32(v) => v.as_mut_ptr().cast::<u8>(),
             TensorData::I32(v) => v.as_mut_ptr().cast::<u8>(),
+            TensorData::I64(_) => {
+                return Err(Error::InvalidTensor(
+                    "Core ML does not support Int64 tensors".into(),
+                ));
+            }
         };
         pool(|| {
             let mut result = Err(Error::InvalidTensor("no native buffer".into()));

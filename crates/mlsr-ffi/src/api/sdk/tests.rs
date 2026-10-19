@@ -48,7 +48,10 @@ fn catalog_resolution_metadata_and_wrong_kind_ownership() {
     let mut error = 0;
     // SAFETY: All strings are static readable UTF-8 and outputs are disjoint locals.
     unsafe {
-        assert_eq!(mlsr_features() & 8, 8);
+        assert_eq!(
+            mlsr_features() & MLSR_FEATURE_DEVELOPER_SDK,
+            MLSR_FEATURE_DEVELOPER_SDK
+        );
         assert_eq!(mlsr_voice_catalog(0, &mut output, &mut error), MLSR_OK);
         let catalog = output;
         assert_eq!(mlsr_event_release(catalog), MLSR_ERROR);

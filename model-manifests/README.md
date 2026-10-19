@@ -20,6 +20,12 @@ INT4 VectorEstimators at latent buckets 128/256/512, and M1/F1 preset voices.
 There are 28 payload files, totaling 169,328,070 bytes. Weights are external;
 ordinary builds never download them.
 
+The experimental [QNN manifest](supertonic3-qnn-superfast.yaml) is pinned by its
+original serialized bytes, including CRLF line endings. Its `.gitattributes`
+exception preserves those bytes in Git and on every checkout; keep the existing
+SHA-256 and bundle identity intact when editing unrelated files. Manifest identity
+verification does not normalize YAML or line endings.
+
 The manifest records:
 
 - Source repository and full immutable revision. For published bundles, each

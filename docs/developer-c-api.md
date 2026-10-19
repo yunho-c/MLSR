@@ -2,8 +2,9 @@
 
 The additive SDK uses ABI 1 with feature bit `8`. Existing engine/job functions,
 layouts, raw model speed and UTF-8 event offsets retain their meanings. Bit `16`
-advertises compiled macOS native output; model execution still needs bit `2` and
-a verified model. See the generated [header](../include/mlsr.h) for every pointer,
+advertises compiled macOS native output; model execution needs Core ML bit `2`
+or QNN HTP bit `32`, the matching compute policy and a verified model. See the
+generated [header](../include/mlsr.h) for every pointer,
 layout and ownership contract. Initialize options with their default functions.
 
 `mlsr_tts_open` loads paths; `mlsr_tts_from_model` retains an existing verified

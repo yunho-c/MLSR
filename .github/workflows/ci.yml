@@ -131,3 +131,5 @@ jobs:
         run: cargo clippy --locked -p mlsr -p mlsr-ffi -p mlsr-cli --all-targets --all-features -- -D warnings
       - name: Test runtime, foreign callers, static/shared libraries, and Apple targets
         run: python tools/check_coreml.py --toolchain ${{ matrix.rust }} --cross
+      - name: Test Apple output compatibility without opening an audio device
+        run: cargo test --locked -p mlsr-playback --features apple

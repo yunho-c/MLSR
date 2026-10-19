@@ -1,6 +1,9 @@
 //! Small, pinned model identities shared by packaging tools and host adapters.
 use super::supertonic3::{Bundle, BundleManifest};
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    runtime::BackendKind,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
 
@@ -105,7 +108,7 @@ impl ModelDescriptor {
     pub fn id(&self) -> &str {
         &self.id
     }
-    /// Runtime backend identifier; only Core ML execution is currently implemented.
+    /// Runtime backend identifier, such as `coreml` or `qnn`.
     pub fn backend(&self) -> &str {
         &self.backend
     }
@@ -128,7 +131,11 @@ impl ModelDescriptor {
     /// Check a parsed manifest against this identity before reading its payload.
     pub fn verify_manifest(&self, manifest: &BundleManifest) -> Result<()> {
         self.validate()?;
-        if self.backend != "coreml" || manifest.id() != self.id {
+        let backend = match manifest.backend() {
+            BackendKind::CoreMl => "coreml",
+            BackendKind::QnnHtp => "qnn",
+        };
+        if self.backend != backend || manifest.id() != self.id {
             return Err(invalid(
                 "model ID or backend differs from its catalog entry",
             ));
@@ -218,6 +225,33 @@ mod tests {
         .unwrap();
         assert!(model.verify_manifest(&changed).is_err());
     }
+    #[test]
+    fn qnn_catalog_requires_explicit_opt_in_and_matching_backend() {
+        let bytes = include_bytes!("../../../../model-manifests/supertonic3-qnn-superfast.yaml");
+        let manifest = BundleManifest::parse(bytes).unwrap();
+        assert_eq!(manifest.backend(), BackendKind::QnnHtp);
+        let catalog = ModelCatalog::parse(include_bytes!(
+            "../../../../model-manifests/catalog-qnn-experimental.yaml"
+        ))
+        .unwrap();
+        let model = catalog.resolve(manifest.id(), "windows-arm64").unwrap();
+        model.verify_manifest(&manifest).unwrap();
+        assert!(catalog.resolve(manifest.id(), "macos-arm64").is_err());
+        assert!(
+            ModelCatalog::builtin()
+                .resolve(manifest.id(), "windows-arm64")
+                .is_err()
+        );
+
+        let mut mismatched = model.clone();
+        mismatched.backend = "coreml".into();
+        assert!(mismatched.verify_manifest(&manifest).is_err());
+        let baseline = BundleManifest::baseline();
+        let mut mismatched = ModelCatalog::builtin().models().next().unwrap().clone();
+        mismatched.backend = "qnn".into();
+        assert!(mismatched.verify_manifest(&baseline).is_err());
+    }
+
     #[test]
     fn rejects_ambiguous_or_unsafe_catalogs() {
         for (before, after) in [

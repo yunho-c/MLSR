@@ -375,7 +375,12 @@ impl Tts {
             if matches!(error, Error::Cancelled) || lock(&self.operations.state).0 {
                 Error::Cancelled
             } else {
-                Error::OperationFailed(Failure::new(speech.id(), FailureStage::Writing, &error))
+                Error::OperationFailed(Failure::new(
+                    speech.id(),
+                    FailureStage::Writing,
+                    &error,
+                    speech.request().voice().voice().backend(),
+                ))
             }
         })
     }
@@ -435,6 +440,11 @@ fn finalize_consumer<T>(job: &SynthesisJob, result: Result<T>, stage: FailureSta
     }
     result.map_err(|e| match e {
         Error::OperationFailed(_) | Error::Cancelled => e,
-        other => Error::OperationFailed(Failure::new(job.id(), stage, &other)),
+        other => Error::OperationFailed(Failure::new(
+            job.id(),
+            stage,
+            &other,
+            job.request().voice().voice().backend(),
+        )),
     })
 }

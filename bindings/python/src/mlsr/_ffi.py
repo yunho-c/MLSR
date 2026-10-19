@@ -22,13 +22,25 @@ def _library() -> ctypes.CDLL:
             "MLSR's native library was not found. Set MLSR_LIBRARY_PATH to the "
             "absolute path of libmlsr_ffi.so, libmlsr_ffi.dylib, or mlsr_ffi.dll."
         )
+    directories = []
     try:
+        # Python 3.8+ excludes PATH when resolving DLL dependencies. Keep these
+        # explicit directory registrations alive with the loaded native library.
+        if os.name == "nt":
+            for directory in os.environ.get("MLSR_DLL_DIRECTORIES", "").split(
+                os.pathsep
+            ):
+                if directory:
+                    directories.append(os.add_dll_directory(directory))
         library = ctypes.CDLL(path)
+        library._mlsr_dll_directories = directories
         library.mlsr_abi_version.argtypes = []
         library.mlsr_abi_version.restype = ctypes.c_uint32
         library.mlsr_version.argtypes = []
         library.mlsr_version.restype = ctypes.c_char_p
     except (OSError, AttributeError) as error:
+        for directory in directories:
+            directory.close()
         raise LibraryLoadError(
             f"Cannot load the MLSR C ABI from {path!r}: {error}"
         ) from error

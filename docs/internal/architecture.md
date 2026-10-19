@@ -14,6 +14,9 @@ parsers, and SHA-256. JSON reads the upstream tokenizer/configuration/voice asse
 model manifests use YAML. The optional Apple-only
 `coreml` feature adds pinned cidre bindings. The portable frontend and noise
 preparation use pinned Unicode normalization and random-generation crates.
+The optional Windows ARM64 `qnn` feature links a separately prepared narrow C++
+bridge to ExecuTorch/QNN. No Python runtime or second native synthesis pipeline
+is introduced; Rust owns the same frontend, noise, duration, flow and job policy.
 
 ## Rust modules
 

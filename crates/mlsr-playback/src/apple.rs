@@ -190,9 +190,7 @@ impl Player {
                 let enabled = accepting.clone();
                 let block = RcBlock::new(move |_: NonNull<NSNotification>| {
                     if enabled.load(Ordering::Acquire) {
-                        let _ = count.fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-                            Some(n.saturating_add(1).min(33))
-                        });
+                        super::counter::increment_bounded(&count, 33);
                     }
                 });
                 let observer = center.addObserverForName_object_queue_usingBlock(

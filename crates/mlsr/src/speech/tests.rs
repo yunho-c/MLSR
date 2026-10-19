@@ -561,6 +561,36 @@ fn rejected_replace_does_not_cancel_current_or_queued_speech() {
     assert!(queued.snapshot().cancellation.is_none());
     assert!(current.snapshot().cancellation.is_none());
 }
+
+#[test]
+fn request_from_another_backend_cannot_replace_current_speech() {
+    let tts = owner(Factory::new(false, false));
+    let current = tts
+        .speak(
+            request(&tts, "Current."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&current, |s| s.buffered_until_frame > 0);
+    let qnn = crate::models::supertonic3::BundleManifest::parse(include_bytes!(
+        "../../../../model-manifests/supertonic3-qnn-superfast.yaml"
+    ))
+    .unwrap()
+    .voice_catalog();
+    let foreign = Request::new(
+        "Wrong model.",
+        qnn.resolve("en", None, VoiceFallback::Strict).unwrap(),
+        RequestOptions::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        tts.speak(foreign, SpeechOptions::default(), SpeakMode::Replace),
+        Err(Error::VoiceUnavailable(_))
+    ));
+    assert!(current.completion().is_none());
+    assert!(!current.control.job.snapshot().cancellation_requested);
+}
 #[test]
 fn cancel_flushes_before_inflight_synthesis_quiesces() {
     let factory = Factory::new(false, false);
@@ -689,6 +719,42 @@ fn cancellation_consumed_between_enqueues_keeps_the_healthy_output() {
     ));
     assert_eq!(lock(&factory.devices).len(), 1);
     assert!(!lock(&factory.device(0)).dropped);
+}
+
+#[test]
+fn paused_seek_publishes_position_and_text_range_together() {
+    let factory = Factory::new(true, false);
+    let tts = owner(factory.clone());
+    let speech = tts
+        .speak(
+            request(&tts, "First sentence. Second sentence."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&speech, |s| s.position_frame == 84000);
+    speech.pause().unwrap();
+    wait(&speech, |s| s.playback == PlaybackPhase::Paused);
+    assert_eq!(speech.snapshot().active_text_range.unwrap().sentence_id, 1);
+
+    // Hold retained-audio enqueue after the native output rebases, before the
+    // worker can publish its new position and matching source range.
+    let (entered, observed) = std::sync::mpsc::sync_channel(1);
+    let (release, resume) = std::sync::mpsc::sync_channel(1);
+    lock(&factory.device(0)).enqueue_gate = Some((entered, resume));
+    speech.seek(0).unwrap();
+    observed.recv_timeout(Duration::from_secs(3)).unwrap();
+    let pending = speech.snapshot();
+    release.send(()).unwrap();
+    assert_eq!(pending.position_frame, 84000);
+    assert_eq!(pending.active_text_range.unwrap().sentence_id, 1);
+
+    wait(&speech, |s| s.position_frame == 0);
+    let applied = speech.snapshot();
+    assert_eq!(applied.playback, PlaybackPhase::Paused);
+    assert_eq!(applied.active_text_range.unwrap().sentence_id, 0);
+    speech.cancel();
+    assert!(speech.wait(Duration::from_secs(3)).is_some());
 }
 
 #[test]

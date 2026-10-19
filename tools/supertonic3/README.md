@@ -1,11 +1,20 @@
 # Supertonic 3 model tools
 
+These development-only tools pin model bytes, prepare verified local bundles,
+and capture/replay real reference fixtures, runtime stages and synthesis.
+
+The Windows ARM64 QNN tools use a separate Superfast manifest: `qnn_bundle`
+prepares/verifies assets and external runtimes, `qnn_replay` compares saved-noise
+Rust/QNN/ONNX stages, `qnn_profile` collects SDK HTP evidence, and `qnn_summary`
+revalidates captures and summarizes measurements. See [setup and reproduction](../../docs/qnn-runtime.md)
+and the [experimental qualification result](../../docs/qnn-qualification.md).
+
 ## Recommended FP16 bundle
 
 The app and `BundleManifest::recommended()` select the boundary-corrected
-T=384 FP16 release. ONNX is only a development conversion/reference format;
-MLSR executes Core ML. The remaining sections document the retained legacy
-T=128 INT4 baseline and default reference-tool arguments.
+T=384 FP16 Core ML release. ONNX is only a development conversion/reference
+format. The later legacy sections document the retained T=128 INT4 Core ML
+baseline and default reference-tool arguments.
 
 Build the FP16 exports using the [context experiment](../../docs/internal/supertonic3-context-experiment.md#reproducing-the-experiment).
 In addition to the main export, export the short estimator with
@@ -54,11 +63,6 @@ including scikit-learn. It never changes the shipping catalog or Flutter default
 See the [candidate results and remaining listening gate](../../docs/internal/supertonic3-fp16-promotion.md#four-bit-candidate).
 
 ## Legacy baseline
-
-These development-only tools implement milestone 1: pin published model bytes,
-prepare a verified local bundle, and capture/replay real reference fixtures.
-The Rust runtime replay below additionally qualifies milestone 2. Public
-Dart/Go/Python synthesis and Rust text-to-PCM orchestration are subsequent work.
 
 The baseline is the published **v2** duration predictor and text encoder,
 v2 bucketed INT4 VectorEstimators, and the unchanged FP16 vocoder. The v2 models

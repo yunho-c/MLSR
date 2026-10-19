@@ -27,7 +27,7 @@ func TestRealSynthesis(t *testing.T) {
 		t.Skip("real model assets not requested")
 	}
 	before := nativeHandleCount()
-	engine, err := Open(os.Getenv("MLSR_TEST_MANIFEST"), os.Getenv("MLSR_TEST_BUNDLE"), EngineOptions{})
+	engine, err := Open(os.Getenv("MLSR_TEST_MANIFEST"), os.Getenv("MLSR_TEST_BUNDLE"), EngineOptions{QNNHTP: os.Getenv("MLSR_TEST_POLICY") == "qnn_htp"})
 	if err != nil {
 		t.Fatal(err)
 	}

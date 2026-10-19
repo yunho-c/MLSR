@@ -2,7 +2,7 @@
 
 `Engine::start(SynthesisRequest, JobOptions)` copies the request and returns a
 `Job`. One orchestration worker owns the loaded pipeline. The existing native
-runtime worker continues to own Core ML objects. One request may be active on
+runtime worker owns the selected Core ML or QNN objects. One request may be active on
 an engine; competing starts and synchronous calls return `Error::Busy`.
 `Engine::synthesize` remains a synchronous, single-segment convenience API.
 
@@ -32,8 +32,9 @@ The recommended Supertonic3 FP16 bundle accepts 384 normalized Unicode tokens,
 including language tags and terminal punctuation. A complete sentence that fits
 this window stays in one model invocation. Oversized sentences use a fallback
 target of 300 source graphemes, or 120 for Korean/Japanese, and must still fit
-the normalized-token limit. The legacy T=128 INT4 bundle retains its 70/57
-source-grapheme targets. Normalization can expand text, especially Korean.
+the normalized-token limit. T=128 bundles, including legacy Core ML and QNN
+Superfast, use 70/57 source-grapheme targets. Normalization can expand text,
+especially Korean.
 All segments are checked against the real tokenizer before the first model call.
 Unsupported input fails explicitly; no text is truncated.
 
@@ -66,7 +67,7 @@ graphs. While delivering audio, the producer holds at most one complete segment
 plus the bounded queue. It waits for queue capacity before copying another chunk
 or starting another segment. The pipeline's temporary tensors are independently
 bounded by supported model shapes. These are allocation bounds, not claims about
-Core ML's physical memory or ANE residency. Audio retained by the caller is owned
+accelerator physical memory or residency. Audio retained by the caller is owned
 by that caller and no longer counts toward the queue limit.
 
 `cancel()` sets a shared flag, discards queued data, and wakes blocked producers.
@@ -91,3 +92,10 @@ counts and native tensor lifetime. Later FFI/binding tests must preserve this
 contract rather than introduce an unbounded adapter queue. The
 [job qualification record](../tests/fixtures/supertonic3/jobs-summary.yaml)
 identifies the actual tests and saved-noise regression evidence.
+
+The [QNN device checks](qnn-qualification.md) exercise this same contract through
+Rust, C, Dart, Go and Python. QNN's single L96 preset caps each segment at
+294,912 frames even when `max_segment_frames` permits more. Segmentation does
+not guarantee that predicted duration fits; oversized segments fail explicitly.
+QNN cancellation waits for the current synchronous graph and discards its result;
+the measured latency depends on whether TE, VE or vocoder is in flight.

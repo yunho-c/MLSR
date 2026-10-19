@@ -37,6 +37,9 @@ func nativeOpen(manifest, bundle string, options EngineOptions) (uint64, error) 
 	if options.CPUOnly {
 		settings.compute_policy = 0
 	}
+	if options.QNNHTP {
+		settings.compute_policy = 2
+	}
 	if options.DisableOutputReuse {
 		settings.reuse_output_buffers = 0
 	}

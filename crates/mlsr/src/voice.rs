@@ -145,6 +145,7 @@ impl VoiceCatalog {
         bundle: &str,
         revision: &str,
         manifest: &str,
+        backend: crate::runtime::BackendKind,
         readiness: VoiceReadiness,
     ) -> Self {
         static QUALIFIED_MANIFESTS: OnceLock<[String; 2]> = OnceLock::new();
@@ -174,7 +175,7 @@ impl VoiceCatalog {
                     bundle_id: bundle.into(),
                     revision: revision.into(),
                     manifest_sha256: manifest.into(),
-                    backend: "coreml".into(),
+                    backend: backend.as_str().into(),
                     languages: SUPPORTED_LANGUAGES.iter().map(|s| (*s).into()).collect(),
                     qualified_languages: qualified_languages.clone(),
                     requires_network: false,

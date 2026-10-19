@@ -50,12 +50,12 @@ pub struct Failure {
     pub message: String,
 }
 impl Failure {
-    pub(crate) fn new(request_id: u64, stage: FailureStage, error: &Error) -> Self {
+    pub(crate) fn new(request_id: u64, stage: FailureStage, error: &Error, backend: &str) -> Self {
         Self {
             request_id,
             category: error.code(),
             stage,
-            backend: Some("coreml".into()),
+            backend: Some(backend.into()),
             message: error.to_string(),
         }
     }

@@ -1,11 +1,12 @@
 # Voice discovery and frozen text plans
 
 Voice IDs use model identity (`supertonic3:M1`, `supertonic3:F1`), independent of
-the Core ML backend and of a bundle revision. The old engine accepts raw M1/F1
+the execution backend and of a bundle revision. The old engine accepts raw M1/F1
 identifiers unchanged. A catalog reports exact bundle/revision/manifest identity,
-31 frontend-supported languages and capabilities. Only the pinned, qualified
-baseline advertises English/Korean as qualified languages. Language-wide tags do
-not imply a particular accent.
+31 frontend-supported languages and capabilities. The pinned recommended FP16
+and legacy Core ML bundles advertise English/Korean as qualified languages. Language-wide tags do
+not imply a particular accent. QNN entries report `backend: qnn` with empty
+qualified languages; the experimental model's quality gate remains open.
 
 `BundleManifest::voice_catalog()` requires no assets or runtime and reports
 `CatalogOnly`; `Bundle::voice_catalog()` reports `AssetsVerified`;
@@ -32,9 +33,10 @@ indices for sentence navigation.
 `Utf16Map` rejects interior UTF-8 bytes, interior surrogate pairs, reversed spans
 and out-of-range offsets. Source slicing never uses normalized-text offsets.
 The existing 64 KiB raw input and bounded, grapheme-safe segmentation limits apply.
-Supertonic3's [text policy](jobs.md#text-policy) uses conservative character
-targets and clause boundaries while independently enforcing the model's token
-limit. Chunk boundaries may change with library versions; sentence navigation
+Supertonic3's [text policy](jobs.md#text-policy) keeps complete sentences in the
+recommended T=384 window and uses clause-aware fallbacks, while T=128 bundles
+retain conservative character targets. Every model's token limit is enforced.
+Chunk boundaries may change with library versions; sentence navigation
 and seeded suffixes remain consistent within each frozen plan.
 
 Validation for this change:

@@ -16,7 +16,9 @@ func (e *Error) Error() string { return fmt.Sprintf("mlsr %s: %s", e.Code, e.Mes
 
 // EngineOptions selects permitted devices and output-buffer reuse.
 type EngineOptions struct {
-	CPUOnly            bool
+	CPUOnly bool
+	// QNNHTP selects the prepared Windows ARM64 QNN backend. Incompatible with CPUOnly.
+	QNNHTP             bool
 	DisableOutputReuse bool
 	ExecutionVariant   uint32
 }
@@ -57,8 +59,11 @@ func (e Event) Terminal() bool {
 // Engine retains models across jobs. Close cancels and joins native work.
 type Engine struct{ handle atomic.Uint64 }
 
-// Open verifies local assets and loads Core ML. It performs no downloads.
+// Open verifies local assets and loads the selected backend. It performs no downloads.
 func Open(manifest, bundle string, options EngineOptions) (*Engine, error) {
+	if options.CPUOnly && options.QNNHTP {
+		return nil, fmt.Errorf("CPUOnly and QNNHTP are mutually exclusive")
+	}
 	if _, err := Version(); err != nil {
 		return nil, err
 	}

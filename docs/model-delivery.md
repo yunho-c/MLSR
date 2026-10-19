@@ -34,12 +34,18 @@ recommended release is `supertonic3-coreml-fp16-t384-v1`; the legacy
 `baseline()` retains the legacy manifest for reproducibility.
 Adding a platform to the schema's vocabulary does not qualify model execution.
 
+Windows ARM64 QNN uses the separate, opt-in
+[`catalog-qnn-experimental.yaml`](../model-manifests/catalog-qnn-experimental.yaml).
+Its Superfast model still fails the canonical quality screen and is absent from
+the builtin catalog. [QNN setup](qnn-runtime.md) describes leased model loading;
+the Flutter resource adapter remains macOS-only.
+
 `ModelCatalog::parse` rejects unknown fields, duplicate keys/IDs, overlapping or
 unsafe asset roots, malformed hashes and unsupported platform names. A lookup
 selects an exact ID and platform; it does not scan user directories or choose
 "latest". The catalog itself must come from the application's trusted resources.
 
-`ModelDescriptor::open(root)` checks the manifest hash and model ID before
+`ModelDescriptor::open(root)` checks the manifest hash, model ID and backend before
 reading payloads. This prevents a substituted manifest from authorizing different
 weights merely by carrying matching checksums of its own. Model files and any
 development symlink targets must remain immutable while an engine uses them.

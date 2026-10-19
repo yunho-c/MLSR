@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "source_commit": "f2026d7a666ab09c3e9859c0e70cd3446bb42258",
+  "qualification_script_sha256": "6d007cfc0d3ca1ee823b7807cb35f54f2d2afae9af0616a1ad0e76735401b08b",
+  "checks": [
+    "rust-build",
+    "wheel-build",
+    "wheel-install",
+    "python-installed-origin",
+    "python-tests",
+    "python-example",
+    "go-origin",
+    "go-tests",
+    "go-vet",
+    "go-example"
+  ],
+  "pcm": {
+    "en_M1": {
+      "sha256": "f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0",
+      "frames": 70546,
+      "byte_exact": true
+    },
+    "en_F1": {
+      "sha256": "2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0",
+      "frames": 70710,
+      "byte_exact": true
+    },
+    "ko_M1": {
+      "sha256": "85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e",
+      "frames": 126328,
+      "byte_exact": true
+    },
+    "ko_F1": {
+      "sha256": "470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37",
+      "frames": 126615,
+      "byte_exact": true
+    }
+  },
+  "native_files": {
+    "mlsr_ffi.dll": "ead97c1f6a1f36a8d86b02b4de7f53f0b6f55276a5c343eccce80a042e99599e",
+    "mlsr_ffi.dll.lib": "dee25f168075763d205124b68365a276750a78ec181a0d8914ab5415f11b4b4f",
+    "mlsr_qnn_bridge.dll": "e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad",
+    "qnn_executorch_backend.dll": "95eb9131d4825ac0fca0a7104442ff6937bff78b5fb2e04047dc5d26580d9395"
+  },
+  "manifest_sha256": "85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01",
+  "wheel_sha256": "cebffa76c6d70837e38ab35d3534f7ce46c935109bdac0104907e709eec57b0a",
+  "logs": {
+    "go-example.log": "1aa73f930483abfd028a5db45df023b7adf1fad5067cec772f69af02681a8477",
+    "go-origin.log": "ff28d4cb1777828dafb17516cd2d3f468b412e001efec1011a33c4f641ade35c",
+    "go-tests.log": "27f66c1fdc3a6fe44ac334b521451e8ccc4f0c576706f6a229d03688798415ac",
+    "go-vet.log": "e02a95d2be46af46bbb85f18464a11aebb61aca156976c843f0bec5928935783",
+    "python-example.log": "0c42f5bd8095ea73a3c3146c2ec91a3fbd7bff8aa93bcd838e1c4e4106361c27",
+    "python-installed-origin.log": "2ec80dc46645dcf6d878f1867355a57651c8f053f5c6bee94219a2b2786b2521",
+    "python-tests.log": "ea73fe122ffb70c5d06c0c3c8f2cb87e13fae48c392360a232e448e265e1665e",
+    "rust-build.log": "073da5505874155e87504aa49405cdd2cc4acbba4827d2f4183a54a589def03b",
+    "wheel-build.log": "abd0f9f8750fb4a2a8b08614937e2923dc34b3f3534d0ec2b3622b08e35d36f3",
+    "wheel-install.log": "3f1072c8df811bd9c751ad330a4b81764acf69ee5c26b716adffd556e91b45e8"
+  }
+}

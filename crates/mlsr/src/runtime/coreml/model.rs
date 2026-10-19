@@ -68,7 +68,7 @@ impl NativeModel {
                 let constraint = desc
                     .multi_array_constraint()
                     .ok_or_else(|| Error::InvalidFeature(format!("{name} is not a tensor")))?;
-                if constraint.data_type() != native_dtype(tensor.dtype())
+                if constraint.data_type() != native_dtype(tensor.dtype())?
                     || !call("validate input", || desc.is_allowed_value(&value))?
                 {
                     return Err(Error::InvalidFeature(format!(
@@ -125,7 +125,7 @@ impl NativeModel {
                     Error::InvalidFeature(format!("backing {name} is not a tensor"))
                 })?;
                 let value = ml::FeatureValue::with_multi_array(tensor.raw());
-                if constraint.data_type() != native_dtype(tensor.dtype())
+                if constraint.data_type() != native_dtype(tensor.dtype())?
                     || !call("validate output backing", || desc.is_allowed_value(&value))?
                 {
                     return Err(Error::InvalidFeature(format!(
@@ -163,7 +163,7 @@ impl NativeModel {
                     let constraint = desc.multi_array_constraint().ok_or_else(|| {
                         Error::InvalidFeature(format!("output {name} has no tensor contract"))
                     })?;
-                    if constraint.data_type() != native_dtype(tensor.dtype())
+                    if constraint.data_type() != native_dtype(tensor.dtype())?
                         || !call("validate output", || desc.is_allowed_value(&value))?
                     {
                         return Err(Error::InvalidFeature(format!(

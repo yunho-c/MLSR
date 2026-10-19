@@ -9,6 +9,36 @@
 #include <stdlib.h>
 
 /**
+ * Synthesis job API is available.
+ */
+#define MLSR_FEATURE_JOBS 1
+
+/**
+ * Core ML backend is built for this target.
+ */
+#define MLSR_FEATURE_COREML 2
+
+/**
+ * Model ownership and transactional store API is available.
+ */
+#define MLSR_FEATURE_MODEL_STORE 4
+
+/**
+ * Experimental QNN HTP backend is built for this target.
+ */
+#define MLSR_FEATURE_QNN_HTP 32
+
+/**
+ * Developer SDK with metadata schema v1 is available.
+ */
+#define MLSR_FEATURE_DEVELOPER_SDK 8
+
+/**
+ * Apple native audio output is built for this target.
+ */
+#define MLSR_FEATURE_APPLE_OUTPUT 16
+
+/**
  * Success, timeout/end, or failure. On failure read/release the error handle.
  */
 typedef int32_t MlsrStatus;
@@ -23,7 +53,7 @@ typedef struct {
    */
   uint32_t struct_size;
   /**
-   * 0: CPU only, 1: CPU and Neural Engine permitted.
+   * 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
    */
   uint32_t compute_policy;
   /**
@@ -268,7 +298,7 @@ typedef struct {
    */
   float speaking_rate;
   /**
-   * Supertonic denoising steps, 1..=64; default 8.
+   * Supertonic denoising steps, 1..=64; default 8. QNN Superfast requires 8.
    */
   uint32_t supertonic_steps;
   /**
@@ -396,10 +426,7 @@ uint32_t mlsr_abi_version(void);
 const char *mlsr_version(void);
 
 /**
- * Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
- * 4 = model ownership and transactional store API, 8 = developer SDK metadata
- * schema v1, 16 = Apple native output built for this target. ABI 1's old structs
- * and meanings are unchanged; bindings must check feature bits before new calls.
+ * Bitmask of MLSR_FEATURE_* capabilities built for this target.
  */
 uint32_t mlsr_features(void);
 
