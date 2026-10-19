@@ -67,6 +67,9 @@ sample-exact acoustic measurement at the speaker.
 
 ## Qualification
 
+The [qualification snapshot](../tests/fixtures/developer-api/windows-output.json)
+records the exact source commit, native/model hashes, toolchains and retained logs.
+
 The Windows ARM64/X2 Elite checks use the actual rendering endpoint at zero
 volume. The native test covers pause/resume, starvation, rebasing, stale-epoch
 rejection, true device-clock drain and a simulated default-route notification

@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "status": "native_windows_output_passed_listening_pending",
+  "recorded_utc": "2026-10-19T02:24:11.021192+00:00",
+  "source_commit": "abd32e6e28b93f9d1c9e6acb37176e5f04f69e1d",
+  "integrated_main_commit": "751b8db49a61e186289aa2547a135a058d7a3a8c",
+  "host": "Windows-11-10.0.28000-SP0, Snapdragon X2 Elite X2E84100 / HTP V81",
+  "native_feature_mask": 109,
+  "output": {
+    "backend": "WASAPI shared mode",
+    "sample_rate": 44100,
+    "channels": 1,
+    "playback_rate": 1,
+    "variable_rate_range": null,
+    "muted": true,
+    "default_route_rebuild": "simulated notification, real endpoint reopen",
+    "actual_unplug_bluetooth_tested": false
+  },
+  "runtime": {
+    "backend": "WASAPI shared mode",
+    "cases": [
+      {
+        "frames": 70546,
+        "language": "en",
+        "native_drain": true,
+        "retained_pcm_bit_exact": true,
+        "voice": "supertonic3:M1"
+      },
+      {
+        "frames": 126615,
+        "language": "ko",
+        "native_drain": true,
+        "retained_pcm_bit_exact": true,
+        "voice": "supertonic3:F1"
+      }
+    ],
+    "muted": true,
+    "native_stream_opens": 1,
+    "passed": true,
+    "rate": 1
+  },
+  "checks": {
+    "workspace_passed": 90,
+    "workspace_ignored": 11,
+    "explicit_device_tests_passed": 3,
+    "strict_clippy_all_targets_all_features": true,
+    "x64_all_targets_all_features_clippy": true,
+    "generated_c_dart_current": true,
+    "dart_analysis_format": true,
+    "python_passed": 13,
+    "go_passed": 10,
+    "dart_passed": 10,
+    "binding_tests_skipped": 0,
+    "sdk_and_legacy_pcm_unchanged": true
+  },
+  "bindings": {
+    "passed": true,
+    "host": "Windows ARM64",
+    "manifest_sha256": "85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01",
+    "checks": [
+      "rust-build",
+      "c-build",
+      "c-smoke",
+      "c-sdk-build",
+      "c-sdk",
+      "python",
+      "python-sdk-example",
+      "go",
+      "go-vet",
+      "go-sdk-example",
+      "dart-get",
+      "dart",
+      "dart-sdk-example",
+      "sdk-pcm"
+    ],
+    "experimental_catalog_sha256": "6e06c89083defb3cfc629a29476f3daabf017c33b70f0fe39b96ccb3c532653b",
+    "bridge_sha256": "e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad",
+    "native_sha256": "2bb0a14e6083dbfada4a9b9ade11833d15b380c7097158b1c92fe5a5895624be",
+    "versions": {
+      "python": "3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 11:30:42) [MSC v.1944 64 bit (ARM64)] ARM64",
+      "go": "go version go1.27.2 windows/arm64",
+      "dart": "Dart SDK version: 3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on \"windows_arm64\"",
+      "cc": "clang version 23.1.3 (https://github.com/llvm/llvm-project.git 0d261d1ca552c95a8f007e061c787ac7132fbcbc)\r\nTarget: aarch64-w64-windows-gnu\r\nThread model: posix\r\nInstalledDir: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin\r\nConfiguration file: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin/aarch64-w64-windows-gnu.cfg"
+    },
+    "leased_model_engine_passed": true,
+    "pcm": [
+      {
+        "byte_exact_across_bindings": true,
+        "frames": 70546,
+        "case": "en_M1",
+        "sha256": "f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0"
+      },
+      {
+        "byte_exact_across_bindings": true,
+        "frames": 70710,
+        "case": "en_F1",
+        "sha256": "2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0"
+      },
+      {
+        "byte_exact_across_bindings": true,
+        "frames": 126328,
+        "case": "ko_M1",
+        "sha256": "85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e"
+      },
+      {
+        "byte_exact_across_bindings": true,
+        "frames": 126615,
+        "case": "ko_F1",
+        "sha256": "470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37"
+      }
+    ],
+    "developer_sdk": {
+      "pcm": {
+        "en_M1": {
+          "sha256": "f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0",
+          "frames": 70546,
+          "four_sdk_consumers_and_legacy_byte_exact": true
+        },
+        "en_F1": {
+          "sha256": "2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0",
+          "frames": 70710,
+          "four_sdk_consumers_and_legacy_byte_exact": true
+        },
+        "ko_M1": {
+          "sha256": "85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e",
+          "frames": 126328,
+          "four_sdk_consumers_and_legacy_byte_exact": true
+        },
+        "ko_F1": {
+          "sha256": "470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37",
+          "frames": 126615,
+          "four_sdk_consumers_and_legacy_byte_exact": true
+        }
+      },
+      "examples": {
+        "python": {
+          "frames": 70546,
+          "wav_sha256": "7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c",
+          "pcm_byte_exact": true
+        },
+        "go": {
+          "frames": 70546,
+          "wav_sha256": "7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c",
+          "pcm_byte_exact": true
+        },
+        "dart": {
+          "frames": 70546,
+          "wav_sha256": "7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c",
+          "pcm_byte_exact": true
+        }
+      }
+    },
+    "headless_sdk_passed": true,
+    "native_windows_playback": "muted_wasapi_passed"
+  },
+  "limitations": [
+    "Normal playback speed only; variable pitch-preserving playback rate is unsupported",
+    "Muted device/clock/lifecycle checks do not establish subjective acoustic quality",
+    "Superfast model artifacts unchanged; numerical differences retained as diagnostics; listening evaluation pending",
+    "No physical Apple playback, physical unplug/Bluetooth or other Windows driver qualification in this pass",
+    "Native package publication remains separate from installed wrapper qualification"
+  ],
+  "evidence": [
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/c-sdk.log",
+      "sha256": "a164ea55b15930014adbf12cf60e27e183e6617a87651b48f05cf382d2a69e5b"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/c-smoke.log",
+      "sha256": "5017d3d9edca8811ae08ab378945a9558bc247a92c59f972ab77bd7be7d3723e"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/dart-get.log",
+      "sha256": "3a9e58f5b2835dcce02a9157089b351b5904651763fbe7aa8ad742ebeaa08792"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/dart-sdk-example.log",
+      "sha256": "9725b7244a3c134953eeedb6d158ea6dd755302e17031d8167fe6d8986794c7e"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/dart.log",
+      "sha256": "c96d7e841834b1d0cd2a2ba22275cc9312325999cc56b9e80c09f505126f98e6"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/go-sdk-example.log",
+      "sha256": "195a3c4f77b97d8cf213282b2daf70255d6aa453cf6b36741dedf10c11772fe9"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/go.log",
+      "sha256": "162c21eda1bf9d7f7b2fb9bde013f7a259d4e05a588a86b6337e1ac7df45d812"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/python-sdk-example.log",
+      "sha256": "f453ae972c6d3abcc9eba93c7b21523e0b0f79090b6b1a6e0fd150f955e1b191"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/python.log",
+      "sha256": "1f45cbf2bd089570f5dfdda9c7cf7dc0b40b8f31807bf4d8e269e259b9027a36"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/report.json",
+      "sha256": "e1359482fb4a157b93cde8fb2e95a67b62ff2d02704348106cee9a49451e46f1"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/rust-build.log",
+      "sha256": "922c09de54b91e3c3da5aff7847fff437cfc659989efd2724f0283c5b3be2023"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/sdk-pcm.json",
+      "sha256": "5eb2864fd01c853a1b7d37932b42949cb008c3a428c9acd1398f34407e5393c4"
+    },
+    {
+      "path": "ignore/windows-output-bindings-20261018-qualified/sdk-pcm.log",
+      "sha256": "1ca91fa2ecede9bbacfe2c8bedc00ba32aef7a22cc77ffb2f50a52fdb58778c7"
+    },
+    {
+      "path": "ignore/windows-output-clippy.log",
+      "sha256": "f108243ecbec71b034905b6b4cac3d552c7a227f7c01fd0bfe3d87c41c63b2d7"
+    },
+    {
+      "path": "ignore/windows-output-device.log",
+      "sha256": "6773cf79fb290878ce5b64398c1ef0127c0d244955049fc2d126e3923d6f404d"
+    },
+    {
+      "path": "ignore/windows-output-headless.log",
+      "sha256": "d05f3de8e6d1f615b226c08c7909ed65f92d26177b41d1e7a9727fc39dac9e9a"
+    },
+    {
+      "path": "ignore/windows-output-sdk.json",
+      "sha256": "5872bf2a8b0d89b68a34d4cdf6b683d7b9b5350b5790f689ffac1afba806f47b"
+    },
+    {
+      "path": "ignore/windows-output-sdk.log",
+      "sha256": "f494d544a80ad734ae97725d34684eae944ef1b62aeac09756c267c9a2d71c34"
+    },
+    {
+      "path": "ignore/windows-output-tests.log",
+      "sha256": "c7dd5c1aeab702daca2f3d4a5084f7ecbd65862d7ca7a8d34f061538029cabd0"
+    },
+    {
+      "path": "ignore/windows-output-x64-clippy.log",
+      "sha256": "e71d947a18f3c3dbae33685ec056e5d785b1c3459ec621ec6a60048053ab0f3d"
+    }
+  ]
+}
