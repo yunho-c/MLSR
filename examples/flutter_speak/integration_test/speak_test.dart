@@ -95,8 +95,95 @@ void main() {
       await until(() => !speech.loading);
       await loading;
       expect(speech.ready, isTrue, reason: speech.error);
+      expect(speech.voices.length, 10);
+      expect(
+        speech.voices.every(
+          (voice) =>
+              voice.languages.length == 31 &&
+              voice.readiness == VoiceReadiness.engineReady,
+        ),
+        isTrue,
+      );
+      report['voices'] = speech.voices
+          .map(
+            (voice) => {
+              'id': voice.id,
+              'name': voice.displayName,
+              'languages': voice.languages,
+              'qualified_languages': voice.qualifiedLanguages,
+            },
+          )
+          .toList();
       expect(ticks, greaterThan(5));
       await screenshot('ready');
+      // Exercise the real catalog selectors and generation controls through the
+      // app, then inspect the immutable request received by the shared SDK.
+      await tap('voice');
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Olivia · F4'),
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('Olivia · F4').last);
+      await tester.pumpAndSettle();
+      await tap('language');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('العربية · Arabic').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('script')),
+        speech.languages['ar']!.sample,
+      );
+      tester
+          .widget<Slider>(find.byKey(const Key('synthesis-speed')))
+          .onChanged!(1.3);
+      tester.widget<Slider>(find.byKey(const Key('quality-steps'))).onChanged!(
+        2,
+      );
+      await tester.pump();
+      await tap('speak');
+      final expandedRequest = await speech.speech!.request();
+      expect(expandedRequest.voice.voice.id, 'supertonic3:F4');
+      expect(expandedRequest.voice.language, 'ar');
+      expect(expandedRequest.backend.steps, 2);
+      expect(expandedRequest.effectiveSpeed, closeTo(1.35, .000001));
+      await until(() => !speech.speaking || speech.error != null);
+      expect(speech.error, isNull);
+      expect(speech.originalIsRtl, isTrue);
+      await speech.exportTo('$output/olivia-ar.wav');
+      await screenshot('arabic');
+      report['expanded_voice_request'] = {
+        'voice': expandedRequest.voice.voice.id,
+        'language': expandedRequest.voice.language,
+        'steps': expandedRequest.backend.steps,
+        'effective_speed': expandedRequest.effectiveSpeed,
+        'frames': speech.generatedFrames,
+      };
+      // Restore defaults for the existing lifecycle and reader regressions.
+      tester
+          .widget<DropdownButton<String>>(
+            find.descendant(
+              of: find.byKey(const Key('voice')),
+              matching: find.byType(DropdownButton<String>),
+            ),
+          )
+          .onChanged!('supertonic3:M1');
+      tester
+          .widget<DropdownButton<String>>(
+            find.descendant(
+              of: find.byKey(const Key('language')),
+              matching: find.byType(DropdownButton<String>),
+            ),
+          )
+          .onChanged!('en');
+      tester
+          .widget<Slider>(find.byKey(const Key('synthesis-speed')))
+          .onChanged!(1);
+      tester.widget<Slider>(find.byKey(const Key('quality-steps'))).onChanged!(
+        8,
+      );
+      await tester.pump();
       await tester.enterText(
         find.byKey(const Key('script')),
         List.filled(12, english).join('\n'),

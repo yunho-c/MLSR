@@ -29,7 +29,13 @@ class MetadataAndExport(unittest.TestCase):
         lib = ffi.library()
         before = lib.mlsr_live_handles()
         catalog = voices()
-        self.assertEqual([v.id for v in catalog], ["supertonic3:M1", "supertonic3:F1"])
+        self.assertEqual(
+            [v.id for v in catalog],
+            [f"supertonic3:{p}{i}" for p in ("M", "F") for i in range(1, 6)],
+        )
+        self.assertEqual(catalog[8].display_name, "Olivia")
+        self.assertEqual(catalog[8].qualified_languages, ())
+        self.assertEqual(resolve_voice("ja", "supertonic3:F4").language, "ja")
         self.assertEqual(catalog[0].readiness, "catalog_only")
         self.assertFalse(catalog[0].capabilities.word_alignment)
         with self.assertRaises(TtsError):

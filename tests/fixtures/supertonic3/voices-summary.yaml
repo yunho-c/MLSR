@@ -1,0 +1,136 @@
+schema_version: 1
+bundle_id: supertonic3-coreml-fp16-t384-voices-v1
+manifest_sha256: b10e17e18b2e2a69e18d76b0e4ef9f0dfb504f6634560f037f07fe587bd49f7f
+validation_date: '2026-10-19'
+scope: Real synthesis and UI coverage on macOS Apple Silicon; not expanded listening
+  or intelligibility qualification
+host: macOS-27.0.1-arm64-arm-64bit-Mach-O
+compute_policy: cpu_and_neural_engine
+payload:
+  files: 42
+  size_bytes: 459297332
+  added_style_files: 8
+  added_size_bytes: 2331748
+  original_payloads_unchanged: true
+smoke:
+  passed: true
+  cases: 310
+  voices:
+  - M1
+  - M2
+  - M3
+  - M4
+  - M5
+  - F1
+  - F2
+  - F3
+  - F4
+  - F5
+  languages:
+  - en
+  - ko
+  - ja
+  - ar
+  - bg
+  - cs
+  - da
+  - de
+  - el
+  - es
+  - et
+  - fi
+  - fr
+  - hi
+  - hr
+  - hu
+  - id
+  - it
+  - lt
+  - lv
+  - nl
+  - pl
+  - pt
+  - ro
+  - ru
+  - sk
+  - sl
+  - sv
+  - tr
+  - uk
+  - vi
+  steps: 8
+  raw_speed: 1.05
+  seed: 1729
+  pcm_checks:
+  - 44100 Hz mono
+  - positive bounded length
+  - finite samples
+  - non-silent samples
+  wav_files: 49
+  native_handles_before: 0
+  native_handles_after: 0
+  report_sha256: 1218152fc927779d7f4dd6edb1b6f692b32ba07990bdc1fe1b729cc152540e2e
+  script_sha256: 41aa9058e470112afa32c2ff638e4f7966d20fe380adfb16874c4130517d6b5d
+  library_sha256: 1081b456aefbd18fb87e211b50c29e8a5d9b0fb356f1ed616a38557a57c09a85
+  samples_sha256: 48a294cef7f581c02effd08f35e6561f9175303f2270448f22b5169555becd23
+legacy_regression:
+- voice: M1
+  language: en
+  frames: 97945
+  pcm_sha256: 72d3da7d48ff00aed379e85fb4ee2d987fed8101d693dead789e2030bb811f08
+  exact: true
+- voice: M1
+  language: ko
+  frames: 145359
+  pcm_sha256: 848f35e7821d19b4930818710b0889ef379c5d5a664bd777bd35f970cf2d64db
+  exact: true
+- voice: F1
+  language: en
+  frames: 98109
+  pcm_sha256: 2e7cb12953d5ffdf98a2cc5756b657c4f7584ee3a363068444e549a316ad80c9
+  exact: true
+- voice: F1
+  language: ko
+  frames: 145605
+  pcm_sha256: 973d2daea287028956803e826c59f1f2ee30fd9de18611b498a9df125437563b
+  exact: true
+flutter:
+  passed: true
+  muted: true
+  voices: 10
+  expanded_voice_request:
+    voice: supertonic3:F4
+    language: ar
+    steps: 2
+    effective_speed: 1.3499999046325684
+    frames: 89641
+  native_handles_before: 0
+  native_handles_after: 0
+  report_sha256: 05afd767d329b24298c87a9542b05644c95bffdaa6fb87289b7178e2e0d57b0e
+  checks:
+  - catalog-driven voice and language selection
+  - Arabic input and reader direction
+  - synthesis speed and step mapping
+  - replace/enqueue/cancel
+  - pause/rate/volume/seek/replay
+  - original Unicode spans and sentence navigation
+  - English/Korean/Arabic WAV export
+evidence_root: /Users/yunhocho/.cache/mlsr/experiments/supertonic3-voices-20261019
+quality:
+  qualified_voices:
+  - M1
+  - F1
+  qualified_languages:
+  - en
+  - ko
+  additional_presets: synthesis smoke only
+  additional_languages: synthesis smoke only
+release_app:
+  build: passed
+  codesign_deep_strict: passed
+  packaged_native_and_model_validation: passed
+  voice_count: 10
+  languages_per_voice: 31
+  matches_flutter_export: true
+  library_sha256: f76cebb8843404d9a60ad069a125ffae45ea0ececde927721e3e3931ed09d886
+  report_sha256: 56b87506b47519daedf2967eb829bf28bbd738c61a60efa090b457b6957f3ff7

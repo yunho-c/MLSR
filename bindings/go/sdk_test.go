@@ -19,8 +19,14 @@ func TestSDKCatalogAndOwnedWAV(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(voices) != 2 || voices[0].ID != "supertonic3:M1" || voices[0].Readiness != "catalog_only" || voices[0].Capabilities.WordAlignment {
+	if len(voices) != 10 || voices[0].ID != "supertonic3:M1" || voices[0].Readiness != "catalog_only" || voices[0].Capabilities.WordAlignment {
 		t.Fatalf("unexpected catalog: %+v", voices)
+	}
+	if voices[8].ID != "supertonic3:F4" || voices[8].DisplayName != "Olivia" || len(voices[8].QualifiedLanguages) != 0 {
+		t.Fatalf("expanded voice metadata: %+v", voices[8])
+	}
+	if resolved, err := ResolveVoice("ja", "supertonic3:F4", StrictLocale); err != nil || resolved.Language != "ja" {
+		t.Fatalf("expanded voice resolution: %+v %v", resolved, err)
 	}
 	if _, err := ResolveVoice("en-US", "", StrictLocale); err == nil {
 		t.Fatal("implicit locale fallback")

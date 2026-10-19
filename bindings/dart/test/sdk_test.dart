@@ -89,7 +89,16 @@ void main() {
     () async {
       final before = native.mlsr_live_handles();
       final voices = await getVoices();
-      expect(voices.map((v) => v.id), ['supertonic3:M1', 'supertonic3:F1']);
+      expect(voices.map((v) => v.id), [
+        for (final prefix in ['M', 'F'])
+          for (var i = 1; i <= 5; i++) 'supertonic3:$prefix$i',
+      ]);
+      expect(voices[8].displayName, 'Olivia');
+      expect(voices[8].qualifiedLanguages, isEmpty);
+      expect(
+        (await resolveVoice('ja', voice: 'supertonic3:F4')).language,
+        'ja',
+      );
       expect(voices.first.readiness, VoiceReadiness.catalogOnly);
       expect(voices.first.capabilities.wordAlignment, isFalse);
       await expectLater(

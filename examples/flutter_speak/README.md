@@ -1,7 +1,7 @@
 # MLSR Speak
 
 A local Flutter player and reader for the macOS Apple Silicon developer SDK. Write text,
-choose English or Korean and voice M1/F1, then speak, stop, or export completed
+choose among ten named voices and 31 languages, then speak, stop, or export completed
 speech as a mono Float32 WAV. Replace or enqueue a new script while reading;
 pause, change volume/rate, seek retained audio, and navigate sentences.
 Command-Enter speaks; Escape stops all queued speech.
@@ -14,9 +14,10 @@ the repository's [model tools](../../tools/supertonic3/README.md) first. The
 checked-in `mlsr-models.yaml` reads the usual local cache; edit its `source` if
 your verified payloads live elsewhere. This path is preparation input only.
 
-The app now selects `supertonic3-coreml-fp16-t384-v1`: corrected FP16 Core ML
-graphs with a 384-token text window and complete-sentence segmentation. Its
-local exports must be prepared using the [FP16 release instructions](../../tools/supertonic3/README.md#recommended-fp16-bundle).
+The app selects `supertonic3-coreml-fp16-t384-voices-v1`: corrected FP16 Core ML
+graphs with a 384-token text window, complete-sentence segmentation, and all
+official demo presets. Prepare it from the existing two-voice FP16 graph bundle
+using the [FP16 release instructions](../../tools/supertonic3/README.md#recommended-fp16-bundle).
 The old INT4 bundle remains a separate release; its assets cannot be substituted.
 
 ```sh
@@ -45,6 +46,15 @@ Notarization, App Store submission, Intel/mobile inference, and additional devic
 qualification remain separate work. See [model delivery](../../docs/model-delivery.md).
 
 ## Ownership and playback
+
+Voice names, IDs and language availability come from the loaded engine's
+catalog. Choosing another language preserves the editor's contents; **Try an
+example** inserts a local sample explicitly. Arabic input and reader text use
+right-to-left direction. Speech speed (0.8–1.3×) and quality (2–16 steps) affect
+new requests and match the demo's synthesis controls. The separate **Playback**
+rate changes retained audio, not the generation settings or WAV export.
+All ten voices and 31 languages have real synthesis smoke coverage; broader
+listening quality remains unqualified. See [voice coverage](../../docs/voices-and-text-plans.md).
 
 `DemoController` owns public `Tts` and `Speech` handles and bounded presentation
 subscriptions. It does not consume PCM, advance queues, schedule native buffers,

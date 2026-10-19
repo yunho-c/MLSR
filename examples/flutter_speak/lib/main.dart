@@ -5,9 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mlsr_app_models/app_models.dart';
-import 'package:mlsr_flutter/mlsr_flutter.dart' show SpeakMode;
+import 'package:mlsr_flutter/mlsr_flutter.dart' show SpeakMode, Voice;
 import 'speech_controller.dart';
 import 'reader_controls.dart';
+import 'voice_controls.dart';
 
 const paper = Color(0xfff6f4ed);
 const ink = Color(0xff243e33);
@@ -107,7 +108,28 @@ class SpeakPage extends StatefulWidget {
 class _SpeakPageState extends State<SpeakPage> {
   late final DemoController speech = widget.controller ?? DemoController();
   final text = TextEditingController(text: english);
-  String language = 'en', voice = 'M1';
+  String language = 'en', voice = '';
+  double synthesisSpeed = 1;
+  int steps = 8;
+  Voice? get selectedVoice {
+    for (final entry in speech.voices) {
+      if (entry.id == voice) return entry;
+    }
+    return speech.voices.firstOrNull;
+  }
+
+  String get selectedLanguage {
+    final supported = selectedVoice?.languages ?? const <String>[];
+    return supported.contains(language)
+        ? language
+        : supported.firstOrNull ?? language;
+  }
+
+  String get example => switch (selectedLanguage) {
+    'en' => english,
+    'ko' => korean,
+    _ => speech.languages[selectedLanguage]?.sample ?? '',
+  };
   bool enqueue = false;
   late final AppLifecycleListener lifecycle;
   bool get busy => speech.loading || speech.exporting;
@@ -138,8 +160,10 @@ class _SpeakPageState extends State<SpeakPage> {
     if (!busy && utf8.encode(text.text).length <= 65536) {
       speech.speak(
         text.text,
-        language,
-        voice,
+        selectedLanguage,
+        selectedVoice?.id ?? '',
+        synthesisSpeed: synthesisSpeed,
+        steps: steps,
         mode: enqueue ? SpeakMode.enqueue : SpeakMode.replace,
       );
     }
@@ -150,11 +174,12 @@ class _SpeakPageState extends State<SpeakPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Your local voices'),
-        content: const SizedBox(
+        content: SizedBox(
           width: 420,
           child: Text(
-            'English and Korean, with voices M1 and F1.\n\n'
-            'Voices are included with this app. Speech runs on your Mac, even when you are offline.',
+            '${speech.voices.length} voices are available in ${selectedVoice?.languages.length ?? 0} languages.\n\n'
+            'Voices are included with this app. Speech runs on your Mac, even when you are offline.\n\n'
+            'Voice quality can vary by language. Speech speed and quality settings apply to your next recording.',
           ),
         ),
         actions: [
@@ -310,9 +335,7 @@ class _SpeakPageState extends State<SpeakPage> {
                                           onPressed: busy
                                               ? null
                                               : () {
-                                                  text.text = language == 'en'
-                                                      ? english
-                                                      : korean;
+                                                  text.text = example;
                                                   setState(() {});
                                                 },
                                           child: const Text(
@@ -327,6 +350,13 @@ class _SpeakPageState extends State<SpeakPage> {
                                       child: TextField(
                                         key: const Key('script'),
                                         controller: text,
+                                        textDirection:
+                                            speech
+                                                    .languages[selectedLanguage]
+                                                    ?.rtl ==
+                                                true
+                                            ? TextDirection.rtl
+                                            : TextDirection.ltr,
                                         readOnly: busy,
                                         maxLines: null,
                                         expands: true,
@@ -389,104 +419,22 @@ class _SpeakPageState extends State<SpeakPage> {
                                   ),
                                   child: label('MAKE IT SOUND LIKE YOU'),
                                 ),
-                                DropdownButtonFormField<String>(
-                                  key: const Key('language'),
-                                  initialValue: language,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Language',
-                                    border: OutlineInputBorder(
-                                      borderSide: BorderSide(color: line),
-                                    ),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'en',
-                                      child: Text('English'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'ko',
-                                      child: Text('한국어 · Korean'),
-                                    ),
-                                  ],
-                                  onChanged: busy
-                                      ? null
-                                      : (value) => setState(() {
-                                          language = value!;
-                                          text.text = language == 'en'
-                                              ? english
-                                              : korean;
-                                        }),
-                                ),
-                                const SizedBox(height: 20),
-                                label('VOICE'),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: ['M1', 'F1']
-                                      .map(
-                                        (id) => Expanded(
-                                          child: Padding(
-                                            padding: EdgeInsets.only(
-                                              right: id == 'M1' ? 8 : 0,
-                                            ),
-                                            child: Semantics(
-                                              selected: voice == id,
-                                              button: true,
-                                              label: 'Voice $id',
-                                              child: InkWell(
-                                                key: Key('voice-$id'),
-                                                onTap: busy
-                                                    ? null
-                                                    : () => setState(
-                                                        () => voice = id,
-                                                      ),
-                                                borderRadius:
-                                                    BorderRadius.circular(13),
-                                                child: Container(
-                                                  height: 75,
-                                                  decoration: BoxDecoration(
-                                                    color: voice == id
-                                                        ? accent
-                                                        : Colors.transparent,
-                                                    border: Border.all(
-                                                      color: voice == id
-                                                          ? ink
-                                                          : line,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          13,
-                                                        ),
-                                                  ),
-                                                  padding: const EdgeInsets.all(
-                                                    12,
-                                                  ),
-                                                  child: Row(
-                                                    children: [
-                                                      Icon(
-                                                        id == 'M1'
-                                                            ? Icons.waves
-                                                            : Icons
-                                                                  .multitrack_audio,
-                                                        size: 23,
-                                                      ),
-                                                      const Spacer(),
-                                                      Text(
-                                                        id,
-                                                        style: const TextStyle(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
+                                VoiceControls(
+                                  voices: speech.voices,
+                                  voice: selectedVoice,
+                                  languages: speech.languages,
+                                  language: selectedLanguage,
+                                  enabled: !busy && speech.ready,
+                                  speed: synthesisSpeed,
+                                  steps: steps,
+                                  onVoice: (value) =>
+                                      setState(() => voice = value),
+                                  onLanguage: (value) =>
+                                      setState(() => language = value),
+                                  onSpeed: (value) =>
+                                      setState(() => synthesisSpeed = value),
+                                  onSteps: (value) =>
+                                      setState(() => steps = value),
                                 ),
                                 const SizedBox(height: 20),
                                 SizedBox(
@@ -527,9 +475,11 @@ class _SpeakPageState extends State<SpeakPage> {
                                               () => enqueue = value!,
                                             ),
                                     ),
-                                    const Text(
-                                      'Queue after current',
-                                      style: TextStyle(fontSize: 12),
+                                    const Expanded(
+                                      child: Text(
+                                        'Queue after current',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
                                     ),
                                   ],
                                 ),

@@ -19,6 +19,7 @@ import numpy as np
 from .bundle import (
     DEFAULT_CORPUS,
     ROOT,
+    VOICE_ID,
     ReferenceError,
     canonical_digest,
     digest,
@@ -44,9 +45,10 @@ def load_corpus(path: Path = DEFAULT_CORPUS) -> dict:
         if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or name in seen:
             raise ReferenceError(f"Invalid or duplicate case ID: {name}")
         seen.add(name)
-        if not isinstance(case.get("text"), str) or case.get("voice") not in (
-            "M1",
-            "F1",
+        if (
+            not isinstance(case.get("text"), str)
+            or not isinstance(case.get("voice"), str)
+            or not VOICE_ID.fullmatch(case["voice"])
         ):
             raise ReferenceError(f"Invalid text/voice for {name}")
         if type(case.get("seed")) is not int or not 0 <= case["seed"] < 2**64:
@@ -225,6 +227,10 @@ class CoreMLReference:
             self.indexer,
             limit=self.manifest["contract"]["text_tokens"],
         )
+        if case["voice"] not in self.manifest["contract"]["voices"]:
+            raise ReferenceError(
+                f"Voice is unavailable in this bundle: {case['voice']}"
+            )
         voice_path = (
             self.root / self.manifest["artifacts"][f"voice_{case['voice']}"]["path"]
         )

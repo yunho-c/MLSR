@@ -1,0 +1,570 @@
+schema_version: 1
+id: supertonic3-coreml-fp16-t384-voices-v1
+model: supertonic-3
+model_version: 1.7.3
+source:
+  repository: https://huggingface.co/spaces/Supertone/supertonic-3
+  revision: 4402acca094e2ff2b3dff446e0bf915f3fccc462
+provenance:
+  local_export: true
+  distribution_note: Locally built Core ML payloads; source identifies the original
+    model inputs, not downloadable compiled artifacts.
+  upstream_model:
+    repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+    revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+    license: OpenRAIL-M
+    license_url: https://huggingface.co/supertone-oss-archive/supertonic-3/blob/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE
+  upstream_preprocessing:
+    repository: https://github.com/yunho-c/supertonic
+    revision: 1e9799e964ea4c0dad7cde993b65c3c813a7b373
+    path: py/helper.py
+    license: MIT
+  conversion_tooling_reference:
+    repository: https://github.com/FluidInference/mobius
+    revision: 26f5fa8059d5ab3d34449adce6ff6ed86734e522
+    path: models/tts/supertonic-3/coreml
+    license: Apache-2.0
+    role: Reference tooling snapshot, not an attestation of the published v2 export.
+  conditioning_manifest_sha256: 958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5
+  export_corrections:
+  - LayerNorm epsilon read from official ONNX graphs
+  - Replicate the true sequence endpoint before masked ConvNeXt convolutions
+  exports:
+    main:
+      manifest_sha256: c21cfa3939116bd08308652372133d27114483ce0f89acb31c80f5ad34a14106
+      tool_sources_sha256:
+        bundle.py: f3a51b4bcb5c8c52da3b32856595f763b8e13d9562b4f4f81690d2c6bd91e3f9
+        frontend.py: aacad397cb551896bd0e19a892f7b19685d1000297f3bfa60be00411b7121a47
+        reference.py: cd569f2b2f74efd93efc21720b2ae4d965d61e8e2c23e826a533f159fbc318ce
+        quality_probe.py: 5491e4e907fb5119a71965202caec1813fdb5138f1afe051e2c68f0c1ad802ca
+        context_probe.py: 90989db4782b6a603ca27818ee44ee6e9829f424e196861197e835463aae629f
+        context_coreml.py: 4d364b1923d67d9a1960ff6aeb0c08879cea51793b66d9fdb6cfe44942ec3446
+      onnx_sha256:
+        vector_estimator.onnx: 883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c
+        duration_predictor.onnx: c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db
+        text_encoder.onnx: c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff
+        vocoder.onnx: 085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba
+      coremltools: '9.0'
+      torch: 2.8.0
+    short_latents:
+      manifest_sha256: 4466e8f3a1b6be537bb318b77967e99d451c914ed407cd94dea3808511e1dfab
+      tool_sources_sha256:
+        bundle.py: f3a51b4bcb5c8c52da3b32856595f763b8e13d9562b4f4f81690d2c6bd91e3f9
+        frontend.py: aacad397cb551896bd0e19a892f7b19685d1000297f3bfa60be00411b7121a47
+        reference.py: cd569f2b2f74efd93efc21720b2ae4d965d61e8e2c23e826a533f159fbc318ce
+        quality_probe.py: 5491e4e907fb5119a71965202caec1813fdb5138f1afe051e2c68f0c1ad802ca
+        context_probe.py: 6e8ab937b1c686df407ce5cd37205c8a71ce9d1895a2313530c17f341b5deb1c
+        context_coreml.py: 9b0f790eb77be852dc91850934fe9e577917dbf4a0a3627e017859745891c84e
+      onnx_sha256:
+        vector_estimator.onnx: 883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c
+        duration_predictor.onnx: c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db
+        text_encoder.onnx: c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff
+        vocoder.onnx: 085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba
+      coremltools: '9.0'
+      torch: 2.8.0
+  voice_expansion:
+    base_bundle_id: supertonic3-coreml-fp16-t384-v1
+    base_manifest_sha256: 4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49
+    note: Identical inference graphs, tokenizer, configuration and M1/F1 styles. Eight
+      additional official presets. Existing English/Korean qualification applies only
+      to M1/F1; broader voice/language smoke coverage is not listening qualification.
+  voice_styles:
+    repository: https://huggingface.co/spaces/Supertone/supertonic-3
+    revision: 4402acca094e2ff2b3dff446e0bf915f3fccc462
+    path_prefix: assets
+runtime:
+  kind: coreml
+  format: mlmodelc
+  specification_version: 9
+  deployment_target: iOS18
+  minimum_os:
+    macos: '15.0'
+    ios: '18.0'
+  first_slice_target: macos-arm64
+  compute_policy: cpu_and_neural_engine
+  placement_note: CPU+Neural Engine policy. VE/vocoder placement was inspected; no
+    utilization or physical residency claim.
+contract:
+  sample_rate: 44100
+  channels: 1
+  pcm_dtype: float32
+  batch_size: 1
+  text_tokens: 384
+  text_normalization: NFKD + upstream symbol/whitespace handling + language tags
+  text_offset_unit: Unicode scalar index in normalized text; original text is retained
+    separately
+  oversized_text: reject; never truncate
+  unknown_character: reject; never wrap to uint16 or submit a negative token
+  latent_channels: 144
+  samples_per_latent: 3072
+  latent_buckets:
+  - 128
+  - 256
+  - 512
+  vocoder_latent_range:
+  - 4
+  - 512
+  default_steps: 8
+  default_speed: 1.05
+  duration_policy: Float32 max(0.05, raw_duration / max(speed, 0.05)); reject nonfinite/nonpositive
+    requested speed
+  frame_count_policy: truncate Float32(duration * 44100) toward zero; trim waveform
+    to min(requested_frames, available_frames)
+  latent_length_policy: ceil(requested_frames / 3072); trim VE bucket to true latent
+    length before vocoding
+  ve_output_semantics: denoised_latent is the updated state, including guidance and
+    integration; do not apply another Euler update
+  qualification_languages:
+  - en
+  - ko
+  voices:
+  - M1
+  - M2
+  - M3
+  - M4
+  - M5
+  - F1
+  - F2
+  - F3
+  - F4
+  - F5
+integrity:
+  algorithm: sha256
+  scope: Every listed payload file, excluding Finder .DS_Store metadata. Reject unlisted
+    files inside compiled model directories.
+artifacts:
+  duration_predictor:
+    kind: coreml_compiled
+    path: duration_predictor_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: int32/float32
+    inputs:
+      text_ids:
+        dtype: int32
+        shape:
+        - 1
+        - 384
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+      style_dp:
+        dtype: float32
+        shape:
+        - 1
+        - 8
+        - 16
+    outputs:
+      duration:
+        dtype: float32
+        shape:
+        - 1
+    files:
+    - path: duration_predictor_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: e0e7bc025d309ea12871a5ae267e68c22558765c7706e002f07bba131110885a
+      size_bytes: 243
+    - path: duration_predictor_T384_fp16.mlmodelc/coremldata.bin
+      sha256: fa229d959e8a88d4eb2f5adbd6909ef10698556b0c1527e4c7f1a3ed753904b5
+      size_bytes: 425
+    - path: duration_predictor_T384_fp16.mlmodelc/metadata.json
+      sha256: b460aabc0d986b6d055e97a2cba52c08bd1c054800001ca031e8d25fe647c030
+      size_bytes: 2793
+    - path: duration_predictor_T384_fp16.mlmodelc/model.mil
+      sha256: d090e332af3d8e9c70ac9c39923a19630a34abedaa3f23a7391ba5af0c19ac71
+      size_bytes: 105692
+    - path: duration_predictor_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: f5dee4c85505d18879c0161bebe087e638da4e5065222c6b83f865ed288d0dc7
+      size_bytes: 1929024
+  text_encoder:
+    kind: coreml_compiled
+    path: text_encoder_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: int32/float32
+    inputs:
+      text_ids:
+        dtype: int32
+        shape:
+        - 1
+        - 384
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+      style_ttl:
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+    outputs:
+      text_emb:
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+    files:
+    - path: text_encoder_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: d6cbf54c0d1918c368703fe33129a6aa143e2f57a7bfe2c1fe4fe239ef68eb3c
+      size_bytes: 243
+    - path: text_encoder_T384_fp16.mlmodelc/coremldata.bin
+      sha256: 7251933caef7206e2a968c1695a64b2eecaf5617403abc0c5f482ffd04a0b2ef
+      size_bytes: 431
+    - path: text_encoder_T384_fp16.mlmodelc/metadata.json
+      sha256: 56890bfea09c3a54e08a9eccf51456bb084ae01ebc00b3f76619c6dd5f142294
+      size_bytes: 2713
+    - path: text_encoder_T384_fp16.mlmodelc/model.mil
+      sha256: 391386eb86b972b69db556d3b7ab0240a4732bf517571319653d46ecc9f960f1
+      size_bytes: 159454
+    - path: text_encoder_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: 7abcfb15dafe3440cc04f6ce4685b4c40f67411a41503ebb7bf51692efadfb59
+      size_bytes: 18546304
+  ve_128:
+    kind: coreml_compiled
+    path: vector_estimator_L128_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    latent_bucket: 128
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+      text_emb:
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+      style_ttl:
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+      latent_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+      current_step:
+        dtype: float32
+        shape:
+        - 1
+      total_step:
+        dtype: float32
+        shape:
+        - 1
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+    files:
+    - path: vector_estimator_L128_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: c454cd0b772e28b97374200ca276802a4693db1cf01b99bc935a028b20a87a55
+      size_bytes: 243
+    - path: vector_estimator_L128_T384_fp16.mlmodelc/coremldata.bin
+      sha256: 149d939d7033051b115c3248653045dab69e34ca7bd841cf8bc3c469a32b9ef8
+      size_bytes: 552
+    - path: vector_estimator_L128_T384_fp16.mlmodelc/metadata.json
+      sha256: be6a2806b589b2294455e5572f480a13de32e3f1d24f1452c96e2fe74418b240
+      size_bytes: 4038
+    - path: vector_estimator_L128_T384_fp16.mlmodelc/model.mil
+      sha256: 4a813539f6345c6d940e9460a8b809fae21c25c4920f17622fa652d08ea9342d
+      size_bytes: 349601
+    - path: vector_estimator_L128_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: 8afaa0e0e4a1f752d21784adbcdb58aaeefc29d3fd3472911f2a33cdde78818f
+      size_bytes: 127844160
+  ve_256:
+    kind: coreml_compiled
+    path: vector_estimator_L256_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    latent_bucket: 256
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 256
+      text_emb:
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+      style_ttl:
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+      latent_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 256
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+      current_step:
+        dtype: float32
+        shape:
+        - 1
+      total_step:
+        dtype: float32
+        shape:
+        - 1
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 256
+    files:
+    - path: vector_estimator_L256_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: df417ca1325066c4ee6da3a75cb06e6027f2410a87263152c3aeb07cbe7fb8f3
+      size_bytes: 243
+    - path: vector_estimator_L256_T384_fp16.mlmodelc/coremldata.bin
+      sha256: 93cea4e590cb2191160285af4573351deb7d7118a5c1509f15601c9342f56e6e
+      size_bytes: 552
+    - path: vector_estimator_L256_T384_fp16.mlmodelc/metadata.json
+      sha256: 15ae6898893c363238707fcb9f2ab93257cda928cdb0432701bc42342e3dcdb8
+      size_bytes: 4038
+    - path: vector_estimator_L256_T384_fp16.mlmodelc/model.mil
+      sha256: 43b03ca38ea5051ab60cdd6cce76e6b0d1934689517cebb32f887c0a06ef71c6
+      size_bytes: 349601
+    - path: vector_estimator_L256_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: 034b683a74ba550a8059a4c2a3cc47cb60e1b31a0f290c3db19041a46f359d97
+      size_bytes: 127844672
+  ve_512:
+    kind: coreml_compiled
+    path: vector_estimator_L512_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    latent_bucket: 512
+    inputs:
+      noisy_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 512
+      text_emb:
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+      style_ttl:
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+      latent_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 512
+      text_mask:
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+      current_step:
+        dtype: float32
+        shape:
+        - 1
+      total_step:
+        dtype: float32
+        shape:
+        - 1
+    outputs:
+      denoised_latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 512
+    files:
+    - path: vector_estimator_L512_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: 85b105267eb87c76a3e3b9a9c250ded8b9b79167cac9c89a9a59aec24c4a2a86
+      size_bytes: 243
+    - path: vector_estimator_L512_T384_fp16.mlmodelc/coremldata.bin
+      sha256: 66f4ef0deb13bd0045fe834234a3d6a259ee7b5ae19d67526c656966d664f66a
+      size_bytes: 552
+    - path: vector_estimator_L512_T384_fp16.mlmodelc/metadata.json
+      sha256: b030f07f55f35090d7e076621a987cbc3b17319c513c488388ddbec75b12153a
+      size_bytes: 4038
+    - path: vector_estimator_L512_T384_fp16.mlmodelc/model.mil
+      sha256: cd08244362e3f8f912bc35ef4515d6851a6fe617bef61a320690b21220b69d01
+      size_bytes: 349601
+    - path: vector_estimator_L512_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: 8709bfa2b60550d7433f8bc8e06569abd1e6fb686244d825fcdc581a2d8f02bc
+      size_bytes: 127845696
+  vocoder:
+    kind: coreml_compiled
+    path: vocoder_T384_fp16.mlmodelc
+    precision:
+      weights: float16
+      activations: float16
+      interface: float32
+    inputs:
+      latent:
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - L
+    outputs:
+      wav:
+        dtype: float32
+        shape:
+        - 1
+        - 3072*L
+    files:
+    - path: vocoder_T384_fp16.mlmodelc/analytics/coremldata.bin
+      sha256: 601667b5f266611a71c003e9e9c399b9c433e934b2cb5eb1425d6c94d58c5bc1
+      size_bytes: 243
+    - path: vocoder_T384_fp16.mlmodelc/coremldata.bin
+      sha256: e1273d884f5885af1fb8888aeac8345990f41c6846cdf1488a3603c7933cbf32
+      size_bytes: 388
+    - path: vocoder_T384_fp16.mlmodelc/metadata.json
+      sha256: 28a938a4b7e2ef35023e73ca168ec2cffa677a630a1a591bb9590589a20a4b40
+      size_bytes: 1938
+    - path: vocoder_T384_fp16.mlmodelc/model.mil
+      sha256: 085a8ea667d4a8e39054c300489da19c84b71b02db6cf1faaebb2e7bff47dfac
+      size_bytes: 75628
+    - path: vocoder_T384_fp16.mlmodelc/weights/weight.bin
+      sha256: b45e4c17a45cc4de30dcedae9f662548aa35f8f9763632c342b8bbef3089fcee
+      size_bytes: 50672512
+  tts_config:
+    kind: configuration
+    path: tts.json
+    files:
+    - path: tts.json
+      sha256: 42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09
+      size_bytes: 8253
+  unicode_indexer:
+    kind: tokenizer
+    path: unicode_indexer.json
+    files:
+    - path: unicode_indexer.json
+      sha256: 9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f
+      size_bytes: 277676
+  voice_M1:
+    kind: voice_style
+    path: voice_styles/M1.json
+    files:
+    - path: voice_styles/M1.json
+      sha256: e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b
+      size_bytes: 291748
+  voice_F1:
+    kind: voice_style
+    path: voice_styles/F1.json
+    files:
+    - path: voice_styles/F1.json
+      sha256: bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2
+      size_bytes: 292046
+  voice_M2:
+    kind: voice_style
+    path: voice_styles/M2.json
+    files:
+    - path: voice_styles/M2.json
+      sha256: b76cbf62bac707c710cf0ae5aba5e31eea1a6339a9734bfae33ab98499534a50
+      size_bytes: 292055
+  voice_M3:
+    kind: voice_style
+    path: voice_styles/M3.json
+    files:
+    - path: voice_styles/M3.json
+      sha256: ea1ac35ccb91b0d7ecad533a2fbd0eec10c91513d8951e3b25fbba99954e159b
+      size_bytes: 290198
+  voice_M4:
+    kind: voice_style
+    path: voice_styles/M4.json
+    files:
+    - path: voice_styles/M4.json
+      sha256: ca8eefad4fcd989c9379032ff3e50738adc547eeb5e221b82593a6d7b3bac303
+      size_bytes: 291522
+  voice_M5:
+    kind: voice_style
+    path: voice_styles/M5.json
+    files:
+    - path: voice_styles/M5.json
+      sha256: dd22b92740314321f8ae11c5e87f8dd60d060f15dd3a632b5adf77f471f77af2
+      size_bytes: 291469
+  voice_F2:
+    kind: voice_style
+    path: voice_styles/F2.json
+    files:
+    - path: voice_styles/F2.json
+      sha256: 7c722c6a72707b1a77f035d67f0d1351ba187738e06f7683e8c72b1df3477fc6
+      size_bytes: 292423
+  voice_F3:
+    kind: voice_style
+    path: voice_styles/F3.json
+    files:
+    - path: voice_styles/F3.json
+      sha256: 12f6ef2573baa2defa1128069cb59f203e3ab67c92af77b42df8a0e3a2f7c6ab
+      size_bytes: 290794
+  voice_F4:
+    kind: voice_style
+    path: voice_styles/F4.json
+    files:
+    - path: voice_styles/F4.json
+      sha256: c2fa764c1225a76dfc3e2c73e8aa4f70d9ee48793860eb34c295fff01c2e032b
+      size_bytes: 291808
+  voice_F5:
+    kind: voice_style
+    path: voice_styles/F5.json
+    files:
+    - path: voice_styles/F5.json
+      sha256: 45966e73316415626cf41a7d1c6f3b4c70dbc1ba2bee5c1978ef0ce33244fc8d
+      size_bytes: 291479
+voice_names:
+  M1: Alex
+  M2: James
+  M3: Robert
+  M4: Sam
+  M5: Daniel
+  F1: Sarah
+  F2: Lily
+  F3: Jessica
+  F4: Olivia
+  F5: Emily

@@ -4,7 +4,8 @@ A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
 **Status:** the [developer SDK v0](docs/developer-sdk.md) is implemented on top of
-the recommended Supertonic3 FP16 Core ML bundle with a 384-token text window.
+the recommended Supertonic3 FP16 Core ML bundle with a 384-token text window,
+ten named preset voices, and 31 supported languages.
 Rust, C, Dart, Go and Python expose
 speech controllers, lazy synthesis, bounded rendering,
 native Apple playback, retained seeking and original-text reader alignment. The
@@ -12,8 +13,10 @@ native Apple playback, retained seeking and original-text reader alignment. The
 [documentation](docs/README.md) for setup and API guides.
 
 Real inference/output qualification targets macOS Apple Silicon, English/Korean
-and voices M1/F1. The experimental Windows ARM64 [QNN Superfast backend](docs/qnn-runtime.md)
-supports the headless SDK with the same voices, lazy jobs and WAV export;
+and voices M1/F1. All ten presets across 31 languages have short synthesis smoke
+coverage; [broader listening quality is not yet qualified](docs/voices-and-text-plans.md).
+The experimental Windows ARM64 [QNN Superfast backend](docs/qnn-runtime.md)
+supports the headless SDK with M1/F1, lazy jobs and WAV export;
 its [subjective listening qualification is pending](docs/qnn-qualification.md).
 Native Windows playback, physical iOS, other devices/minimum OS versions and
 published native distribution packages need separate work and qualification.
@@ -69,7 +72,7 @@ cargo run -p mlsr --example version
 
 # Synthesize on macOS using an already prepared local bundle (no Python needed).
 MACOSX_DEPLOYMENT_TARGET=15.0 cargo run --release -p mlsr-cli --features coreml -- \
-  synthesize --manifest model-manifests/supertonic3-coreml-fp16.yaml \
+  synthesize --manifest model-manifests/supertonic3-coreml-fp16-voices.yaml \
   --bundle /path/to/model-bundle --text "Hello from MLSR." \
   --language en --voice M1 --output hello.wav
 

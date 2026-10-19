@@ -196,7 +196,7 @@ packages:
   mlsr_app_models:
     dependency: "direct main"
     description:
-      path: ".mlsr/model_assets_fp16_t384"
+      path: ".mlsr/model_assets_voices"
       relative: true
     source: path
     version: "0.1.0"

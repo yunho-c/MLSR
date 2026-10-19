@@ -1,10 +1,17 @@
 # Model manifests
 
-The recommended release is [supertonic3-coreml-fp16.yaml](supertonic3-coreml-fp16.yaml):
-boundary-corrected FP16 Core ML, T=384 text, L=128/256/512 estimators and M1/F1.
+The recommended release is [supertonic3-coreml-fp16-voices.yaml](supertonic3-coreml-fp16-voices.yaml):
+boundary-corrected FP16 Core ML, T=384 text, L=128/256/512 estimators and all ten
+official preset voices. It reuses every graph/config/tokenizer/M1/F1 payload from
+the original [two-voice FP16 release](supertonic3-coreml-fp16.yaml), whose bytes
+and catalog identity remain unchanged. Eight additional JSON styles add
+2,331,748 bytes. `contract.voices` controls loading and catalog order;
+`voice_names` supplies display names. See [voice coverage](../docs/voices-and-text-plans.md).
 It pins locally compiled payloads and their export provenance. The source URL
 identifies the original model inputs; these compiled files are **not published
-there**. Preparation requires verified local assets. See the
+there**. Preparation requires verified local graphs; missing styles may be
+downloaded explicitly from their separately revision-pinned
+`provenance.voice_styles` source. See the
 [promotion record](../docs/internal/supertonic3-fp16-promotion.md).
 ONNX is used only by optional conversion/reference tools, not by the library.
 

@@ -147,7 +147,7 @@ MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release -p mlsr-ffi --featu
 export CGO_CFLAGS="-I$PWD/include"
 export CGO_LDFLAGS="-L$PWD/target/release -Wl,-rpath,$PWD/target/release"
 cd bindings/go
-go run ./examples/synthesize --manifest ../../model-manifests/supertonic3-coreml-fp16.yaml \
+go run ./examples/synthesize --manifest ../../model-manifests/supertonic3-coreml-fp16-voices.yaml \
   --bundle /path/to/bundle --output hello.wav --cancel-first
 ```
 

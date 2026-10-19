@@ -32,7 +32,7 @@ pub struct SynthesisRequest<'a> {
     pub text: &'a str,
     /// Model language tag, e.g. en or ko.
     pub language: &'a str,
-    /// Bundled voice identifier, M1 or F1 in the first slice.
+    /// Bundled model-local voice identifier, such as M1 or F4.
     pub voice: &'a str,
     /// Validated speed, steps, and seed. Segment n uses seed.wrapping_add(n).
     pub options: SynthesisOptions,

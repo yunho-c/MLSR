@@ -104,7 +104,7 @@ impl Diagnostics {
 }
 
 impl Pipeline {
-    /// Load all six graphs once and upload both voices. Reuse allocates two
+    /// Load all six graphs once and upload the declared voices. Reuse allocates two
     /// dedicated output buffers per VE bucket; Core ML may decline to use them.
     pub fn load(bundle: Bundle, policy: ComputePolicy, reuse_output_buffers: bool) -> Result<Self> {
         Self::load_variant(

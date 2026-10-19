@@ -12,7 +12,45 @@ and the [experimental qualification result](../../docs/qnn-qualification.md).
 ## Recommended FP16 bundle
 
 The app and `BundleManifest::recommended()` select the boundary-corrected
-T=384 FP16 Core ML release. ONNX is only a development conversion/reference
+T=384 FP16 Core ML release with ten official preset voices. From an existing
+verified two-voice FP16 bundle, prepare the expanded release:
+
+```sh
+python3 -m tools.supertonic3 \
+  --manifest model-manifests/supertonic3-coreml-fp16-voices.yaml prepare \
+  --source "$HOME/.cache/mlsr/models/supertonic3-coreml-fp16-t384-v1" \
+  --output "$HOME/.cache/mlsr/models/supertonic3-coreml-fp16-t384-voices-v1" \
+  --download
+```
+
+Only the eight missing style JSON files (2.22 MiB) need downloading. Graphs,
+tokenizer/configuration and M1/F1 are reused and checksum-verified; local graph
+exports cannot be downloaded by this command. For offline preparation, omit
+`--download` and supply another `--source` containing the pinned `voice_styles/`
+files. Existing bundles are never overwritten. Ordinary builds and inference
+never download assets.
+
+Run the real 310-case voice/language smoke matrix and four exact M1/F1 legacy
+comparisons with the Core ML FFI library built:
+
+```sh
+cargo build --locked --release -p mlsr-ffi --features coreml,apple-output
+python3 -m tools.supertonic3.voice_smoke \
+  --bundle "$HOME/.cache/mlsr/models/supertonic3-coreml-fp16-t384-voices-v1" \
+  --legacy-bundle "$HOME/.cache/mlsr/models/supertonic3-coreml-fp16-t384-v1" \
+  --output /path/to/new/voice-smoke
+```
+
+The report records every PCM hash, frame count, finite/non-silent checks,
+request settings, host and input/library hashes. It retains WAVs for M1 in all
+languages and every voice in English/Korean (49 files); `--save-all-audio`
+retains all 310. It checks native handle cleanup. This is synthesis coverage,
+not perceptual qualification or a performance benchmark. Samples also power
+the Flutter app's explicit **Try an example** action.
+
+### Preparing the original FP16 graph release
+
+ONNX is only a development conversion/reference
 format. The later legacy sections document the retained T=128 INT4 Core ML
 baseline and default reference-tool arguments.
 

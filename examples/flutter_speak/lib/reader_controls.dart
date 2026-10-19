@@ -79,7 +79,7 @@ class _ReaderControlsState extends State<ReaderControls> {
               onPressed: active ? () => controller.navigate(next: true) : null,
               icon: const Icon(Icons.skip_next_rounded),
             ),
-            const Text('Speed'),
+            const Text('Playback'),
             DropdownButton<double>(
               key: const Key('rate'),
               value: controller.playbackRate,
@@ -145,6 +145,9 @@ class _ReaderControlsState extends State<ReaderControls> {
             child: SelectableText.rich(
               TextSpan(children: spans),
               key: const Key('reading-text'),
+              textDirection: controller.originalIsRtl
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
               style: const TextStyle(fontSize: 15, height: 1.6),
             ),
           ),

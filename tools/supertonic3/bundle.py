@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path, PurePosixPath
 import re
 import shutil
@@ -19,6 +20,7 @@ DEFAULT_MANIFEST = ROOT / "model-manifests/supertonic3-coreml.yaml"
 DEFAULT_CORPUS = ROOT / "tests/fixtures/supertonic3/corpus.yaml"
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
+VOICE_ID = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 
 
 class ReferenceError(ValueError):
@@ -105,6 +107,27 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
     ):
         raise ReferenceError("Expected a Hugging Face model repository URL")
     contract = manifest.get("contract", {})
+    voices = contract.get("voices")
+    if (
+        not isinstance(voices, list)
+        or not 1 <= len(voices) <= 64
+        or any(not isinstance(v, str) or not VOICE_ID.fullmatch(v) for v in voices)
+        or len(set(voices)) != len(voices)
+    ):
+        raise ReferenceError("Expected 1..=64 unique safe voice IDs")
+    names = manifest.get("voice_names", {})
+    if (
+        not isinstance(names, dict)
+        or (names and set(names) != set(voices))
+        or any(
+            not isinstance(v, str)
+            or not v.strip()
+            or len(v.encode("utf-8")) > 128
+            or any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in v)
+            for v in names.values()
+        )
+    ):
+        raise ReferenceError("Voice names must match the declared voices")
     expected = {
         "sample_rate": 44100,
         "channels": 1,
@@ -150,11 +173,21 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict:
         "ve_512",
         "tts_config",
         "unicode_indexer",
-        "voice_M1",
-        "voice_F1",
-    }
+    } | {f"voice_{voice}" for voice in voices}
     if set(artifacts) != required:
         raise ReferenceError(f"Expected artifacts: {sorted(required)}")
+    for voice in voices:
+        artifact = artifacts[f"voice_{voice}"]
+        if (
+            artifact.get("kind") != "voice_style"
+            or len(artifact["files"]) != 1
+            or artifact["files"][0]["path"] != artifact["path"]
+            or artifact["files"][0]["size_bytes"] > 4 * 1024 * 1024
+            or artifact.get("inputs") is not None
+            or artifact.get("outputs") is not None
+            or artifact.get("latent_bucket") is not None
+        ):
+            raise ReferenceError(f"Invalid voice style artifact: {voice}")
     for name in (
         "text_encoder",
         "duration_predictor",
@@ -256,6 +289,9 @@ def verify_bundle(manifest: dict, root: Path) -> dict:
         raise ReferenceError(
             "Missing, changed, or unexpected bundle files:\n" + "\n".join(failures)
         )
+    for artifact in manifest["artifacts"].values():
+        if artifact["kind"] == "voice_style":
+            validate_voice_style(json.loads((root / artifact["path"]).read_text()))
     config = json.loads(
         (root / manifest["artifacts"]["tts_config"]["path"]).read_text()
     )
@@ -275,8 +311,64 @@ def verify_bundle(manifest: dict, root: Path) -> dict:
     }
 
 
+def validate_voice_style(value: dict) -> None:
+    """The shared Supertonic conditioning contract, independent of preset ID."""
+    if not isinstance(value, dict):
+        raise ReferenceError("Expected a voice style object")
+    for key, shape in (("style_ttl", [1, 50, 256]), ("style_dp", [1, 8, 16])):
+        style = value.get(key, {})
+        if not isinstance(style, dict):
+            raise ReferenceError(f"Invalid voice style tensor: {key}")
+        data = style.get("data")
+        if (
+            style.get("dims") != shape
+            or any(type(dim) is not int for dim in style["dims"])
+            or style.get("type") != "float32"
+            or not isinstance(data, list)
+            or len(data) != shape[0]
+            or any(
+                not isinstance(batch, list)
+                or len(batch) != shape[1]
+                or any(
+                    not isinstance(row, list)
+                    or len(row) != shape[2]
+                    or any(
+                        type(v) not in (int, float)
+                        or not math.isfinite(v)
+                        or abs(v) > 3.4028234663852886e38
+                        for v in row
+                    )
+                    for row in batch
+                )
+                for batch in data
+            )
+        ):
+            raise ReferenceError(f"Invalid voice style tensor: {key}")
+
+
 def asset_url(manifest: dict, path: str) -> str:
-    if manifest.get("provenance", {}).get("local_export"):
+    provenance = manifest.get("provenance", {})
+    # Locally exported graphs remain local. A separately pinned upstream source
+    # can supply only the explicitly declared small voice-style files.
+    voice_source = provenance.get("voice_styles")
+    if voice_source is not None and not isinstance(voice_source, dict):
+        raise ReferenceError("Expected a pinned voice source mapping")
+    if voice_source and any(
+        a["kind"] == "voice_style" and a["path"] == path
+        for a in manifest["artifacts"].values()
+    ):
+        repository = voice_source.get("repository", "")
+        revision = voice_source.get("revision", "")
+        if not re.fullmatch(
+            r"https://huggingface\.co/(?:spaces/)?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+            repository,
+        ) or not REVISION.fullmatch(revision):
+            raise ReferenceError(
+                "Voice source must pin a Hugging Face repository and revision"
+            )
+        prefix = relative_path(voice_source.get("path_prefix"))
+        return f"{repository}/resolve/{revision}/{prefix}/{quote(relative_path(path), safe='/')}"
+    if provenance.get("local_export"):
         raise ReferenceError(
             "This local Core ML export has no published download; provide verified local assets"
         )
