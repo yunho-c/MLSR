@@ -219,6 +219,10 @@ toolchains, never download weights and never clear developer caches.
 
 ## Scope left for later milestones
 
+Subsequent Windows ARM64 QNN and normal-speed WASAPI output checks are recorded
+in the [Windows playback guide](../windows-output.md). The scope below describes
+the original macOS qualification snapshot.
+
 This qualifies the essential developer API on this macOS host, not a published
 distribution or universal backend support. Separate [QNN qualification](../qnn-qualification.md)
 covers the experimental Windows ARM64 headless SDK. Native Windows output,

@@ -135,10 +135,10 @@ library on PATH and dot-source `tools/qnn_env.ps1` for QNN dependencies. Pass
 `EngineOptions{QNNHTP: true}` to `OpenTTS` or `Open` with the QNN manifest and verified bundle.
 For SDK jobs/rendering, use `DefaultTTSOptions()` with `Output = HeadlessOutput`;
 `TTSFromModel` accepts the same engine options. The public developer example
-accepts `--policy qnn_htp`. Native Windows speech output is unavailable, and
-QNN requires eight steps.
+accepts `--policy qnn_htp`. Add `windows-output` to the native build for
+[Windows speech](../../docs/windows-output.md) at playback rate 1. QNN requires eight steps.
 `CPUOnly` and `QNNHTP` are mutually exclusive. The preset remains
-[experimental because of model-quality failures](../../docs/qnn-qualification.md).
+[experimental pending listening qualification](../../docs/qnn-qualification.md).
 
 For example, after building the Core ML library from the repository root:
 

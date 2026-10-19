@@ -23,6 +23,13 @@ Future<void> main(List<String> args) async {
       );
     }
     final appleOutput = input.userDefines['apple-output'] ?? false;
+    final windowsOutput = input.userDefines['windows-output'] ?? false;
+    if (windowsOutput is! bool) {
+      throw FormatException('MLSR windows-output must be true or false.');
+    }
+    if (windowsOutput && config.targetOS != OS.windows) {
+      throw UnsupportedError('WASAPI output requires a Windows host build.');
+    }
     if (appleOutput is! bool) {
       throw FormatException('MLSR apple-output must be true or false.');
     }
@@ -146,12 +153,13 @@ Future<void> main(List<String> args) async {
           '--release',
           '--package',
           'mlsr-ffi',
-          if (coreml || qnn || appleOutput) ...[
+          if (coreml || qnn || appleOutput || windowsOutput) ...[
             '--features',
             [
               if (coreml) 'coreml',
               if (qnn) 'qnn',
               if (appleOutput) 'apple-output',
+              if (windowsOutput) 'windows-output',
             ].join(','),
           ],
           '--target',

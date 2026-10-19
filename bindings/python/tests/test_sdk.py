@@ -2,11 +2,11 @@ import array
 import asyncio
 import gc
 import os
-from pathlib import Path
 import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 
 from mlsr import (
     AudioClip,
@@ -209,7 +209,9 @@ class RealNativeSpeech(unittest.TestCase):
         lib = ffi.library()
         before = lib.mlsr_live_handles()
         with Tts(
-            os.environ["MLSR_TEST_MANIFEST"], os.environ["MLSR_TEST_BUNDLE"]
+            os.environ["MLSR_TEST_MANIFEST"],
+            os.environ["MLSR_TEST_BUNDLE"],
+            compute_policy=os.environ.get("MLSR_TEST_POLICY", "cpu_and_neural_engine"),
         ) as tts:
             self.assertTrue(tts.output_capabilities.pause_resume)
             paused = SpeechOptions(paused=True, volume=0.0)
@@ -231,7 +233,15 @@ class RealNativeSpeech(unittest.TestCase):
                     queued.cancel()
                     self.assertEqual(queued.wait(1).outcome.reason, "requested")
                 speech.set_volume(0)
-                speech.set_playback_rate(2)
+                if tts.output_capabilities.rate_range is None:
+                    with self.assertRaises(TtsError) as unsupported:
+                        speech.set_playback_rate(2)
+                    self.assertEqual(
+                        unsupported.exception.code, "unsupported_capability"
+                    )
+                    speech.set_playback_rate(1)
+                else:
+                    speech.set_playback_rate(2)
                 speech.seek(0)
                 speech.resume()
                 done = speech.wait(8)

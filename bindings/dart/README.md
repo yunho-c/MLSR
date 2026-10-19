@@ -161,11 +161,12 @@ hooks:
 Select `computePolicy: ComputePolicy.qnnHtp` in `Tts.open` or `Engine.load` with the QNN
 manifest and its verified bundle. The hook tracks the bridge import library;
 the prepared bridge/SDK/FastRPC DLLs must also be loadable at runtime. The preset
-has [open model-quality failures](../../docs/qnn-qualification.md).
+has [pending listening qualification](../../docs/qnn-qualification.md).
 For SDK jobs/rendering, use `TtsOptions(output: OutputMode.headless)`;
 `Tts.fromModel` accepts the same policy. The developer example accepts `qnn_htp`
-as its fourth argument. Native Windows speech output is unavailable, and QNN
-requires eight steps.
+as its fourth argument. Add `windows-output: true` beside `qnn: true` in the hook
+settings for [Windows speech](../../docs/windows-output.md) at playback rate 1.
+QNN requires eight steps.
 
 The [Flutter speak/stop example](../../examples/flutter_speak/README.md) uses this
 hook with Flutter 3.41.4. Supported hook/code-assets ranges allow that SDK's pinned
