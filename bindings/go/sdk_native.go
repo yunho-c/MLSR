@@ -180,6 +180,9 @@ func sdkSpeechOptions(options SpeechOptions, mode SpeakMode) C.MlsrSpeechOptions
 	s.retain_audio = 0
 	if options.RetainAudio {
 		s.retain_audio = 1
+		if options.OnDemandSeeking {
+			s.retain_audio = 2
+		}
 	}
 	s.lookahead_frames = C.uint32_t(options.LookaheadFrames)
 	return s

@@ -8,6 +8,7 @@ use crate::{
     voice::VoiceFallback,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
+mod reader_tests;
 
 fn caps() -> OutputCapabilities {
     OutputCapabilities {
@@ -729,8 +730,14 @@ fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
         panic!("missing initial reader snapshot")
     };
     speech.seek(4096).unwrap();
-    let SpeechStatePoll::Snapshot(after_seek) = observer.poll(Duration::from_secs(1)) else {
-        panic!("same-segment paused seek did not notify state observers")
+    let after_seek = loop {
+        let SpeechStatePoll::Snapshot(snapshot) = observer.poll(Duration::from_secs(1)) else {
+            panic!("same-segment paused seek did not notify state observers")
+        };
+        if !snapshot.seeking {
+            break snapshot;
+        }
+        assert_eq!(snapshot.seek_target_frame, Some(4096));
     };
     assert_eq!(after_seek.position_frame, 4096);
     assert!(after_seek.revision > before_seek.revision);

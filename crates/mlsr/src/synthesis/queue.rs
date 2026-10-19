@@ -71,6 +71,16 @@ impl Queue {
         self.engine.voice_catalog()
     }
     pub(crate) fn create(self: &Arc<Self>, request: Request) -> Result<SynthesisJob> {
+        self.create_work(request, Work::Stream)
+    }
+    pub(crate) fn prepare(self: &Arc<Self>, request: Request) -> Result<SynthesisJob> {
+        self.create_work(request, Work::Prepare)
+    }
+    pub(super) fn create_work(
+        self: &Arc<Self>,
+        request: Request,
+        work: Work,
+    ) -> Result<SynthesisJob> {
         let mut gate = lock(&self.shared.gate);
         if gate.closed {
             return Err(Error::Closed);
@@ -99,7 +109,7 @@ impl Queue {
         gate.next_id = id
             .checked_add(1)
             .ok_or_else(|| Error::WorkerFailed("request IDs exhausted".into()))?;
-        let control = Control::new(id, request, self.options.job);
+        let control = Control::new(id, request, self.options.job, work);
         gate.all.push(Arc::downgrade(&control));
         Ok(SynthesisJob {
             lease: Arc::new(Lease {
@@ -198,7 +208,10 @@ fn worker(shared: Arc<Shared>, engine: Arc<Engine>) {
     }
 }
 fn process(engine: &Engine, control: &Control) -> Result<()> {
-    let (plan, start) = control.request.prepare(engine)?;
+    let (plan, start) = match &control.work {
+        Work::Segment { prepared, index } => (prepared.text_plan().clone(), *index),
+        _ => control.request.prepare(engine)?,
+    };
     {
         let mut state = lock(&control.state);
         state.plan = Some(plan.clone());
@@ -216,14 +229,25 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
     // Paced jobs start closed until native ownership is published below. A
     // concurrent seek cannot be overwritten by a stale initial horizon.
     let generation_limit = lock(&control.state).generation_limit.map(|_| 0);
-    let native = Arc::new(engine.start_plan_paced(
-        plan,
-        start,
-        control.request.voice().voice().model_voice_id(),
-        control.request.options().effective_synthesis_options()?,
-        control.limits,
-        generation_limit,
-    )?);
+    let native = Arc::new(match &control.work {
+        Work::Prepare => engine.prepare_speech(
+            plan,
+            control.request.voice().voice().model_voice_id(),
+            control.request.options().effective_synthesis_options()?,
+            control.limits,
+        )?,
+        Work::Segment { prepared, index } => {
+            engine.start_prepared_segment(prepared.clone(), *index, control.limits)?
+        }
+        Work::Stream => engine.start_plan_paced(
+            plan,
+            start,
+            control.request.voice().voice().model_voice_id(),
+            control.request.options().effective_synthesis_options()?,
+            control.limits,
+            generation_limit,
+        )?,
+    });
     {
         let mut state = lock(&control.state);
         state.native = Some(native.clone());
@@ -256,6 +280,9 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
                 job::Event::Predicted(_) => {}
                 job::Event::Audio(chunk) => control.push(chunk),
                 job::Event::Terminal(report) => {
+                    if matches!(control.work, Work::Prepare) {
+                        lock(&control.state).prepared = native.prepared_speech();
+                    }
                     control.finish_native(report);
                     return Ok(());
                 }

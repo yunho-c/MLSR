@@ -94,11 +94,13 @@ pub struct MlsrSpeechOptions {
     pub volume: f32,
     /// 0: begin playing when ready, 1: begin paused.
     pub paused: u32,
-    /// 0: no retention, 1: retain under the shared disk quota (default).
+    /// 0: no retention, 1: full recording under the shared quota (default),
+    /// 2: on-demand reader cache with full-timeline seeking and segment eviction.
     pub retain_audio: u32,
     /// Retained speech segment-start horizon ahead of presentation; default
-    /// 88,200 source frames. An admitted segment is retained in full, so seekable
-    /// audio can extend beyond this horizon. Output and byte quotas are separate.
+    /// 88,200 source frames. An admitted segment is retained in full, so buffered
+    /// audio can extend beyond this horizon. On-demand seeks choose a new position
+    /// independently of this bound. Output and byte quotas are separate.
     pub lookahead_frames: u32,
     /// Must be zero.
     pub reserved: u32,

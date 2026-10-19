@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -393,6 +394,53 @@ func TestRealSDKNativeReader(t *testing.T) {
 	owner.Close()
 	if nativeHandleCount() != before {
 		t.Fatal("native speech handle leak")
+	}
+}
+
+func TestRealSDKOnDemandSeek(t *testing.T) {
+	if os.Getenv("MLSR_TEST_NATIVE_OUTPUT") == "" {
+		t.Skip("explicit native playback not requested")
+	}
+	before := nativeHandleCount()
+	owner := openSDK(t, true)
+	options := DefaultSpeechOptions()
+	options.Volume, options.Paused, options.OnDemandSeeking = 0, true, true
+	request := DefaultSpeechRequest(strings.Repeat("Hello from MLSR. This is another passage to read.\n", 8))
+	speech, err := owner.Speak(context.Background(), request, options, Replace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer speech.Close()
+	initial := waitSpeechState(t, speech, func(s SpeechState) bool {
+		return s.EstimatedFrames != nil && len(s.BufferedRanges) > 0
+	})
+	target := *initial.EstimatedFrames * 3 / 4
+	if len(initial.SeekableRanges) != 1 || initial.SeekableRanges[0].End != *initial.EstimatedFrames || initial.BufferedUntilFrame >= target {
+		t.Fatalf("missing unbuffered, seekable destination: %+v", initial)
+	}
+	if err := speech.Seek(target); err != nil {
+		t.Fatal(err)
+	}
+	ready := waitSpeechState(t, speech, func(s SpeechState) bool {
+		return s.PositionFrame == target && !s.Seeking && len(s.BufferedRanges) >= 2
+	})
+	if ready.RequestID != speech.ID || ready.Playback != "paused" || ready.SeekTargetFrame != nil || ready.RecordingComplete || *ready.EstimatedFrames != *initial.EstimatedFrames {
+		t.Fatalf("seek changed identity, pause, timeline or exportability: %+v", ready)
+	}
+	if err := speech.Seek(0); err != nil {
+		t.Fatal(err)
+	}
+	waitSpeechState(t, speech, func(s SpeechState) bool { return s.PositionFrame == 0 && !s.Seeking })
+	if err := speech.Close(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := owner.Snapshot()
+	if err != nil || snapshot.Retention.UsedBytes != 0 || snapshot.Retention.LiveStores != 0 {
+		t.Fatalf("reader cache leaked: %+v %v", snapshot, err)
+	}
+	owner.Close()
+	if nativeHandleCount() != before {
+		t.Fatal("on-demand speech handle leak")
 	}
 }
 

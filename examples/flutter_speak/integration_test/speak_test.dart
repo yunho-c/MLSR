@@ -185,6 +185,61 @@ void main() {
       speech.stop();
       await until(() => !speech.speaking);
 
+      // A real scrubber jump into ungenerated text keeps the document identity,
+      // full scale, pause state and previously cached regions.
+      speech.speak(
+        List.filled(12, english).join('\n'),
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(() => speech.generatedFrames > 88200 || speech.error != null);
+      expect(speech.error, isNull);
+      final documentId = speech.speech!.id;
+      final plannedFrames = speech.state!.estimatedFrames!;
+      final firstReadyEnd = speech.state!.bufferedRanges.first.end;
+      final distantTarget = (plannedFrames * .72).round();
+      expect(distantTarget, greaterThan(firstReadyEnd));
+      expect(speech.timeline.canSeek(distantTarget), isTrue);
+      expect(speech.timeline.isBuffered(distantTarget), isFalse);
+      final distantSeek = Stopwatch()..start();
+      var scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeStart!(scrubber.value);
+      scrubber.onChanged!(distantTarget.toDouble());
+      await tester.pump();
+      scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeEnd!(distantTarget.toDouble());
+      await until(
+        () =>
+            (!speech.state!.seeking &&
+                speech.playedFrames == distantTarget &&
+                speech.timeline.isBuffered(distantTarget)) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.speech!.id, documentId);
+      expect(speech.state!.estimatedFrames, plannedFrames);
+      expect(speech.paused, isTrue);
+      expect(speech.state!.bufferedRanges.length, greaterThanOrEqualTo(2));
+      expect(speech.timeline.isBuffered(firstReadyEnd + 4096), isFalse);
+      report['unbuffered_seek_observed_ms'] =
+          distantSeek.elapsedMicroseconds / 1000;
+      report['unbuffered_seek_target_frame'] = distantTarget;
+      report['unbuffered_seek_preserved_request'] =
+          speech.speech!.id == documentId;
+      report['disjoint_buffered_ranges'] = speech.state!.bufferedRanges
+          .map((range) => [range.start, range.end])
+          .toList();
+      await screenshot('unbuffered-seek');
+      speech.seek(4096);
+      await until(() => !speech.state!.seeking && speech.playedFrames == 4096);
+      expect(speech.speech!.id, documentId);
+      expect(speech.paused, isTrue);
+      report['return_to_cached_frame'] = speech.playedFrames;
+      await screenshot('cached-return');
+      speech.stop();
+      await until(() => !speech.speaking);
+
       // Native admission and replace behavior with rapid calls from the UI layer.
       final replaced = speech.speak(
         'Replace this request.',

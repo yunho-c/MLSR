@@ -1,97 +1,164 @@
 # Reader controls and retained recordings
 
-The shared Rust controller retains generated PCM in owned temporary storage by
-default. `SpeechOptions::with_retention(false)` omits that storage. Playback and
-rendering remain separate: `Tts::render` returns caller-owned memory, and WAV
-exports are caller-owned files that reader cleanup never deletes.
+Speech supports two storage policies. The default retains every generated frame
+for recording/export. Opt into **on-demand seeking** for a reader that can seek
+anywhere in the planned document, generating uncached passages directly and
+evicting old cached segments when necessary. The Flutter example uses this mode.
 
-`Tts::configured` accepts `RetentionOptions` independently of inference queue and
-output limits. The defaults are **128 MiB total PCM and 128 recordings per Tts**,
-shared across its controllers and completed caller-retained handles. A replay
-shares its recording; it does not charge a second copy. `retention_stats` reports
-current/peak PCM bytes and store count, not physical filesystem/RSS overhead.
-Quota failure is typed (`FailureStage::Retention`); no recording is silently
-evicted. Anonymous temporary files are closed/deleted on last release or owner
-closure. A failed write retires the owned file instead of exposing partial data.
-
-The byte quota is about **12 minutes 41 seconds** at the current 44,100 Hz mono
-Float32 format (176,400 PCM bytes/second), shared across all retained recordings.
-It excludes filesystem overhead. A single request is also limited to **64 KiB of
-raw UTF-8 text**, checked before admission. For whole books, applications must
-split text into requests and release recordings or configure larger storage
-budgets. This API does not automatically page a book or evict its playback
-history. The storage quota is configurable up to 16 GiB and 4,096 recordings.
-
-For retained speech, `SpeechOptions::lookahead_frames` controls **starting the
-next model segment**, with a default horizon of 88,200 source frames (two
-seconds). A segment starts only when its actual source start is before the
-presented position plus that horizon. Once started, its entire generated PCM
-drains into the retained file, independently of pause and output capacity, and
-becomes seekable. Thus a long first segment can be fully seekable while playback
-is paused at zero. Cancellation wakes the segment admission wait.
-
-With forward playback, generation can extend past the horizon by at most one
-bounded model segment (`JobOptions::segment_frames`). All earlier history remains
-on disk, including after a backward seek; the new position governs admission of
-further segments. Duration planning still covers the entire request before PCM.
-The native event queue, advanced consumer queue, one pending output chunk and
-native output have separate finite bounds. No-retention speech uses those queues
-without a retained store. Retention drains in bounded bursts, file conversion
-uses a 16 KiB scratch block, and PCM reads are bounded. Storage/control work is
-serialized on the controller thread; native and filesystem calls do not carry
-a hard real-time deadline.
-
-| Operation | Behavior |
+| Binding | Enable on-demand seeking |
 | --- | --- |
-| `seek(frame)` | Valid during running/paused speech, including after generation finishes. Flushes and rebases output, preserves pause/rate/volume, reads retained PCM without inference. State confirms application. |
-| `replay_from(frame, options, mode)` | Valid for a completed recording. Returns a **new Speech** with its own immutable outcome and the same retained PCM/source plan. Observe the new handle's state. |
-| `previous_sentence` / `next_sentence` | Navigate original spoken sentences, including a sentence split across several model segments. Return `Boundary` at document ends. |
-| `navigate_to_sentence(id)` | Returns `Seeked` for available retained audio or `Started(new_speech)` for a new original-plan suffix/replay. An older handle cannot navigate over a different current request. |
-| `dispose()` | Cancels/joins this request and releases its recording reference. Other replay handles keep their own references; final outcome/metadata remain inspectable. |
+| Rust | `SpeechOptions::default().with_on_demand_seeking(true)` |
+| Dart | `SpeechOptions(onDemandSeeking: true)` |
+| Go | Set `DefaultSpeechOptions().OnDemandSeeking = true` on the options value. |
+| Python | `SpeechOptions(on_demand_seeking=True)` |
+| C | Set `MlsrSpeechOptions.retain_audio = 2` after initializing defaults. Values 0 and 1 retain their no-storage/full-recording meanings. |
 
-One `Speech.done` describes one accepted playback request and never changes after
-completion. Seeking within an active request preserves its identity. Replaying a
-completed recording gets a new identity, so awaiting its `done` waits for that
-replay's actual output drain. Its timeline/duration still uses the complete
-recording's source coordinates, even when replay starts partway through it.
+On-demand mode requires retention and an output adapter that can flush/rebase.
+Invalid options fail admission without replacing current speech. Disabling
+retention omits seeking storage. Playback and rendering remain separate:
+`Tts::render` returns caller-owned memory, and WAV exports are caller-owned files
+that reader cleanup never deletes.
 
-Seekable ranges describe actual retained source frames, normally `[0, end)`.
-The endpoint itself is also a valid cursor: it waits for more generated audio or
-finishes when input has ended. Outside-range seeks return `invalid_seek` without
-moving output. No-retention/released recordings expose empty ranges. Closing Tts
-invalidates all its retained audio, including completed handles; it preserves
-their outcomes and all caller-owned clips/export files.
+## Seeking across a document
 
-For a sentence whose audio is not retained, navigation creates a new request
-using the **same frozen text plan and original segment seed offsets**. It does
-not slice/re-normalize a suffix or invent an unavailable timestamp. The previous
-active handle ends with `Navigation` cancellation. The new suffix timeline starts
-at zero; original sentence/segment IDs and UTF-8/UTF-16 source ranges remain
-unchanged. Queued requests keep their order behind the navigation request.
+Before PCM generation, a cancellable duration-only pass predicts every segment
+in the frozen text plan. It retains small duration/shape decisions, releases
+native tensors, and reuses each prediction during synthesis. There is no partial
+sum masquerading as the whole duration. Planning adds preparation latency
+proportional to segment count; seeking is unavailable until it finishes.
 
-`buffered_until_frame` is the end ready in the retained store; `seekable_ranges`
-describe replayable data. Whole-request `estimated_frames` remains null until all
-required predictions are known. The developer facade runs a cancellable
-duration-only pass over the remaining frozen segments before generating PCM,
-then reuses each prediction during synthesis. The complete estimate is available
-even while playback is paused or PCM queues are full. Planning retains only
-small duration/shape decisions, bounded by the validated text, and releases each
-segment's temporary native tensors. It adds an upfront predictor pass to first
-audio latency; it does not run the predictor twice or expand the segment
-admission horizon or PCM queues.
-Cancellation takes effect between predictions and waits for an in-flight call.
+An on-demand seek resolves the selected time to an **original segment and local
+frame offset**. The controller flushes old scheduled audio, generates only the
+missing destination segment, then supplies PCM from that offset. Skipped segments
+are not generated. Cached destinations reuse their exact PCM. The document,
+original segment IDs/seeds, source mappings and active speech identity survive
+seeks, as do pause, playback rate and volume. Sentence navigation uses the same
+path, including for ungenerated sentences.
 
-`duration_frames` comes from final generated frames and overrides the estimate.
-Neither field changes with playback rate. Highlighting follows the
-presented segment through seeks/rate changes; it does not claim word alignment.
+Seek admission returns without waiting for inference or file I/O. `seeking` and
+`seek_target_frame` expose the pending destination until output has accepted its
+audio (or the document endpoint). The latest seek wins; obsolete generation is
+cancelled before a replacement is scheduled. Cancellation takes effect at native
+checkpoints and must wait for an in-flight model call, so a cold destination can
+show a loading state. This is not a zero-latency or hard real-time guarantee.
 
-A progress bar or scrubber uses `duration_frames ?? estimated_frames` as its
-full scale. Retained ranges describe which parts of that scale can be selected;
-their growing endpoint is not a total duration. The Flutter example shows the
-available region separately, stays indeterminate while the total is unknown,
-and leaves playback unchanged when a drag ends outside retained audio.
+Measured segment lengths refine the timeline. Pending and playing positions are
+anchored to segment/local offset, so an earlier correction cannot select different
+text. An offset beyond a segment's actual end clamps to that end. Original segment
+identity and synthesis settings are preserved when evicted audio is regenerated.
+The whole scale can change when predictions are corrected; neither estimated nor
+actual source duration changes with playback rate.
+
+| State | Meaning |
+| --- | --- |
+| `position_frame` | Confirmed output cursor. A seek can move it while paused or buffering. |
+| `seekable_ranges` | In on-demand mode, the full planned document `[0, total)`. In full-recording mode, actual retained audio. The endpoint is a valid cursor. |
+| `buffered_ranges` | Actual ready cached audio; potentially disjoint. Partial/cancelled reader segments are never advertised as ready. |
+| `buffered_until_frame` | End of the contiguous cached interval containing the cursor; the cursor itself if uncached. |
+| `seeking`, `seek_target_frame` | Accepted seek still awaiting output rebasing or target audio. |
+| `estimated_frames` | Whole-document estimate, refined by known actual lengths. Null before planning. |
+| `duration_frames` | Actual document duration once every segment's length has been measured, even if some PCM was later evicted. |
+| `recording_complete` | Every segment's PCM is currently retained and can supply a complete recording. |
+
+A scrubber uses `duration_frames ?? estimated_frames` for its scale and
+`seek_target_frame ?? position_frame` for its pending cursor. Buffered ranges
+are a separate overlay, never a total-duration estimate or an on-demand seek
+restriction. An invalid target leaves playback unchanged. No-retention, released
+or closed storage exposes empty navigable ranges.
+
+## Cache and generation limits
+
+`Tts::configured` accepts `RetentionOptions` separately from inference and output
+limits. Defaults are **128 MiB of PCM and 128 stores per Tts**, shared across
+controllers and caller-retained completed handles. A full recording uses one
+store; each cached reader segment uses one store. `retention_stats` reports
+current/peak PCM bytes and store counts, excluding filesystem and RSS overhead.
+Limits are configurable up to 16 GiB and 4,096 stores.
+
+The byte quota holds about **12 minutes 41 seconds** at 44,100 Hz mono Float32
+(176,400 PCM bytes/second); the store-count quota can bind earlier. On-demand mode
+evicts the least recently used segments of its own document, protecting the
+currently selected/presented segment. It does not evict other documents or full
+recordings. Replays share the document cache and do not copy PCM. Actual duration
+measurements survive eviction. Anonymous temporary files close/delete on final
+release or owner closure.
+
+A segment must fit in the cache. Automatic prefetch defers if the protected
+current segment occupies the remaining quota. If the required destination cannot
+fit, or other retained recordings hold the quota, the request fails with a typed
+retention error. Quota and I/O failures never expose incomplete cached audio.
+Full-recording mode does not evict history; exhausting its quota fails the request.
+
+The **two-second source-frame lookahead** (88,200 frames by default) remains the
+horizon for automatically starting the next segment during playback. Once started,
+a whole bounded model segment drains into storage independently of pause/output
+capacity; ready audio can extend beyond that horizon. An explicit on-demand seek
+selects a new position anywhere in the document and generates there. It does not
+increase the output queue or generate everything between the old and new cursor.
+
+Native events, synthesis chunks, pending output and the audio driver have
+separate finite bounds. Cache I/O is performed in bounded chunks on the controller
+worker, never on the native audio callback. Only one segment job per reader is
+in flight, through the shared inference queue. Paused readers stop automatic
+generation beyond their horizon and release the inference lane between jobs.
+
+A request is still limited to **64 KiB of raw UTF-8 text** before admission.
+The cache allows a document longer than its PCM budget, but this is not a new
+whole-book ingestion API: applications must split larger text into requests.
+
+## Completion, replay and export
+
+`Speech.done` is immutable and belongs to one accepted playback request. Seeking
+within active speech preserves it. Reaching the end after skipping passages can
+complete playback with an incomplete recording. In reader mode, `Completion.frames`
+counts the measured frames of unique generated document segments, not an invented
+full duration or the number of frames listened to.
+
+`replay_from(frame, options, mode)` returns a **new Speech** and outcome after
+successful completion. Reader replay shares the original document and cache and
+can regenerate missing segments. Full-recording replay shares retained PCM without
+inference. Both keep original source coordinates; observe the new handle's state.
+
+Previous/next sentence respect original sentence IDs, including sentences split
+into multiple model segments, and return `Boundary` at document ends. In reader
+mode, active navigation returns `Seeked` even if destination audio must be generated.
+In full-recording mode, navigation outside retained audio returns `Started(new_speech)`
+for an original-plan suffix and ends the old handle with `Navigation` cancellation.
+That legacy suffix starts its timeline at zero but preserves original IDs, seeds
+and source ranges. Older handles cannot navigate over another current request.
+
+`Tts::write_speech` requires completed playback with all PCM currently cached.
+It rejects skipped/evicted coverage before creating an output file; it never
+exports holes as silence. A complete export pins its segment files under the same
+quota while the incremental writer runs. For an independent complete export, use
+`render_to_file`, which explicitly generates the whole request.
+
+`dispose()` cancels/joins this request and releases its storage reference; other
+replay handles retain their shared references. Closing Tts invalidates all owned
+retention, including completed handles, while preserving outcomes and all
+caller-owned clips/export files.
 
 ## Evidence
+
+The [on-demand seek qualification](../tests/fixtures/developer-api/on-demand-seek.json)
+records source hashes and the tested commands. Portable reader regressions cover
+direct uncached seeks, disjoint intervals, latest-seek cancellation during a blocked
+native call, cache eviction/regeneration, duration corrections, and a seek accepted
+during final drain. They also check close/quiescence, full export PCM, inference
+availability while paused, and reading a document with room for only one segment.
+The real prepared-segment test generates in order `2, 0, 1, 2`, compares every
+Float32 bit with linear synthesis and checks that duration predictions are not
+repeated. Real Python/Go and muted macOS Flutter tests exercise far seeks and cached
+returns through the public APIs. These checks qualify the branch's Core ML INT4
+backend on the tested Mac, not every backend or device.
+
+```sh
+MLSR_TEST_BUNDLE=/absolute/verified/model cargo test --locked -p mlsr --all-features \
+  real_prepared_segments_match_linear_synthesis -- --ignored --nocapture
+```
+
+Earlier full-recording and duration-planning evidence follows; its no-eviction
+and retained-only seek behavior applies to the default full-recording policy.
 
 Portable tests cover partial/completed generation seeks, invalid-seek preservation,
 paused segment admission, full retention with a full output queue, forward and
@@ -114,7 +181,8 @@ per segment, frame-limit failure before audio, and final-length correction. The
 Flutter widget tests cover both timeline scales, buffer appends, unknown duration,
 unavailable targets and replacement during a held drag. A paused seek within the
 same text segment must also publish a new state revision; the controller keeps
-its previous snapshot until the output clock confirms the new cursor.
+its previous position until the output clock confirms the new cursor, while
+publishing seek admission separately.
 
 The real duration test compares every PCM sample against the incremental path
 for English/M1 and Korean/F1 at raw synthesis speeds 0.84, 1.05 and 1.26. It also

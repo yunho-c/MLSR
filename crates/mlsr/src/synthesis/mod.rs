@@ -17,6 +17,16 @@ use std::{
 mod queue;
 pub(crate) use queue::Queue;
 
+#[derive(Clone)]
+enum Work {
+    Stream,
+    Prepare,
+    Segment {
+        prepared: Arc<crate::engine::PreparedSpeech>,
+        index: usize,
+    },
+}
+
 /// Finite request and PCM budgets. In addition to the consumer queue, the engine
 /// has its separately bounded native event queue and one bounded model segment.
 #[derive(Clone, Copy, Debug)]
@@ -108,20 +118,23 @@ struct State {
     native: Option<Arc<job::Job>>,
     native_finished: bool,
     generation_limit: Option<u64>,
+    prepared: Option<Arc<crate::engine::PreparedSpeech>>,
 }
 pub(crate) struct Control {
     id: u64,
     request: Request,
     limits: JobOptions,
+    work: Work,
     state: Mutex<State>,
     changed: Condvar,
 }
 impl Control {
-    fn new(id: u64, request: Request, limits: JobOptions) -> Arc<Self> {
+    fn new(id: u64, request: Request, limits: JobOptions, work: Work) -> Arc<Self> {
         Arc::new(Self {
             id,
             request,
             limits,
+            work,
             changed: Condvar::new(),
             state: Mutex::new(State {
                 snapshot: SynthesisSnapshot {
@@ -146,6 +159,7 @@ impl Control {
                 native: None,
                 native_finished: false,
                 generation_limit: None,
+                prepared: None,
             }),
         })
     }
@@ -238,7 +252,9 @@ impl Control {
         }
         match report.outcome {
             job::Outcome::Completed => {
-                state.snapshot.duration_frames = Some(report.frames);
+                if !matches!(self.work, Work::Prepare) {
+                    state.snapshot.duration_frames = Some(report.frames);
+                }
                 state.snapshot.phase = SynthesisPhase::Generated;
                 if state.audio.is_empty() {
                     self.complete(&mut state, Outcome::Completed);
@@ -343,6 +359,20 @@ impl SynthesisJob {
     }
     pub(crate) fn chunk_frames(&self) -> usize {
         self.lease.control.limits.chunk_frames()
+    }
+    pub(crate) fn prepared_speech(&self) -> Option<Arc<crate::engine::PreparedSpeech>> {
+        lock(&self.lease.control.state).prepared.clone()
+    }
+    pub(crate) fn segment_job(
+        &self,
+        prepared: Arc<crate::engine::PreparedSpeech>,
+        index: usize,
+    ) -> Result<Self> {
+        self.lease
+            .queue
+            .upgrade()
+            .ok_or(Error::Closed)?
+            .create_work(self.request().clone(), Work::Segment { prepared, index })
     }
     /// Playback owns this moving source horizon. It gates starting segments,
     /// never consumption of their already-generated PCM.

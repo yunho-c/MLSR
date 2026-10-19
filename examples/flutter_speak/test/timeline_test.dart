@@ -5,6 +5,7 @@ import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_speak/main.dart';
 import 'package:mlsr_speak/speech_controller.dart';
 import 'package:mlsr_speak/speech_timeline.dart';
+import 'package:mlsr_speak/buffered_track.dart';
 
 class _Range implements IndexRange {
   @override
@@ -24,6 +25,14 @@ class _Snapshot implements SpeechState {
   @override
   final List<IndexRange> seekableRanges;
   @override
+  final List<IndexRange> bufferedRanges;
+  @override
+  final bool seeking;
+  @override
+  final int? seekTargetFrame;
+  @override
+  bool get recordingComplete => false;
+  @override
   final PlaybackPhase playback;
   _Snapshot({
     this.requestId = 1,
@@ -34,7 +43,11 @@ class _Snapshot implements SpeechState {
     this.format = const AudioFormat(sampleRate: 44100, channels: 1),
     this.playback = PlaybackPhase.playing,
     List<IndexRange>? ranges,
-  }) : seekableRanges = ranges ?? [_Range(0, bufferedUntilFrame)];
+    List<IndexRange>? buffered,
+    this.seeking = false,
+    this.seekTargetFrame,
+  }) : seekableRanges = ranges ?? [_Range(0, bufferedUntilFrame)],
+       bufferedRanges = buffered ?? [_Range(0, bufferedUntilFrame)];
   @override
   SpeechTextRange? get activeTextRange => null;
   @override
@@ -203,6 +216,66 @@ void main() {
     await tester.pump();
     expect(controller.seeks, isEmpty);
   });
+
+  testWidgets(
+    'unbuffered targets are accepted and the pending destination stays visible',
+    (tester) async {
+      final controller = await _showPlayer(
+        tester,
+        _Snapshot(
+          ranges: [_Range(0, 60 * 44100)],
+          buffered: [_Range(0, 10 * 44100), _Range(40 * 44100, 45 * 44100)],
+        ),
+      );
+      var slider = seekSlider(tester);
+      slider.onChangeStart!(slider.value);
+      slider.onChanged!(30 * 44100);
+      await tester.pump();
+      expect(seekSlider(tester).label, contains('Prepare on seek'));
+      seekSlider(tester).onChangeEnd!(30 * 44100);
+      expect(controller.seeks, [30 * 44100]);
+      controller.update(
+        _Snapshot(
+          ranges: [_Range(0, 60 * 44100)],
+          buffered: [_Range(0, 10 * 44100), _Range(40 * 44100, 45 * 44100)],
+          seeking: true,
+          seekTargetFrame: 30 * 44100,
+          playback: PlaybackPhase.paused,
+        ),
+      );
+      await tester.pump();
+      slider = seekSlider(tester);
+      expect(
+        slider.value,
+        30 * 44100,
+        reason: 'do not snap back while generation is pending',
+      );
+      expect(find.textContaining('Preparing selection'), findsOneWidget);
+      final track =
+          SliderTheme.of(
+                tester.element(find.byKey(const Key('seek'))),
+              ).trackShape
+              as BufferedTrack;
+      expect(track.ranges.map((range) => [range.start, range.end]), [
+        [0, 10 * 44100],
+        [40 * 44100, 45 * 44100],
+      ]);
+      expect(controller.timeline.isBuffered(30 * 44100), isFalse);
+      expect(controller.timeline.canSeek(30 * 44100), isTrue);
+      controller.update(
+        _Snapshot(
+          positionFrame: 30 * 44100,
+          ranges: [_Range(0, 60 * 44100)],
+          buffered: [_Range(0, 10 * 44100), _Range(29 * 44100, 35 * 44100)],
+          playback: PlaybackPhase.paused,
+        ),
+      );
+      await tester.pump();
+      expect(seekSlider(tester).value, 30 * 44100);
+      expect(controller.paused, isTrue);
+      expect(controller.timeline.isBuffered(30 * 44100), isTrue);
+    },
+  );
 
   test(
     'source sample rate and exact retained intervals govern presentation',

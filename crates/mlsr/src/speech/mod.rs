@@ -16,6 +16,8 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
+mod document;
+mod reader;
 mod worker;
 
 /// Repeated speech calls have explicit, controller-scoped scheduling semantics.
@@ -27,14 +29,16 @@ pub enum SpeakMode {
     /// Append after the current and queued speech. Pause does not skip the current.
     Enqueue,
 }
-/// Sentence navigation distinguishes a retained seek from a new playback request.
+/// Sentence navigation distinguishes an in-session seek from a new request.
 pub enum Navigation {
-    /// Existing speech seeks without inference or changing its request identity.
+    /// Existing speech keeps its identity. Reader mode may generate the target;
+    /// full-recording mode seeks only already retained audio.
     Seeked {
         /// Original source-audio frame at the sentence start.
         frame: u64,
     },
-    /// A new handle for ungenerated text or replay of a completed recording.
+    /// A new handle for completed speech replay, or for ungenerated text in
+    /// full-recording mode. Reader navigation keeps an active handle's identity.
     Started(Speech),
     /// No previous/next spoken sentence exists in the original plan.
     Boundary,
@@ -47,6 +51,7 @@ pub struct SpeechOptions {
     paused: bool,
     retain_audio: bool,
     lookahead_frames: usize,
+    on_demand: bool,
 }
 impl Default for SpeechOptions {
     fn default() -> Self {
@@ -56,6 +61,7 @@ impl Default for SpeechOptions {
             paused: false,
             retain_audio: true,
             lookahead_frames: 88200,
+            on_demand: false,
         }
     }
 }
@@ -91,7 +97,8 @@ impl SpeechOptions {
     pub fn paused(self) -> bool {
         self.paused
     }
-    /// Enable full temporary PCM retention (default true) or omit seek storage.
+    /// Enable temporary PCM retention (default true) or omit seek storage.
+    /// The default retains a full recording; on-demand mode uses an evicting cache.
     pub fn with_retention(mut self, retain: bool) -> Self {
         self.retain_audio = retain;
         self
@@ -100,9 +107,21 @@ impl SpeechOptions {
     pub fn retains_audio(self) -> bool {
         self.retain_audio
     }
+    /// Enable full-timeline seeking and a regenerable segment cache. This is
+    /// independent of full-recording retention: unused cached segments may be
+    /// evicted under the shared quotas. Requires retention and output rebasing.
+    pub fn with_on_demand_seeking(mut self, enabled: bool) -> Self {
+        self.on_demand = enabled;
+        self
+    }
+    /// Whether seeks can synthesize unbuffered segments on demand.
+    pub fn on_demand_seeking(self) -> bool {
+        self.on_demand
+    }
     /// Start another model segment only when its source start is within this
     /// horizon ahead of presentation. Already-started segments are retained in
-    /// full, so seekable audio may extend past it by one bounded model segment.
+    /// full, so buffered audio may extend past it by one bounded model segment.
+    /// Explicit on-demand seeks choose a new position independently of this bound.
     /// PCM queues, output buffering and retained byte quotas are independent.
     pub fn with_lookahead(mut self, frames: usize) -> Result<Self> {
         if !(1..=44100 * 30).contains(&frames) {
@@ -118,6 +137,14 @@ impl SpeechOptions {
         self.lookahead_frames
     }
     fn validate(self, caps: OutputCapabilities) -> Result<()> {
+        if self.on_demand && !self.retain_audio {
+            return Err(Error::InvalidOptions(
+                "on-demand seeking requires a retained cache".into(),
+            ));
+        }
+        if self.on_demand && !caps.rebase {
+            return Err(Error::UnsupportedCapability("on-demand seek/rebase"));
+        }
         validate_rate(self.playback_rate, caps)?;
         if self.paused && !caps.pause_resume {
             return Err(Error::UnsupportedCapability("pause/resume"));
@@ -181,7 +208,7 @@ pub struct ActiveTextRange {
 pub struct SpeechSnapshot {
     /// Monotonic state revision.
     pub revision: u64,
-    /// Stable request identity; replay gets a new identity without new inference.
+    /// Stable request identity; completed-speech replay gets a new identity.
     pub request_id: u64,
     /// Independent generation phase.
     pub synthesis: SynthesisPhase,
@@ -189,13 +216,23 @@ pub struct SpeechSnapshot {
     pub playback: PlaybackPhase,
     /// Source PCM format.
     pub format: crate::audio::AudioFormat,
-    /// Presented media position, frozen while paused.
+    /// Confirmed output cursor; paused playback freezes it, but seeking can move
+    /// it even while destination audio is being prepared.
     pub position_frame: u64,
     /// End of contiguous generated audio available ahead of the position.
     pub buffered_until_frame: u64,
-    /// Half-open retained source intervals. Their end is also a valid seek point.
-    /// Empty when retention is disabled, released, or the owner is closed.
+    /// Navigable source intervals. Reader mode exposes the complete planned
+    /// timeline; full-retention mode exposes actual retained PCM. Endpoints are
+    /// valid cursors. Empty before planning or when seeking storage is unavailable.
     pub seekable_ranges: Vec<std::ops::Range<u64>>,
+    /// Actual ready audio, possibly disjoint in an on-demand reader.
+    pub buffered_ranges: Vec<std::ops::Range<u64>>,
+    /// An accepted seek is waiting for output rebasing or destination audio.
+    pub seeking: bool,
+    /// Pending destination, separate from the last confirmed playback position.
+    pub seek_target_frame: Option<u64>,
+    /// Every segment is currently retained; completed speech can be exported.
+    pub recording_complete: bool,
     /// Whole-request estimate, if available.
     pub estimated_frames: Option<u64>,
     /// Authoritative final generated duration, independent of output drain.
@@ -222,7 +259,14 @@ struct Desired {
 struct State {
     snapshot: SpeechSnapshot,
     desired: Desired,
-    seek_to: Option<u64>,
+    seek_to: Option<Seek>,
+    seek_serial: u64,
+}
+#[derive(Clone, Copy)]
+struct Seek {
+    frame: u64,
+    anchor: Option<document::Cursor>,
+    serial: u64,
 }
 struct Control {
     id: u64,
@@ -233,6 +277,7 @@ struct Control {
     markers: Mutex<Vec<(u64, u32)>>,
     state: Mutex<State>,
     changed: Condvar,
+    reader: Option<document::Reader>,
 }
 impl Control {
     fn new(
@@ -242,6 +287,7 @@ impl Control {
         retained: Option<Arc<Store>>,
         replay_start: Option<u64>,
         markers: Vec<(u64, u32)>,
+        reader: Option<document::Reader>,
     ) -> Arc<Self> {
         if retained.is_some() && replay_start.is_none() {
             job.pace_generation(options.lookahead_frames as u64);
@@ -257,6 +303,10 @@ impl Control {
                     position_frame: replay_start.unwrap_or(0),
                     buffered_until_frame: 0,
                     seekable_ranges: Vec::new(),
+                    buffered_ranges: Vec::new(),
+                    seeking: false,
+                    seek_target_frame: None,
+                    recording_complete: false,
                     estimated_frames: None,
                     duration_frames: None,
                     playback_rate: options.playback_rate,
@@ -272,6 +322,7 @@ impl Control {
                     volume: options.volume,
                 },
                 seek_to: None,
+                seek_serial: 0,
             }),
             id,
             job,
@@ -280,6 +331,7 @@ impl Control {
             lookahead_frames: options.lookahead_frames,
             markers: Mutex::new(markers),
             changed: Condvar::new(),
+            reader,
         })
     }
     fn id(&self) -> u64 {
@@ -291,10 +343,31 @@ impl Control {
     }
     fn finish(&self, outcome: Outcome, playback: PlaybackPhase) {
         let mut state = lock(&self.state);
+        self.finish_locked(&mut state, outcome, playback);
+    }
+    fn finish_reader(&self, serial: u64) -> bool {
+        let mut state = lock(&self.state);
+        if state.seek_serial != serial {
+            return false;
+        }
+        self.finish_locked(&mut state, Outcome::Completed, PlaybackPhase::Ended);
+        true
+    }
+    fn finish_locked(&self, state: &mut State, outcome: Outcome, playback: PlaybackPhase) {
         if state.snapshot.completion.is_some() {
             return;
         }
-        state.snapshot.synthesis = self.job.snapshot().phase;
+        if self.reader.is_none() {
+            state.snapshot.synthesis = self.job.snapshot().phase;
+        }
+        let generated_frames = self.reader.as_ref().map_or_else(
+            || self.job.snapshot().generated_frames,
+            |reader| {
+                reader
+                    .document()
+                    .map_or(0, |doc| doc.view().timeline.generated_frames())
+            },
+        );
         let (outcome, playback) = match state.snapshot.cancellation {
             Some(reason) => (Outcome::Cancelled { reason }, PlaybackPhase::Stopped),
             None => (outcome, playback),
@@ -303,15 +376,22 @@ impl Control {
             // Failed/cancelled recordings cannot be replayed. Release this
             // request's reference before done; other replay handles own theirs.
             lock(&self.retained).take();
+            if let Some(reader) = &self.reader {
+                reader.release();
+            }
             state.snapshot.seekable_ranges.clear();
+            state.snapshot.buffered_ranges.clear();
+            state.snapshot.recording_complete = false;
         }
         state.snapshot.playback = playback;
+        state.snapshot.seeking = false;
+        state.snapshot.seek_target_frame = None;
         state.snapshot.completion = Some(Completion {
             request_id: self.id(),
-            frames: self.job.snapshot().generated_frames,
+            frames: generated_frames,
             outcome,
         });
-        self.publish(&mut state);
+        self.publish(state);
     }
     fn cancel(&self, reason: CancelReason) {
         let (queued, reason) = {
@@ -323,7 +403,7 @@ impl Control {
             self.publish(&mut state);
             (state.snapshot.playback == PlaybackPhase::Queued, reason)
         };
-        self.job.cancel_with(reason);
+        self.cancel_jobs(reason);
         if queued {
             let reason = lock(&self.state)
                 .snapshot
@@ -331,6 +411,38 @@ impl Control {
                 .expect("cancel reason");
             self.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
         }
+    }
+    fn cancel_jobs(&self, reason: CancelReason) {
+        self.job.cancel_with(reason);
+        if let Some(reader) = &self.reader {
+            reader.cancel(reason);
+        }
+    }
+    fn join_jobs(&self) {
+        while self.job.wait(Duration::from_millis(5)).is_none() {}
+        if let Some(reader) = &self.reader {
+            reader.join();
+        }
+    }
+    fn request_seek(
+        &self,
+        state: &mut State,
+        frame: u64,
+        anchor: Option<document::Cursor>,
+    ) -> Result<()> {
+        state.seek_serial = state
+            .seek_serial
+            .checked_add(1)
+            .ok_or_else(|| Error::WorkerFailed("seek revisions exhausted".into()))?;
+        state.seek_to = Some(Seek {
+            frame,
+            anchor,
+            serial: state.seek_serial,
+        });
+        state.snapshot.seeking = true;
+        state.snapshot.seek_target_frame = Some(frame);
+        self.publish(state);
+        Ok(())
     }
 }
 struct Gate {
@@ -405,12 +517,26 @@ impl SpeechController {
         self.owner.validate(options)?;
         let mut gate = lock(&self.owner.shared.gate);
         self.owner.admit(&gate, request.text().len())?;
-        let job = self.owner.queue.create(request)?;
-        let retained = options
-            .retain_audio
+        let job = if options.on_demand {
+            self.owner.queue.prepare(request)?
+        } else {
+            self.owner.queue.create(request)?
+        };
+        let retained = (options.retain_audio && !options.on_demand)
             .then(|| self.owner.retention.create(job.snapshot().format))
             .transpose()?;
-        let control = Control::new(job.clone(), job.id(), options, retained, None, Vec::new());
+        let reader = options
+            .on_demand
+            .then(|| document::Reader::new(self.owner.retention.clone()));
+        let control = Control::new(
+            job.clone(),
+            job.id(),
+            options,
+            retained,
+            None,
+            Vec::new(),
+            reader,
+        );
         Ok(self.owner.submit(&mut gate, control, mode))
     }
     /// Output capability metadata without opening the audio device.
@@ -524,6 +650,31 @@ impl Speech {
     /// Latest snapshot independent of any state subscription.
     pub fn snapshot(&self) -> SpeechSnapshot {
         let mut state = lock(&self.control.state);
+        if let Some(reader) = &self.control.reader {
+            let previous = state.snapshot.clone();
+            if let Some(document) = reader.document().filter(|d| d.available()) {
+                let view = document.view();
+                state.snapshot.seekable_ranges =
+                    std::iter::once(0..view.timeline.total()).collect();
+                state.snapshot.buffered_ranges = view.ranges.clone();
+                state.snapshot.buffered_until_frame = view
+                    .ranges
+                    .iter()
+                    .find(|r| r.contains(&state.snapshot.position_frame))
+                    .map_or(state.snapshot.position_frame, |r| r.end);
+                state.snapshot.recording_complete = view.complete;
+                state.snapshot.estimated_frames = Some(view.timeline.total());
+                state.snapshot.duration_frames = view.timeline.duration();
+            } else {
+                state.snapshot.seekable_ranges.clear();
+                state.snapshot.buffered_ranges.clear();
+                state.snapshot.recording_complete = false;
+            }
+            if previous != state.snapshot {
+                self.control.publish(&mut state);
+            }
+            return state.snapshot.clone();
+        }
         let end = lock(&self.control.retained)
             .as_ref()
             .map_or(0, |s| s.frames());
@@ -533,7 +684,12 @@ impl Speech {
             std::iter::once(0..end).collect()
         };
         if state.snapshot.seekable_ranges != ranges {
+            state.snapshot.buffered_ranges = ranges.clone();
             state.snapshot.seekable_ranges = ranges;
+            state.snapshot.recording_complete = state
+                .snapshot
+                .duration_frames
+                .is_some_and(|frames| frames == end && end > 0);
             self.control.publish(&mut state);
         }
         state.snapshot.clone()
@@ -552,9 +708,11 @@ impl Speech {
             owner.cancel(&self.control, CancelReason::Requested);
         }
     }
-    /// Flush/rebase a running request within retained PCM; paused seeks remain
-    /// paused and never regenerate audio. Admission returns immediately; state
-    /// confirms the applied frame. Invalid seeks leave the position unchanged.
+    /// Flush/rebase a running request. Reader mode accepts the full planned
+    /// timeline and generates missing target audio; full-retention mode requires
+    /// retained PCM. Paused seeks stay paused. Admission returns immediately;
+    /// `seeking` and `seek_target_frame` distinguish pending work from application.
+    /// Invalid seeks leave the position unchanged.
     /// For a completed recording use replay_from for a new immutable outcome.
     pub fn seek(&self, frame: u64) -> Result<()> {
         let owner = self.owner.upgrade().ok_or(Error::Closed)?;
@@ -565,6 +723,19 @@ impl Speech {
         if state.snapshot.completion.is_some() || state.snapshot.cancellation.is_some() {
             return Err(Error::Closed);
         }
+        if let Some(reader) = &self.control.reader {
+            let document = reader.document().filter(|d| d.available()).ok_or_else(|| {
+                Error::InvalidOptions("document duration plan is not ready".into())
+            })?;
+            let view = document.view();
+            let cursor = view.timeline.locate(frame).ok_or(Error::InvalidSeek {
+                frame,
+                available_end: view.timeline.total(),
+            })?;
+            self.control.request_seek(&mut state, frame, Some(cursor))?;
+            owner.shared.changed.notify_all();
+            return Ok(());
+        }
         let end = lock(&self.control.retained)
             .as_ref()
             .map_or(0, |s| s.frames());
@@ -574,12 +745,13 @@ impl Speech {
                 available_end: end,
             });
         }
-        state.seek_to = Some(frame);
+        self.control.request_seek(&mut state, frame, None)?;
         owner.shared.changed.notify_all();
         Ok(())
     }
-    /// Replay a completed recording from retained PCM without inference or a
-    /// second disk copy. A new Speech identity/done preserves the original outcome.
+    /// Replay completed speech with a new identity/done. Full-retention mode
+    /// shares its recording without inference; reader mode shares its document
+    /// and cache, regenerating missing targets. The original outcome is immutable.
     pub fn replay_from(
         &self,
         frame: u64,
@@ -587,6 +759,11 @@ impl Speech {
         mode: SpeakMode,
     ) -> Result<Speech> {
         let owner = self.owner.upgrade().ok_or(Error::Closed)?;
+        let options = if self.control.reader.is_some() {
+            options.with_on_demand_seeking(true)
+        } else {
+            options
+        };
         owner.validate(options)?;
         let mut gate = lock(&owner.shared.gate);
         owner.admit(&gate, self.control.job.request().text().len())?;
@@ -599,6 +776,29 @@ impl Speech {
             ));
         }
         let retained = lock(&self.control.retained).clone();
+        if let Some(reader) = &self.control.reader {
+            let document = reader
+                .document()
+                .filter(|d| d.available())
+                .ok_or(Error::Closed)?;
+            let view = document.view();
+            if frame > view.timeline.total() {
+                return Err(Error::InvalidSeek {
+                    frame,
+                    available_end: view.timeline.total(),
+                });
+            }
+            let control = Control::new(
+                self.control.job.clone(),
+                owner.queue.reserve_id()?,
+                options.with_on_demand_seeking(true),
+                None,
+                Some(frame),
+                Vec::new(),
+                Some(reader.fork()),
+            );
+            return Ok(owner.submit(&mut gate, control, mode));
+        }
         let end = retained.as_ref().map_or(0, |s| s.frames());
         if end == 0 || frame > end {
             return Err(Error::InvalidSeek {
@@ -614,6 +814,7 @@ impl Speech {
             retained,
             Some(frame),
             lock(&self.control.markers).clone(),
+            None,
         );
         Ok(owner.submit(&mut gate, control, mode))
     }
@@ -657,9 +858,10 @@ impl Speech {
         }
         self.navigate_to_sentence(id)
     }
-    /// Seek retained sentence audio, or explicitly start a new request from the
-    /// frozen plan. Ungenerated targets cancel only this active request with the
-    /// Navigation reason; pending speech keeps its order behind the new request.
+    /// Navigate the frozen plan. Reader mode seeks within the active document,
+    /// generating missing audio. In full-recording mode, ungenerated targets
+    /// start a new suffix request and cancel the active one with Navigation;
+    /// pending speech keeps its order behind that new request.
     /// An older handle cannot navigate over another current request.
     pub fn navigate_to_sentence(&self, sentence: u32) -> Result<Navigation> {
         let owner = self.owner.upgrade().ok_or(Error::Closed)?;
@@ -685,6 +887,25 @@ impl Speech {
         if !current && !idle {
             return Err(Error::NotCurrentSpeech);
         }
+        if let Some(reader) = &self.control.reader {
+            let document = reader
+                .document()
+                .filter(|d| d.available())
+                .ok_or(Error::Closed)?;
+            let frame = document.view().timeline.start(target as usize);
+            drop(gate);
+            if self.completion().is_some() {
+                let desired = lock(&self.control.state).desired;
+                let options = SpeechOptions::new(desired.rate, desired.volume, desired.paused)?
+                    .with_on_demand_seeking(true)
+                    .with_lookahead(self.control.lookahead_frames)?;
+                return self
+                    .replay_from(frame, options, SpeakMode::Enqueue)
+                    .map(Navigation::Started);
+            }
+            self.seek(frame)?;
+            return Ok(Navigation::Seeked { frame });
+        }
         let retained = lock(&self.control.retained).clone();
         let frame = lock(&self.control.markers)
             .iter()
@@ -707,7 +928,7 @@ impl Speech {
                 if !owner.factory.capabilities().rebase {
                     return Err(Error::UnsupportedCapability("seek/rebase"));
                 }
-                state.seek_to = Some(frame);
+                self.control.request_seek(&mut state, frame, None)?;
                 owner.shared.changed.notify_all();
                 return Ok(Navigation::Seeked { frame });
             }
@@ -718,6 +939,7 @@ impl Speech {
                     paused: state.desired.paused,
                     retain_audio: retained.is_some(),
                     lookahead_frames: self.control.lookahead_frames,
+                    on_demand: false,
                 },
                 state.snapshot.completion.is_some(),
             )
@@ -732,6 +954,7 @@ impl Speech {
                 retained,
                 Some(frame),
                 lock(&self.control.markers).clone(),
+                None,
             )
         } else {
             let request = self.control.job.request().at_sentence(plan, sentence)?;
@@ -740,7 +963,15 @@ impl Speech {
                 .retain_audio
                 .then(|| owner.retention.create(job.snapshot().format))
                 .transpose()?;
-            Control::new(job.clone(), job.id(), options, retained, None, Vec::new())
+            Control::new(
+                job.clone(),
+                job.id(),
+                options,
+                retained,
+                None,
+                Vec::new(),
+                None,
+            )
         };
         self.control.cancel(CancelReason::Navigation);
         gate.pending.push_front(next.clone());
@@ -757,11 +988,14 @@ impl Speech {
         self.cancel();
         while self.wait(Duration::from_millis(50)).is_none() {}
         let retained = lock(&self.control.retained).take();
+        if let Some(reader) = &self.control.reader {
+            reader.release();
+        }
         drop(retained);
         self.snapshot();
         Ok(())
     }
-    pub(crate) fn recording(&self, queue: &Arc<Queue>) -> Result<Arc<Store>> {
+    pub(crate) fn recording(&self, queue: &Arc<Queue>) -> Result<crate::retention::Recording> {
         if !self.control.job.belongs_to(queue) {
             return Err(Error::InvalidOptions(
                 "speech belongs to another Tts owner".into(),
@@ -775,8 +1009,12 @@ impl Speech {
                 "recording export requires completed speech".into(),
             ));
         }
+        if let Some(reader) = &self.control.reader {
+            return reader.document().ok_or(Error::Closed)?.recording();
+        }
         lock(&self.control.retained)
             .clone()
+            .map(crate::retention::Recording::Contiguous)
             .ok_or(Error::UnsupportedCapability(
                 "retained recording is unavailable",
             ))

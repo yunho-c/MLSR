@@ -11,9 +11,13 @@ class SpeechTimeline {
   bool get estimated =>
       state?.durationFrames == null && state?.estimatedFrames != null;
   int get position => state?.positionFrame ?? 0;
+  int get displayPosition => state?.seekTargetFrame ?? position;
   int get bufferedUntil => state?.bufferedUntilFrame ?? 0;
   int get sampleRate => state?.format.sampleRate ?? 44100;
   List<IndexRange> get ranges => state?.seekableRanges ?? const [];
+  List<IndexRange> get bufferedRanges => state?.bufferedRanges ?? const [];
+  bool isBuffered(int frame) =>
+      bufferedRanges.any((range) => frame >= range.start && frame < range.end);
   int get seekableUntil =>
       ranges.fold(0, (end, range) => range.end > end ? range.end : end);
 

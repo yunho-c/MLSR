@@ -33,8 +33,8 @@ pub(super) fn run(shared: Arc<Shared>, factory: Arc<dyn OutputFactory>, policy: 
             controls
         };
         for control in controls {
-            control.job.cancel();
-            while control.job.wait(TICK).is_none() {}
+            control.cancel_jobs(CancelReason::Requested);
+            control.join_jobs();
             control.finish(
                 Outcome::Failed {
                     error: Failure::new(
@@ -73,7 +73,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
         match result {
             Ok(()) => {}
             Err(error) => {
-                control.job.cancel();
+                control.cancel_jobs(CancelReason::Requested);
                 let cancelled = lock(&control.state).snapshot.cancellation;
                 // Cancellation can race with claiming the synthesis consumer.
                 // It does not imply a broken native graph. Flush that graph and
@@ -93,7 +93,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
                 {
                     let _ = old.flush(next);
                 }
-                while control.job.wait(TICK).is_none() {}
+                control.join_jobs();
                 let cancelled = lock(&control.state).snapshot.cancellation;
                 if let Some(reason) = cancelled {
                     control.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
@@ -110,7 +110,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
     }
     // Native graph and buffers are released on this same output thread.
 }
-fn advance(epoch: &mut u64) -> Result<u64> {
+pub(super) fn advance(epoch: &mut u64) -> Result<u64> {
     *epoch = epoch
         .checked_add(1)
         .ok_or_else(|| Error::Output("playback epochs exhausted".into()))?;
@@ -124,6 +124,9 @@ fn play(
     output: &mut Option<Box<dyn AudioOutput>>,
     epoch: &mut u64,
 ) -> Result<()> {
+    if control.reader.is_some() {
+        return super::reader::play(shared, control, factory, policy, output, epoch);
+    }
     let cancelled = lock(&control.state).snapshot.cancellation;
     if let Some(reason) = cancelled {
         control.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
@@ -176,6 +179,7 @@ fn play(
         apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
         let seek = lock(&control.state).seek_to.take();
         if let Some(frame) = seek {
+            let frame = frame.frame;
             current_epoch = advance(epoch)?;
             output.flush(current_epoch)?;
             output.begin(
@@ -193,7 +197,9 @@ fn play(
         // Apply generation pacing at the new cursor, but keep the previous
         // published position until publish() can detect and notify the change.
         // Otherwise a paused seek within one text segment has no new revision.
-        let position = seek.unwrap_or_else(|| lock(&control.state).snapshot.position_frame);
+        let position = seek
+            .map(|s| s.frame)
+            .unwrap_or_else(|| lock(&control.state).snapshot.position_frame);
         pump(
             control,
             &mut playback,
@@ -228,6 +234,14 @@ fn play(
                 apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
             }
             publish(control, &playback, &snapshot);
+            if let Some(seek) = seek {
+                let mut state = lock(&control.state);
+                if state.seek_serial == seek.serial {
+                    state.snapshot.seeking = false;
+                    state.snapshot.seek_target_frame = None;
+                    control.publish(&mut state);
+                }
+            }
             if playback.ended_input && snapshot.drained {
                 let mut state = lock(&control.state);
                 if let Some(frames) = state.snapshot.duration_frames {
@@ -410,6 +424,10 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
     } else {
         std::iter::once(0..end).collect()
     };
+    state.snapshot.buffered_ranges = state.snapshot.seekable_ranges.clone();
+    state.snapshot.recording_complete = synthesis
+        .duration_frames
+        .is_some_and(|frames| end == frames && end > 0);
     if playback.retained.is_some() {
         state.snapshot.buffered_until_frame = end;
     }

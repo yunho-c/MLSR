@@ -126,6 +126,10 @@ class SpeechOptions {
   final double playbackRate, volume;
   final bool paused, retainAudio;
 
+  /// Generate unbuffered seek targets and evict unused cached segments as needed.
+  /// Requires retainAudio. Full recording export is available only while complete.
+  final bool onDemandSeeking;
+
   /// Retained speech starts segments within this source-frame horizon. Each
   /// admitted segment is retained in full, even past it. Output limits are separate.
   final int lookaheadFrames;
@@ -134,16 +138,23 @@ class SpeechOptions {
     this.volume = 1,
     this.paused = false,
     this.retainAudio = true,
+    this.onDemandSeeking = false,
     this.lookaheadFrames = 88200,
   });
-  Map<String, Object?> _values(SpeakMode mode) => {
-    'mode': mode.index,
-    'playbackRate': playbackRate,
-    'volume': volume,
-    'paused': paused,
-    'retainAudio': retainAudio,
-    'lookaheadFrames': _sdkUInt(lookaheadFrames),
-  };
+  Map<String, Object?> _values(SpeakMode mode) {
+    if (onDemandSeeking && !retainAudio) {
+      throw ArgumentError('On-demand seeking requires retainAudio');
+    }
+    return {
+      'mode': mode.index,
+      'playbackRate': playbackRate,
+      'volume': volume,
+      'paused': paused,
+      'retainAudio': retainAudio,
+      'onDemandSeeking': onDemandSeeking,
+      'lookaheadFrames': _sdkUInt(lookaheadFrames),
+    };
+  }
 }
 
 /// Half-open range. The containing field names frames, UTF-8 or UTF-16.
@@ -438,6 +449,9 @@ class SpeechState {
   final PlaybackPhase playback;
   final AudioFormat format;
   final List<IndexRange> seekableRanges;
+  final List<IndexRange> bufferedRanges;
+  final bool seeking, recordingComplete;
+  final int? seekTargetFrame;
   final int? estimatedFrames, durationFrames;
   final double playbackRate, volume;
   final SpeechTextRange? activeTextRange;
@@ -455,6 +469,14 @@ class SpeechState {
       seekableRanges = List<IndexRange>.unmodifiable(
         (data['seekable_ranges'] as List).map(IndexRange._),
       ),
+      bufferedRanges = List<IndexRange>.unmodifiable(
+        ((data['buffered_ranges'] ?? data['seekable_ranges']) as List).map(
+          IndexRange._,
+        ),
+      ),
+      seeking = data['seeking'] as bool? ?? false,
+      seekTargetFrame = data['seek_target_frame'] as int?,
+      recordingComplete = data['recording_complete'] as bool? ?? false,
       estimatedFrames = data['estimated_frames'] as int?,
       durationFrames = data['duration_frames'] as int?,
       playbackRate = (data['playback_rate'] as num).toDouble(),

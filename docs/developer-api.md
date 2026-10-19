@@ -124,7 +124,7 @@ The output accepts bounded PCM and reports available capacity without blocking
 the controller's cancellation path. Native scheduling, not Dart/Go/Python PCM
 round-trips, is the default system playback path.
 
-Pause freezes playback position. For retained speech, lookahead gates the start
+Pause freezes playback position until an explicit seek. For retained speech, lookahead gates the start
 of another model segment; an admitted segment finishes and its complete PCM is
 retained and seekable even while paused or output is full. PCM queues and native
 output remain independently bounded. Resume preserves the current media position.
@@ -148,37 +148,49 @@ test. Existing bundled/offline model delivery and release sandboxing are retaine
 ## Retention, timeline and navigation
 
 Generation lookahead, PCM queues, render collection and disk retention have
-separate finite limits. The initial reader mode retains complete generated audio in an
-owned temporary store under a configurable disk quota. Quota failure is typed;
-there is no implicit eviction or hidden loss of seekability. A no-retention mode
-may expose only its actual available ranges. User output files are not temporary
-store ownership and are never deleted by session cleanup.
+separate finite limits. Default speech retains all generated PCM for recording
+and export, with typed failure on quota exhaustion. Opt-in on-demand seeking
+uses a bounded, evicting segment cache and can generate an uncached destination
+directly. Flutter enables this mode. The default 128 MiB/128-store budget is shared
+across a Tts; each reader segment counts as a store. No-retention speech has no
+seek storage. Caller-owned output files are never deleted by session cleanup.
 
 | Timeline field | Meaning |
 | --- | --- |
-| position | Presented source-audio media position; frozen while paused. |
+| position | Confirmed output cursor; frozen while paused unless explicitly seeking. |
 | bufferedUntil | End of contiguous audio ready to supply ahead of the position. |
-| seekableRanges | Exactly the retained source-audio intervals available for replay. |
+| seekableRanges | Full planned document in on-demand mode; retained intervals in full-recording mode. |
+| bufferedRanges | Actual ready cached audio, possibly disjoint. |
+| seeking / seekTargetFrame | Accepted seek awaiting rebasing or destination audio. |
+| recordingComplete | All document PCM is currently cached; completed playback can be exported. |
 | estimatedDuration | Nullable prediction for the whole request; partial segment sums are not a whole-request estimate. |
 | duration | Authoritative length from final emitted frames, once all output is known. |
 | activeTextRange | Original text corresponding to the presented segment, or the selected paused cursor including frame zero; no fabricated word timestamps. |
 
-Seek is valid only inside retained ranges. A seek outside them returns an explicit
-result without moving playback. Valid seeks flush/invalidate old scheduled audio,
-rebase the output clock and feed the retained store from the requested frame.
-Seeking while paused remains paused. Seeking never re-synthesizes retained PCM.
-The retained endpoint is a valid cursor as well. After playback has completed,
-`replay_from` returns a new `Speech` sharing the recording; the original outcome
-stays immutable and the new `done` represents the replay's actual drain. State
-subscriptions end with their request and callers observe the new replay handle.
+After planning, on-demand seeks accept the entire document timeline. A selected
+time resolves to an original segment/local offset; cached PCM is reused, otherwise
+only the destination segment is generated. Skipped audio is not synthesized. Old
+scheduled audio is flushed, output is rebased, and pause/rate/volume are preserved.
+Latest seek wins, with obsolete inference cancelled at native checkpoints. The UI
+can show a pending target while an in-flight model call finishes. Full-recording
+mode still accepts only retained ranges. Invalid seeks leave playback unchanged;
+the range endpoint is a valid cursor in either mode.
+
+After successful playback, `replay_from` returns a new `Speech` sharing the document
+cache or full recording. The original outcome stays immutable; observe the new
+handle for replay. Reaching the end after skips can complete playback without a
+complete recording. `write_speech` rejects missing/evicted coverage before opening
+an output file; an independent full export uses `render_to_file`.
 
 Previous/next sentence use sentence IDs from the plan, including sentences split
-into several model segments. Navigation to ungenerated text is an explicit new
-speech request from that plan position, with original source mappings and seeds;
-the previous handle terminates as navigation-cancelled. It does not pretend that
-ungenerated text has a known time offset. A cancellable duration-only pass
+into several model segments. On-demand navigation preserves the active speech
+identity even for ungenerated text. Full-recording mode retains its explicit new
+suffix request for ungenerated text, with original source mappings/seeds and a
+navigation-cancelled previous handle. A cancellable duration-only pass
 predicts the complete request before PCM generation and reuses those decisions
-during synthesis; final PCM duration always remains authoritative. The pass
+during synthesis; actual segment lengths refine the estimate. Segment/local-offset
+anchors keep playing and pending selections on the same text during corrections.
+The pass
 adds preparation latency proportional to the number of remaining segments,
 without expanding audio queues or the segment admission horizon. UI timeline
 scales use the final duration or whole-request estimate, with buffered/seekable regions

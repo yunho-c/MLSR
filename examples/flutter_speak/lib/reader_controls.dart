@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'speech_controller.dart';
+import 'buffered_track.dart';
 
 /// Controls send commands to the public SDK. The slider's drag preview is local
 /// UI state; its committed source-frame position is supplied by the SDK.
@@ -25,13 +26,13 @@ class _ReaderControlsState extends State<ReaderControls> {
     final position =
         (timeline.hasTotal
                 ? ((sameRequest ? _seekPreview : null) ??
-                      timeline.position.toDouble())
+                      timeline.displayPosition.toDouble())
                 : 0.0)
             .clamp(0.0, maximum);
     final canSeek =
         timeline.hasTotal &&
         timeline.ranges.isNotEmpty &&
-        (active || controller.canExport);
+        (active || controller.canReplay);
     final original = controller.original;
     final highlight = state?.activeTextRange;
     final spans = highlight == null
@@ -64,16 +65,16 @@ class _ReaderControlsState extends State<ReaderControls> {
             ),
             FilledButton.tonalIcon(
               key: const Key('pause'),
-              onPressed: active || controller.canExport
+              onPressed: active || controller.canReplay
                   ? controller.togglePause
                   : null,
               icon: Icon(
-                controller.paused || controller.canExport
+                controller.paused || controller.canReplay
                     ? Icons.play_arrow_rounded
                     : Icons.pause_rounded,
               ),
               label: Text(
-                controller.canExport
+                controller.canReplay
                     ? 'Replay'
                     : controller.paused
                     ? 'Resume'
@@ -107,54 +108,65 @@ class _ReaderControlsState extends State<ReaderControls> {
             ),
           ],
         ),
-        Slider(
-          key: const Key('seek'),
-          value: position,
-          max: maximum,
-          secondaryTrackValue: timeline.hasTotal
-              ? timeline.seekableUntil.toDouble().clamp(0.0, maximum)
-              : null,
-          label: timeline.canSeek(position.round())
-              ? timeline.time(position.round())
-              : '${timeline.time(position.round())} · Not ready',
-          semanticFormatterCallback: (value) =>
-              '${timeline.time(value.round())} of ${timeline.totalLabel}'
-              '${timeline.canSeek(value.round()) ? '' : ', audio not ready'}',
-          onChangeStart: canSeek
-              ? (value) => setState(() {
-                  _dragRequest = state?.requestId;
-                  _seekPreview = value;
-                  _unavailableRequest = null;
-                })
-              : null,
-          onChanged: canSeek
-              ? (value) {
-                  if (_dragRequest != controller.state?.requestId) return;
-                  setState(() => _seekPreview = value);
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackShape: BufferedTrack(
+              timeline.bufferedRanges,
+              timeline.totalFrames ?? 0,
+            ),
+          ),
+          child: Slider(
+            key: const Key('seek'),
+            value: position,
+            max: maximum,
+            secondaryTrackValue: timeline.hasTotal
+                ? timeline.bufferedUntil.toDouble().clamp(0.0, maximum)
+                : null,
+            label: timeline.canSeek(position.round())
+                ? '${timeline.time(position.round())}${timeline.isBuffered(position.round()) ? '' : ' · Prepare on seek'}'
+                : '${timeline.time(position.round())} · Not ready',
+            semanticFormatterCallback: (value) =>
+                '${timeline.time(value.round())} of ${timeline.totalLabel}'
+                '${timeline.isBuffered(value.round())
+                    ? ''
+                    : timeline.canSeek(value.round())
+                    ? ', will prepare audio'
+                    : ', audio not ready'}',
+            onChangeStart: canSeek
+                ? (value) => setState(() {
+                    _dragRequest = state?.requestId;
+                    _seekPreview = value;
+                    _unavailableRequest = null;
+                  })
+                : null,
+            onChanged: canSeek
+                ? (value) {
+                    if (_dragRequest != controller.state?.requestId) return;
+                    setState(() => _seekPreview = value);
+                  }
+                : null,
+            onChangeEnd: (value) {
+              // Recheck the current document and navigable timeline at release.
+              // Ignore stale drags after replacement or navigation.
+              if (_dragRequest != null &&
+                  _dragRequest == controller.state?.requestId) {
+                if (controller.timeline.canSeek(value.round())) {
+                  controller.seek(value.round());
+                } else {
+                  _unavailableRequest = _dragRequest;
                 }
-              : null,
-          onChangeEnd: (value) {
-            // Recheck the current request and retention at release, rather than
-            // committing a stale drag after replacement or navigation.
-            if (_dragRequest != null &&
-                _dragRequest == controller.state?.requestId) {
-              if (controller.timeline.canSeek(value.round())) {
-                controller.seek(value.round());
-              } else {
-                _unavailableRequest = _dragRequest;
               }
-            }
-            setState(() {
-              _seekPreview = null;
-              _dragRequest = null;
-            });
-          },
+              setState(() {
+                _seekPreview = null;
+                _dragRequest = null;
+              });
+            },
+          ),
         ),
         Text(
           _unavailableRequest != null && _unavailableRequest == state?.requestId
               ? 'Audio at this position is not ready yet.'
-              : '${timeline.durationLabel}'
-                    '${timeline.seekableUntil > 0 ? ' · Ready through ${timeline.time(timeline.seekableUntil)}' : ''}',
+              : '${timeline.durationLabel}${state?.seeking ?? false ? ' · Preparing selection…' : ''}',
           key: const Key('timeline-detail'),
           style: Theme.of(context).textTheme.bodySmall,
         ),

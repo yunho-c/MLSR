@@ -19,9 +19,11 @@ use std::{
 /// Completed recordings retained by callers continue to count until released.
 #[derive(Clone, Copy, Debug)]
 pub struct RetentionOptions {
-    /// Hard total PCM byte quota; defaults to 128 MiB. No implicit eviction.
+    /// Hard total PCM byte quota; defaults to 128 MiB. On-demand readers may
+    /// evict their own cached segments; full recordings are never evicted.
     pub max_total_bytes: u64,
     /// Bound store/file metadata independently of PCM bytes; defaults to 128.
+    /// Each full recording or cached reader segment counts as one store.
     pub max_stores: usize,
 }
 impl Default for RetentionOptions {
@@ -67,6 +69,12 @@ pub(crate) struct Budget {
     state: Mutex<BudgetState>,
 }
 impl Budget {
+    pub(crate) fn options(&self) -> RetentionOptions {
+        self.options
+    }
+    pub(crate) fn is_closed(&self) -> bool {
+        lock(&self.state).closed
+    }
     pub(crate) fn new(options: RetentionOptions) -> Result<Arc<Self>> {
         options.validate()?;
         Ok(Arc::new(Self {
@@ -269,6 +277,40 @@ impl Store {
 impl Drop for Store {
     fn drop(&mut self) {
         self.clear();
+    }
+}
+pub(crate) enum Recording {
+    Contiguous(Arc<Store>),
+    Segments {
+        frames: u64,
+        segments: Vec<(u64, Arc<Store>)>,
+    },
+}
+impl Recording {
+    pub(crate) fn format(&self) -> AudioFormat {
+        match self {
+            Self::Contiguous(store) => store.format(),
+            Self::Segments { segments, .. } => segments[0].1.format(),
+        }
+    }
+    pub(crate) fn read(&self, frame: u64, maximum: usize) -> Result<Option<Audio>> {
+        match self {
+            Self::Contiguous(store) => store.read(frame, maximum),
+            Self::Segments { frames, segments } => {
+                if frame > *frames {
+                    return Err(Error::InvalidSeek {
+                        frame,
+                        available_end: *frames,
+                    });
+                }
+                if frame == *frames {
+                    return Ok(None);
+                }
+                let index = segments.partition_point(|(start, _)| *start <= frame) - 1;
+                let (start, store) = &segments[index];
+                store.read(frame - start, maximum)
+            }
+        }
     }
 }
 fn quota(message: &str) -> Error {
