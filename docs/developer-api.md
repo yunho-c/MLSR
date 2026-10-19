@@ -124,8 +124,10 @@ The output accepts bounded PCM and reports available capacity without blocking
 the controller's cancellation path. Native scheduling, not Dart/Go/Python PCM
 round-trips, is the default system playback path.
 
-Pause freezes playback position. Generation can continue only within bounded
-lookahead, then backpressures. Resume preserves the current media position.
+Pause freezes playback position. For retained speech, lookahead gates the start
+of another model segment; an admitted segment finishes and its complete PCM is
+retained and seekable even while paused or output is full. PCM queues and native
+output remain independently bounded. Resume preserves the current media position.
 Volume is independent of synthesis. Playback-rate changes preserve pitch and the
 source-audio timeline; a 60-second clip remains a 60-second clip at 1.5x. Supported
 rate ranges are advertised and validated. Position comes from the output's media
@@ -145,8 +147,8 @@ test. Existing bundled/offline model delivery and release sandboxing are retaine
 
 ## Retention, timeline and navigation
 
-RAM lookahead, render collection, queued requests and disk retention have separate
-finite limits. The initial reader mode retains complete generated audio in an
+Generation lookahead, PCM queues, render collection and disk retention have
+separate finite limits. The initial reader mode retains complete generated audio in an
 owned temporary store under a configurable disk quota. Quota failure is typed;
 there is no implicit eviction or hidden loss of seekability. A no-retention mode
 may expose only its actual available ranges. User output files are not temporary
@@ -178,8 +180,8 @@ ungenerated text has a known time offset. A cancellable duration-only pass
 predicts the complete request before PCM generation and reuses those decisions
 during synthesis; final PCM duration always remains authoritative. The pass
 adds preparation latency proportional to the number of remaining segments,
-without expanding audio queues or retained lookahead. UI timeline scales use
-the final duration or whole-request estimate, with buffered/seekable regions
+without expanding audio queues or the segment admission horizon. UI timeline
+scales use the final duration or whole-request estimate, with buffered/seekable regions
 shown separately and an explicit unknown-total state while planning.
 Navigation returns an explicit retained seek, new speech handle, or document
 boundary. Pending requests retain their order behind a new navigation request;

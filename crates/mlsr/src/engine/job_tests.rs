@@ -15,6 +15,7 @@ struct Fake {
     reused: Arc<AtomicUsize>,
     planning_gate: Option<(u32, SyncSender<()>, Receiver<()>)>,
     trim_frames: usize,
+    duration_seconds: Option<f32>,
 }
 impl Backend for Fake {
     fn voice_catalog(&self) -> VoiceCatalog {
@@ -45,7 +46,7 @@ impl Backend for Fake {
             }
             None => {
                 self.duration_calls.fetch_add(1, Ordering::SeqCst);
-                SynthesisPlan::from_duration(1., request.options)?
+                SynthesisPlan::from_duration(self.duration_seconds.unwrap_or(1.), request.options)?
             }
         };
         observer.planned(&plan)?;
@@ -84,7 +85,8 @@ impl Backend for Fake {
             let _ = release.recv_timeout(Duration::from_secs(3));
         }
         observer.checkpoint()?;
-        let plan = SynthesisPlan::from_duration(1., request.options)?;
+        let plan =
+            SynthesisPlan::from_duration(self.duration_seconds.unwrap_or(1.), request.options)?;
         observer.planned(&plan)?;
         Ok(plan)
     }
@@ -168,12 +170,16 @@ fn optimized_engines_cancel_recover_and_retain_a_bounded_model_set() {
     }
 }
 pub(crate) fn fake() -> (Engine, Arc<AtomicUsize>) {
+    fake_with_duration(1.)
+}
+pub(crate) fn fake_with_duration(duration_seconds: f32) -> (Engine, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let engine = Engine::with_backend(Box::new(Fake {
         calls: calls.clone(),
         entered: None,
         release: None,
         panic: false,
+        duration_seconds: Some(duration_seconds),
         ..Fake::default()
     }))
     .unwrap();

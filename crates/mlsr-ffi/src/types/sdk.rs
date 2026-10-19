@@ -96,7 +96,9 @@ pub struct MlsrSpeechOptions {
     pub paused: u32,
     /// 0: no retention, 1: retain under the shared disk quota (default).
     pub retain_audio: u32,
-    /// New generated frames ahead of presentation; default 88,200.
+    /// Retained speech segment-start horizon ahead of presentation; default
+    /// 88,200 source frames. An admitted segment is retained in full, so seekable
+    /// audio can extend beyond this horizon. Output and byte quotas are separate.
     pub lookahead_frames: u32,
     /// Must be zero.
     pub reserved: u32,

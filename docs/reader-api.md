@@ -14,14 +14,32 @@ Quota failure is typed (`FailureStage::Retention`); no recording is silently
 evicted. Anonymous temporary files are closed/deleted on last release or owner
 closure. A failed write retires the owned file instead of exposing partial data.
 
-New generation is retained only within `SpeechOptions::lookahead_frames` ahead
-of the presented source position (default 88,200). Paused generation reaches that
-cap and backpressures; retained history behind the cursor remains on disk. The
-native event queue, advanced consumer queue, one pending output chunk and native
-output have separate finite bounds. A backward seek does not permit unlimited
-additional generation. File conversion uses a 16 KiB scratch block and bounded
-PCM reads. Storage/control work is serialized on the controller thread; native
-and filesystem calls do not carry a hard real-time deadline.
+The byte quota is about **12 minutes 41 seconds** at the current 44,100 Hz mono
+Float32 format (176,400 PCM bytes/second), shared across all retained recordings.
+It excludes filesystem overhead. A single request is also limited to **64 KiB of
+raw UTF-8 text**, checked before admission. For whole books, applications must
+split text into requests and release recordings or configure larger storage
+budgets. This API does not automatically page a book or evict its playback
+history. The storage quota is configurable up to 16 GiB and 4,096 recordings.
+
+For retained speech, `SpeechOptions::lookahead_frames` controls **starting the
+next model segment**, with a default horizon of 88,200 source frames (two
+seconds). A segment starts only when its actual source start is before the
+presented position plus that horizon. Once started, its entire generated PCM
+drains into the retained file, independently of pause and output capacity, and
+becomes seekable. Thus a long first segment can be fully seekable while playback
+is paused at zero. Cancellation wakes the segment admission wait.
+
+With forward playback, generation can extend past the horizon by at most one
+bounded model segment (`JobOptions::segment_frames`). All earlier history remains
+on disk, including after a backward seek; the new position governs admission of
+further segments. Duration planning still covers the entire request before PCM.
+The native event queue, advanced consumer queue, one pending output chunk and
+native output have separate finite bounds. No-retention speech uses those queues
+without a retained store. Retention drains in bounded bursts, file conversion
+uses a 16 KiB scratch block, and PCM reads are bounded. Storage/control work is
+serialized on the controller thread; native and filesystem calls do not carry
+a hard real-time deadline.
 
 | Operation | Behavior |
 | --- | --- |
@@ -59,7 +77,8 @@ then reuses each prediction during synthesis. The complete estimate is available
 even while playback is paused or PCM queues are full. Planning retains only
 small duration/shape decisions, bounded by the validated text, and releases each
 segment's temporary native tensors. It adds an upfront predictor pass to first
-audio latency; it does not run the predictor twice or expand PCM lookahead.
+audio latency; it does not run the predictor twice or expand the segment
+admission horizon or PCM queues.
 Cancellation takes effect between predictions and waits for an in-flight call.
 
 `duration_frames` comes from final generated frames and overrides the estimate.
@@ -75,10 +94,19 @@ and leaves playback unchanged when a drag ends outside retained audio.
 ## Evidence
 
 Portable tests cover partial/completed generation seeks, invalid-seek preservation,
-paused lookahead, long sentences, original Unicode ranges, plan reuse, inference-
-free replay, shared storage, replay queue limits, stale-handle navigation, quota
-failure, OS write failure, no-retention behavior and cleanup. They also preserve
-the earlier cancellation/output/scheduler tests.
+paused segment admission, full retention with a full output queue, forward and
+backward seeks beyond lookahead, actual-versus-predicted frame pacing, replacement
+and closure during admission waits, long sentences, original Unicode ranges,
+plan reuse, inference-free replay, shared storage, replay queue limits,
+stale-handle navigation, quota failure, OS write failure, no-retention behavior
+and cleanup. They also preserve the earlier cancellation/output/scheduler tests.
+
+The [segment-retention qualification](../tests/fixtures/developer-api/segment-retention.json)
+records the regression failing before the change and passing afterward. Its
+muted macOS Flutter run retained 199,007 frames (4.51 seconds) while paused at
+zero with the default 88,200-frame generation horizon, then sought to frame
+92,296 without resuming. The native reader test preserves exact suffix PCM,
+and portable tests cover quota failure while paused and the UTF-8 input limit.
 
 Duration-planning regressions check cancellation during an in-flight predictor,
 no partial total publication, estimates under PCM backpressure, one prediction

@@ -319,7 +319,9 @@ typedef struct {
    */
   uint32_t retain_audio;
   /**
-   * New generated frames ahead of presentation; default 88,200.
+   * Retained speech segment-start horizon ahead of presentation; default
+   * 88,200 source frames. An admitted segment is retained in full, so seekable
+   * audio can extend beyond this horizon. Output and byte quotas are separate.
    */
   uint32_t lookahead_frames;
   /**

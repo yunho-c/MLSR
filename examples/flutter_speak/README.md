@@ -61,7 +61,12 @@ is pending, progress is indeterminate and seeking is disabled. The seek track
 shows retained audio separately, and releasing a drag on audio that is not ready
 leaves playback unchanged with an explanation. Buffered audio never substitutes
 for the total length. The native duration pass is cancellable and its predictions
-are reused during synthesis; the default two-second lookahead stays bounded.
+are reused during synthesis. The default two-second lookahead gates starting
+another model segment; completed segments are retained in full and become
+seekable even while paused. Shared temporary storage is capped at 128 MiB by
+default (about 12 minutes 41 seconds of current-format PCM); quota exhaustion
+fails the request without silently evicting history. Input is capped at 64 KiB
+of UTF-8 per request. See the [reader API](../../docs/reader-api.md) for limits.
 
 Export calls `Tts.writeSpeech` for a completed recording, using the shared
 incremental WAV writer. It does not synthesize again or collect a full PCM array

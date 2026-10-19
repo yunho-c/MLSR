@@ -125,6 +125,9 @@ class TtsOptions {
 class SpeechOptions {
   final double playbackRate, volume;
   final bool paused, retainAudio;
+
+  /// Retained speech starts segments within this source-frame horizon. Each
+  /// admitted segment is retained in full, even past it. Output limits are separate.
   final int lookaheadFrames;
   const SpeechOptions({
     this.playbackRate = 1,

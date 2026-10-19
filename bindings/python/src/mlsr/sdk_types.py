@@ -277,6 +277,7 @@ class SpeechOptions:
     volume: float = 1.0
     paused: bool = False
     retain_audio: bool = True
+    # Retained speech segment-start horizon; admitted segments are retained in full.
     lookahead_frames: int = 88200
 
 

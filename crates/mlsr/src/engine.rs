@@ -16,6 +16,8 @@ pub(crate) use job_tests::duration_fake;
 #[cfg(test)]
 pub(crate) use job_tests::fake as fake_engine;
 #[cfg(test)]
+pub(crate) use job_tests::fake_with_duration;
+#[cfg(test)]
 pub(crate) use job_tests::gated_fake as gated_fake_engine;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -278,6 +280,18 @@ impl Engine {
         options: SynthesisOptions,
         limits: JobOptions,
     ) -> Result<Job> {
+        self.start_plan_paced(plan, start_segment, voice, options, limits, None)
+    }
+    /// Internal playback scheduling; ordinary synthesis/rendering is unpaced.
+    pub(crate) fn start_plan_paced(
+        &self,
+        plan: Arc<TextPlan>,
+        start_segment: usize,
+        voice: &str,
+        options: SynthesisOptions,
+        limits: JobOptions,
+        generation_limit: Option<u64>,
+    ) -> Result<Job> {
         if start_segment >= plan.segments().len()
             || self
                 .catalog
@@ -300,7 +314,10 @@ impl Engine {
         })?;
         request.plan = Some((plan, start_segment));
         Ok(Job {
-            control: self.submit(limits, |control| Command::Stream(request, control))?,
+            control: self.submit(limits, |control| {
+                control.set_generation_limit(generation_limit);
+                Command::Stream(request, control)
+            })?,
         })
     }
     fn submit(
@@ -451,6 +468,7 @@ fn stream(
         // A stopped consumer cannot trigger generation of another segment while
         // its queue is full, even before the next duration event is published.
         control.wait_capacity(control.options.chunk_frames())?;
+        control.wait_generation(*frames)?;
         let info = SegmentInfo {
             id: segment.id,
             text_span: segment.span.clone(),

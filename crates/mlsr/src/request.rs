@@ -166,6 +166,33 @@ mod tests {
     use super::*;
     use crate::{models::supertonic3::BundleManifest, voice::VoiceFallback};
     #[test]
+    fn oversized_documents_are_rejected_by_utf8_bytes_at_admission() {
+        let voice = BundleManifest::baseline()
+            .voice_catalog()
+            .resolve("en", None, VoiceFallback::Strict)
+            .unwrap();
+        assert!(
+            Request::new(
+                &"a".repeat(MAX_TEXT_BYTES),
+                voice.clone(),
+                RequestOptions::default()
+            )
+            .is_ok()
+        );
+        for text in [
+            "a".repeat(MAX_TEXT_BYTES + 1),
+            "한".repeat(MAX_TEXT_BYTES / 3 + 1),
+        ] {
+            assert!(matches!(
+                Request::new(&text, voice.clone(), RequestOptions::default()),
+                Err(Error::Input {
+                    kind: InputErrorKind::InputTooLarge,
+                    ..
+                })
+            ));
+        }
+    }
+    #[test]
     fn rates_are_normalized_once_and_requests_own_their_input() {
         assert_eq!(
             RequestOptions::default()

@@ -108,7 +108,7 @@ void main() {
       report['first_retained_pcm_observed_ms'] =
           onset.elapsedMicroseconds / 1000;
       // A long request has a whole-document scale before playback has advanced,
-      // while generation/retention still obey their small lookahead budgets.
+      // while segment admission and retained bytes obey their separate budgets.
       final earlyTimeline = speech.state!;
       expect(earlyTimeline.estimatedFrames, isNotNull);
       expect(earlyTimeline.durationFrames, isNull);
@@ -143,6 +143,47 @@ void main() {
       expect(speech.state!.completion!.reason, CancelReason.requested);
       expect(speech.canExport, isFalse);
       expect(speech.error, isNull);
+
+      // An admitted segment drains to retention even while the native output
+      // is paused. Seeking past the old two-second boundary must work.
+      speech.speak(
+        'This sentence has enough words to take well over two seconds to read.\n'
+            'The second sentence follows later.',
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(
+        () =>
+            (speech.generatedFrames > 88200 && speech.paused) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      await tester.pump(const Duration(milliseconds: 300));
+      final retainedSegment = speech.generatedFrames;
+      expect(speech.playedFrames, 0);
+      expect(retainedSegment, lessThan(speech.state!.estimatedFrames!));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(speech.generatedFrames, retainedSegment);
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const Key('seek')))
+            .secondaryTrackValue,
+        retainedSegment.toDouble(),
+      );
+      const beyondLookahead = 88200 + 4096;
+      speech.seek(beyondLookahead);
+      await until(
+        () => speech.playedFrames == beyondLookahead || speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.paused, isTrue);
+      report['paused_retained_segment_frames'] = retainedSegment;
+      report['segment_start_lookahead_frames'] = 88200;
+      report['seek_beyond_lookahead_frame'] = speech.playedFrames;
+      await screenshot('paused-retention');
+      speech.stop();
+      await until(() => !speech.speaking);
 
       // Native admission and replace behavior with rapid calls from the UI layer.
       final replaced = speech.speak(

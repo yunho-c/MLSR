@@ -161,6 +161,9 @@ impl Job {
     pub fn estimated_frames(&self) -> Option<u64> {
         lock(&self.control.state).estimated_frames
     }
+    pub(crate) fn set_generation_limit(&self, end: Option<u64>) {
+        self.control.set_generation_limit(end);
+    }
 }
 impl Drop for Job {
     fn drop(&mut self) {
@@ -179,6 +182,7 @@ struct State {
     terminal_delivered: bool,
     stats: QueueStats,
     estimated_frames: Option<u64>,
+    generation_limit: Option<u64>,
 }
 pub(crate) struct Control {
     pub(crate) id: u64,
@@ -199,6 +203,7 @@ impl Control {
                 terminal_delivered: false,
                 stats: QueueStats::default(),
                 estimated_frames: None,
+                generation_limit: None,
             }),
             changed: Condvar::new(),
         })
@@ -232,6 +237,26 @@ impl Control {
     pub(crate) fn wait_capacity(&self, frames: usize) -> Result<()> {
         let _guard = self.capacity(frames)?;
         Ok(())
+    }
+    pub(crate) fn set_generation_limit(&self, end: Option<u64>) {
+        let mut state = lock(&self.state);
+        if state.generation_limit != end {
+            state.generation_limit = end;
+            self.changed.notify_all();
+        }
+    }
+    /// Admit a complete segment by its actual source start. Once admitted, all
+    /// of its PCM may drain even if playback pauses or seeks backward. Use the
+    /// same condition variable as cancellation, so no pacing wait delays close.
+    pub(crate) fn wait_generation(&self, start: u64) -> Result<()> {
+        let mut state = lock(&self.state);
+        loop {
+            self.checkpoint()?;
+            if state.generation_limit.is_none_or(|end| start < end) {
+                return Ok(());
+            }
+            state = self.changed.wait(state).unwrap_or_else(|p| p.into_inner());
+        }
     }
     fn capacity(&self, frames: usize) -> Result<MutexGuard<'_, State>> {
         let mut state = lock(&self.state);

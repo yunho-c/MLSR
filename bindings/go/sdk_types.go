@@ -203,7 +203,8 @@ func DefaultTTSOptions() TTSOptions {
 type SpeechOptions struct {
 	PlaybackRate, Volume float32
 	Paused, RetainAudio  bool
-	LookaheadFrames      uint32
+	// Retained speech segment-start horizon; admitted segments are retained in full.
+	LookaheadFrames uint32
 }
 
 func DefaultSpeechOptions() SpeechOptions {

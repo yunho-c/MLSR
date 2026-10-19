@@ -213,16 +213,21 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
         });
         return Ok(());
     }
-    let native = Arc::new(engine.start_plan(
+    // Paced jobs start closed until native ownership is published below. A
+    // concurrent seek cannot be overwritten by a stale initial horizon.
+    let generation_limit = lock(&control.state).generation_limit.map(|_| 0);
+    let native = Arc::new(engine.start_plan_paced(
         plan,
         start,
         control.request.voice().voice().model_voice_id(),
         control.request.options().effective_synthesis_options()?,
         control.limits,
+        generation_limit,
     )?);
     {
         let mut state = lock(&control.state);
         state.native = Some(native.clone());
+        native.set_generation_limit(state.generation_limit);
         control.publish(&mut state);
     }
     loop {

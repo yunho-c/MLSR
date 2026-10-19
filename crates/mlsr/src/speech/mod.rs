@@ -100,8 +100,10 @@ impl SpeechOptions {
     pub fn retains_audio(self) -> bool {
         self.retain_audio
     }
-    /// Bound newly retained audio ahead of presentation. Additional inference,
-    /// consumer and native output queues have independent documented limits.
+    /// Start another model segment only when its source start is within this
+    /// horizon ahead of presentation. Already-started segments are retained in
+    /// full, so seekable audio may extend past it by one bounded model segment.
+    /// PCM queues, output buffering and retained byte quotas are independent.
     pub fn with_lookahead(mut self, frames: usize) -> Result<Self> {
         if !(1..=44100 * 30).contains(&frames) {
             return Err(Error::InvalidOptions(
@@ -111,7 +113,7 @@ impl SpeechOptions {
         self.lookahead_frames = frames;
         Ok(self)
     }
-    /// Source-frame lookahead cap, default two seconds at 44,100 Hz.
+    /// Source-frame segment admission horizon, default two seconds at 44,100 Hz.
     pub fn lookahead_frames(self) -> usize {
         self.lookahead_frames
     }
@@ -241,6 +243,9 @@ impl Control {
         replay_start: Option<u64>,
         markers: Vec<(u64, u32)>,
     ) -> Arc<Self> {
+        if retained.is_some() && replay_start.is_none() {
+            job.pace_generation(options.lookahead_frames as u64);
+        }
         Arc::new(Self {
             state: Mutex::new(State {
                 snapshot: SpeechSnapshot {

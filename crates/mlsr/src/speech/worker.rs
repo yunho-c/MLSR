@@ -190,7 +190,7 @@ fn play(
             playback.cursor = frame;
             playback.ended_input = false;
         }
-        // Apply lookahead at the new cursor immediately, but keep the previous
+        // Apply generation pacing at the new cursor, but keep the previous
         // published position until publish() can detect and notify the change.
         // Otherwise a paused seek within one text segment has no new revision.
         let position = seek.unwrap_or_else(|| lock(&control.state).snapshot.position_frame);
@@ -272,6 +272,45 @@ fn pump(
     epoch: u64,
     position: u64,
 ) -> Result<()> {
+    if let Some(store) = playback.retained.clone()
+        && !playback.ended_generation
+    {
+        control
+            .job
+            .pace_generation(position.saturating_add(control.lookahead_frames as u64));
+        // Retain generated PCM independently of output capacity and playback
+        // position. Bound each burst so controls keep making progress. Segment
+        // admission upstream bounds future inference; the shared byte quota
+        // bounds storage. A full/paused output must not hide completed audio.
+        for _ in 0..32 {
+            if lock(&control.state).snapshot.cancellation.is_some() {
+                return Ok(());
+            }
+            match playback
+                .stream
+                .as_mut()
+                .expect("generation consumer")
+                .poll(Duration::ZERO)
+            {
+                AudioPoll::Audio(chunk) => {
+                    store
+                        .append(chunk.start_frame, &chunk.audio)
+                        .map_err(|e| retention_error(control, e))?;
+                    note_segment(control, chunk.start_frame, chunk.segment.id);
+                }
+                AudioPoll::Finished(done) => {
+                    generation_outcome(control, playback, done.outcome)?;
+                    break;
+                }
+                AudioPoll::Timeout => break,
+                AudioPoll::End => {
+                    return Err(Error::Output(
+                        "audio stream ended without completion".into(),
+                    ));
+                }
+            }
+        }
+    }
     for _ in 0..8 {
         if !playback.ended_generation
             && let Some(done) = control.job.completion()
@@ -282,33 +321,6 @@ fn pump(
             return Ok(());
         }
         if let Some(store) = playback.retained.clone() {
-            let ahead = store.frames().saturating_sub(position);
-            if !playback.ended_generation
-                && ahead + control.job.chunk_frames() as u64 <= control.lookahead_frames as u64
-            {
-                match playback
-                    .stream
-                    .as_mut()
-                    .expect("generation consumer")
-                    .poll(Duration::ZERO)
-                {
-                    AudioPoll::Audio(chunk) => {
-                        store
-                            .append(chunk.start_frame, &chunk.audio)
-                            .map_err(|e| retention_error(control, e))?;
-                        note_segment(control, chunk.start_frame, chunk.segment.id);
-                    }
-                    AudioPoll::Finished(done) => {
-                        generation_outcome(control, playback, done.outcome)?
-                    }
-                    AudioPoll::Timeout => {}
-                    AudioPoll::End => {
-                        return Err(Error::Output(
-                            "audio stream ended without completion".into(),
-                        ));
-                    }
-                }
-            }
             if playback.pending.is_none() {
                 playback.pending = store
                     .read(playback.cursor, control.job.chunk_frames())

@@ -107,6 +107,7 @@ struct State {
     plan: Option<Arc<TextPlan>>,
     native: Option<Arc<job::Job>>,
     native_finished: bool,
+    generation_limit: Option<u64>,
 }
 pub(crate) struct Control {
     id: u64,
@@ -144,6 +145,7 @@ impl Control {
                 plan: None,
                 native: None,
                 native_finished: false,
+                generation_limit: None,
             }),
         })
     }
@@ -341,6 +343,17 @@ impl SynthesisJob {
     }
     pub(crate) fn chunk_frames(&self) -> usize {
         self.lease.control.limits.chunk_frames()
+    }
+    /// Playback owns this moving source horizon. It gates starting segments,
+    /// never consumption of their already-generated PCM.
+    pub(crate) fn pace_generation(&self, end: u64) {
+        let mut state = lock(&self.lease.control.state);
+        if state.generation_limit != Some(end) {
+            state.generation_limit = Some(end);
+            if let Some(native) = &state.native {
+                native.set_generation_limit(Some(end));
+            }
+        }
     }
     /// Cancel without waiting for native inference. Completion waits for quiescence.
     pub fn cancel(&self) {
