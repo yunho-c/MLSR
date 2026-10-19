@@ -104,7 +104,7 @@ impl Diagnostics {
 }
 
 impl Pipeline {
-    /// Load all six graphs once and upload both voices. Reuse allocates two
+    /// Load the bundle's graphs once and upload both voices. Reuse allocates two
     /// dedicated output buffers per VE bucket; Core ML may decline to use them.
     pub fn load(bundle: Bundle, policy: ComputePolicy, reuse_output_buffers: bool) -> Result<Self> {
         Self::load_variant(
@@ -149,20 +149,17 @@ impl Pipeline {
             Session::coreml(policy)?
         };
         let mut models = BTreeMap::new();
-        let names: &[&str] = if qnn {
-            &["duration_predictor", "text_encoder", "ve_96", "vocoder"]
-        } else {
-            &[
-                "duration_predictor",
-                "text_encoder",
-                "ve_128",
-                "ve_256",
-                "ve_512",
-                "vocoder",
-            ]
-        };
-        for &name in names {
-            models.insert(name.into(), session.load(bundle.model_path(name)?)?);
+        let mut names = std::collections::BTreeSet::from([
+            "duration_predictor".to_owned(),
+            "text_encoder".to_owned(),
+        ]);
+        for &bucket in bundle.latent_buckets() {
+            names.insert(format!("ve_{bucket}"));
+            names.insert(bundle.vocoder_name(bucket));
+        }
+        for name in names {
+            let model = session.load(bundle.model_path(&name)?)?;
+            models.insert(name, model);
         }
         for (name, path) in additional {
             models.insert(name, session.load(path)?);
@@ -180,8 +177,7 @@ impl Pipeline {
         }
         let mut backings = BTreeMap::new();
         if reuse_output_buffers {
-            let buckets: &[usize] = if qnn { &[96] } else { &[128, 256, 512] };
-            for &bucket in buckets {
+            for &bucket in bundle.latent_buckets() {
                 backings.insert(
                     bucket,
                     [
@@ -307,7 +303,7 @@ impl Pipeline {
         )?;
         observer.checkpoint()?;
         let raw = self.session.read(&duration)?;
-        SynthesisPlan::for_backend(floats(&raw, "duration")?[0], options, self.bundle.backend())
+        SynthesisPlan::for_bundle(floats(&raw, "duration")?[0], options, &self.bundle)
     }
     fn validate_options(&self, options: SynthesisOptions) -> Result<()> {
         if self.bundle.backend() == BackendKind::QnnHtp && options.steps() != 8 {
@@ -458,7 +454,7 @@ impl Pipeline {
             .variant
             .route(options.steps(), bucket, plan.latent_length());
         if qnn {
-            route.fixed_vocoder = Some(96);
+            route.fixed_vocoder = Some(bucket);
         }
         let model = &self.models[&format!("ve_{bucket}")];
         if route.fused_ve {
@@ -541,7 +537,7 @@ impl Pipeline {
         };
         observer.checkpoint()?;
         let vocoder = if qnn {
-            "vocoder".into()
+            self.bundle.vocoder_name(bucket)
         } else {
             route
                 .fixed_vocoder
