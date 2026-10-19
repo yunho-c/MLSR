@@ -1,5 +1,10 @@
 schema_version: 1
 models:
+  - id: supertonic3-coreml-fp16-t384-v1
+    backend: coreml
+    platforms: [macos-arm64]
+    manifest_sha256: 4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49
+    asset_path: models/supertonic3-coreml-fp16-t384-v1
   - id: supertonic3-coreml-int4-v1
     backend: coreml
     platforms: [macos-arm64]

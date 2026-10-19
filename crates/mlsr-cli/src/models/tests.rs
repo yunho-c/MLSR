@@ -38,6 +38,10 @@ impl Fixture {
         write(&source, BUNDLE_MANIFEST_NAME, &bytes).unwrap();
         let mut catalog: serde_json::Value =
             serde_yaml_ng::from_str(&ModelCatalog::builtin().to_yaml().unwrap()).unwrap();
+        catalog["models"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|m| m["id"] == manifest["id"]);
         catalog["models"][0]["manifest_sha256"] = json!(format!("{:x}", Sha256::digest(&bytes)));
         write(
             root.path(),

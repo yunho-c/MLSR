@@ -74,7 +74,9 @@ def read_indexer(manifest: dict, root: Path) -> list[int]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def check_frontend(corpus: dict, indexer: list[int], expected_path: Path) -> list[dict]:
+def check_frontend(
+    corpus: dict, indexer: list[int], expected_path: Path, capacity: int = 128
+) -> list[dict]:
     expected = load_yaml(expected_path)
     if expected.get("corpus_sha256") != canonical_digest(corpus):
         raise ReferenceError("Frontend fixture belongs to a different corpus")
@@ -84,7 +86,9 @@ def check_frontend(corpus: dict, indexer: list[int], expected_path: Path) -> lis
     for case in corpus["cases"]:
         target = expected["cases"][case["id"]]
         try:
-            normalized, ids, mask = encode_text(case["text"], case["language"], indexer)
+            normalized, ids, mask = encode_text(
+                case["text"], case["language"], indexer, limit=capacity
+            )
         except InputError as error:
             if error.code != case.get("expected_error") or error.code != target.get(
                 "error"
@@ -216,7 +220,10 @@ class CoreMLReference:
         self, case: dict, defaults: dict, saved_noise=None, replay_speed=None
     ):
         normalized, ids, mask = encode_text(
-            case["text"], case["language"], self.indexer
+            case["text"],
+            case["language"],
+            self.indexer,
+            limit=self.manifest["contract"]["text_tokens"],
         )
         voice_path = (
             self.root / self.manifest["artifacts"][f"voice_{case['voice']}"]["path"]
@@ -347,7 +354,10 @@ def capture(
 ) -> dict:
     verify_bundle(manifest, root)
     frontend_results = check_frontend(
-        corpus, read_indexer(manifest, root), frontend_path
+        corpus,
+        read_indexer(manifest, root),
+        frontend_path,
+        capacity=manifest["contract"]["text_tokens"],
     )
     if output.exists() or output.is_symlink():
         raise ReferenceError(f"Reference output already exists: {output}")
@@ -466,13 +476,13 @@ def verify_reference(manifest: dict, corpus: dict, root: Path) -> dict:
             if not 4 <= length <= 512:
                 raise ReferenceError("Invalid true latent length")
             shapes = {
-                "text_ids": (1, 128),
-                "text_mask": (1, 1, 128),
+                "text_ids": (1, manifest["contract"]["text_tokens"]),
+                "text_mask": (1, 1, manifest["contract"]["text_tokens"]),
                 "style_ttl": (1, 50, 256),
                 "style_dp": (1, 8, 16),
                 "duration_raw": (1,),
                 "duration": (1,),
-                "text_emb": (1, 256, 128),
+                "text_emb": (1, 256, manifest["contract"]["text_tokens"]),
                 "initial_noise": (1, 144, length),
                 "latent_mask": (1, 1, length),
                 "ve_initial_latent": (1, 144, bucket),

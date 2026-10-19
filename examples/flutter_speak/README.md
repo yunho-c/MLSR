@@ -14,6 +14,11 @@ the repository's [model tools](../../tools/supertonic3/README.md) first. The
 checked-in `mlsr-models.yaml` reads the usual local cache; edit its `source` if
 your verified payloads live elsewhere. This path is preparation input only.
 
+The app now selects `supertonic3-coreml-fp16-t384-v1`: corrected FP16 Core ML
+graphs with a 384-token text window and complete-sentence segmentation. Its
+local exports must be prepared using the [FP16 release instructions](../../tools/supertonic3/README.md#recommended-fp16-bundle).
+The old INT4 bundle remains a separate release; its assets cannot be substituted.
+
 ```sh
 # From the repository root, before Pub resolves the generated asset package:
 cargo run --locked --release -p mlsr-cli -- models prepare-flutter \

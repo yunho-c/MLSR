@@ -28,20 +28,31 @@ loading remains compatible with previously prepared bundles.
 
 `model-manifests/catalog.yaml` pins model IDs, backend names, qualified platform
 keys, original manifest file hashes and package-relative asset directories. The
-first entry is `supertonic3-coreml-int4-v1`, qualified for `macos-arm64` only.
+recommended release is `supertonic3-coreml-fp16-t384-v1`; the legacy
+`supertonic3-coreml-int4-v1` remains available. Both are qualified for
+`macos-arm64` only. `BundleManifest::recommended()` selects the FP16 profile;
+`baseline()` retains the legacy manifest for reproducibility.
 Adding a platform to the schema's vocabulary does not qualify model execution.
+
+Windows ARM64 QNN uses the separate, opt-in
+[`catalog-qnn-experimental.yaml`](../model-manifests/catalog-qnn-experimental.yaml).
+Its Superfast model still fails the canonical quality screen and is absent from
+the builtin catalog. [QNN setup](qnn-runtime.md) describes leased model loading;
+the Flutter resource adapter remains macOS-only.
 
 `ModelCatalog::parse` rejects unknown fields, duplicate keys/IDs, overlapping or
 unsafe asset roots, malformed hashes and unsupported platform names. A lookup
 selects an exact ID and platform; it does not scan user directories or choose
 "latest". The catalog itself must come from the application's trusted resources.
 
-`ModelDescriptor::open(root)` checks the manifest hash and model ID before
+`ModelDescriptor::open(root)` checks the manifest hash, model ID and backend before
 reading payloads. This prevents a substituted manifest from authorizing different
 weights merely by carrying matching checksums of its own. Model files and any
 development symlink targets must remain immutable while an engine uses them.
 
-The current raw baseline manifest SHA-256 is
+The recommended manifest's exact SHA-256 is
+`4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49`.
+The legacy raw baseline manifest SHA-256 is
 `958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5`.
 The existing semantic digest is
 `4a206fe65fbd38b8d03d9d9b395ddbe03590c1095c431bd0c6eb7e253978c50c`.
@@ -128,14 +139,14 @@ package: mlsr_app_models
 output: .mlsr/model_assets
 mlsr_package: /path/to/MLSR/bindings/dart
 models:
-  - id: supertonic3-coreml-int4-v1
+  - id: supertonic3-coreml-fp16-t384-v1
     dart_name: supertonic3
-    source: ./model-input/supertonic3-coreml-int4-v1
+    source: ./model-input/supertonic3-coreml-fp16-t384-v1
     platforms: [macos-arm64]
 ```
 
-`source` contains a self-contained bundle. For an older development cache, add
-`manifest: /path/to/MLSR/model-manifests/supertonic3-coreml.yaml` to select the
+`source` contains a self-contained bundle. For a development cache without its
+root manifest, add `manifest: /path/to/MLSR/model-manifests/supertonic3-coreml-fp16.yaml` to select the
 original pinned YAML file explicitly. The payload is still read from `source`.
 An optional top-level `catalog` selects a trusted YAML catalog; otherwise the CLI
 uses its embedded catalog. Relative paths resolve beside the config, and `~/`

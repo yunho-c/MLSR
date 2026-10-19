@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{HostTensor, TensorData},
+    runtime::{BackendKind, HostTensor, TensorData},
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -13,6 +13,9 @@ use std::{
 };
 
 const BASELINE: &str = include_str!("../../../../../model-manifests/supertonic3-coreml.yaml");
+const RECOMMENDED: &str =
+    include_str!("../../../../../model-manifests/supertonic3-coreml-fp16.yaml");
+const QNN: &str = include_str!("../../../../../model-manifests/supertonic3-qnn-superfast.yaml");
 /// Filename at the root of a self-contained model bundle.
 pub const BUNDLE_MANIFEST_NAME: &str = "mlsr-bundle.yaml";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
@@ -54,6 +57,8 @@ struct Artifact {
     kind: String,
     path: String,
     #[serde(default)]
+    license: Option<String>,
+    #[serde(default)]
     precision: Value,
     #[serde(default)]
     latent_bucket: Option<usize>,
@@ -64,7 +69,7 @@ struct Artifact {
     files: Vec<LockedFile>,
 }
 /// One immutable payload file named by a validated bundle manifest.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct LockedFile {
     /// Validated path relative to the model bundle root.
@@ -99,9 +104,13 @@ impl BundleManifest {
     pub fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::parse(&read_limited(path.as_ref(), MANIFEST_LIMIT)?)
     }
-    /// The baseline contract embedded in this library; weights remain external.
+    /// The legacy T=128 INT4 baseline, retained for reproducibility and variants.
     pub fn baseline() -> Self {
         Self::parse(BASELINE.as_bytes()).expect("checked-in baseline manifest")
+    }
+    /// The recommended T=384 FP16 Core ML release; weights remain external.
+    pub fn recommended() -> Self {
+        Self::parse(RECOMMENDED.as_bytes()).expect("checked-in recommended manifest")
     }
     /// Original YAML bytes. Copy these when packaging; do not reserialize them.
     pub fn bytes(&self) -> &[u8] {
@@ -115,6 +124,14 @@ impl BundleManifest {
     pub fn id(&self) -> &str {
         &self.parsed.id
     }
+    /// Runtime required by the validated graph and tensor contracts.
+    pub fn backend(&self) -> BackendKind {
+        if self.parsed.runtime["kind"] == "qnn" {
+            BackendKind::QnnHtp
+        } else {
+            BackendKind::CoreMl
+        }
+    }
     /// Exact source revision declared by this manifest.
     pub fn revision(&self) -> &str {
         &self.parsed.source.revision
@@ -125,6 +142,7 @@ impl BundleManifest {
             self.id(),
             self.revision(),
             self.sha256(),
+            self.backend(),
             crate::voice::VoiceReadiness::CatalogOnly,
         )
     }
@@ -155,12 +173,14 @@ impl BundleManifest {
 #[derive(Debug)]
 pub struct Bundle {
     id: String,
+    backend: BackendKind,
     root: PathBuf,
     models: BTreeMap<String, PathBuf>,
     indexer: Vec<i32>,
     voices: BTreeMap<String, Voice>,
     manifest_sha256: String,
     revision: String,
+    text_capacity: usize,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -221,7 +241,7 @@ impl Bundle {
         let mut metadata = BTreeMap::new();
         let mut models = BTreeMap::new();
         for (name, artifact) in &manifest.artifacts {
-            let graph = artifact.kind == "coreml_compiled";
+            let graph = matches!(artifact.kind.as_str(), "coreml_compiled" | "executorch_qnn");
             for entry in &artifact.files {
                 let bytes = verify_file(&root.join(&entry.path), entry, !graph)?;
                 if !graph {
@@ -229,7 +249,9 @@ impl Bundle {
                 }
             }
             if graph {
-                verify_inventory(&root, artifact)?;
+                if artifact.kind == "coreml_compiled" {
+                    verify_inventory(&root, artifact)?;
+                }
                 models.insert(name.clone(), root.join(&artifact.path));
             }
         }
@@ -265,6 +287,7 @@ impl Bundle {
             );
         }
         Ok(Self {
+            backend: description.backend(),
             id: manifest.id.clone(),
             root,
             models,
@@ -272,11 +295,22 @@ impl Bundle {
             voices,
             manifest_sha256: description.sha256.clone(),
             revision: manifest.source.revision.clone(),
+            text_capacity: manifest.contract["text_tokens"]
+                .as_u64()
+                .expect("validated capacity") as usize,
         })
     }
     /// Bundle identifier recorded by the manifest.
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// Fixed normalized-token capacity declared by all text-conditioned graphs.
+    pub fn text_capacity(&self) -> usize {
+        self.text_capacity
+    }
+    /// Runtime required by the pinned graph and tensor contracts.
+    pub fn backend(&self) -> BackendKind {
+        self.backend
     }
     /// SHA-256 of the original manifest bytes used to verify this bundle.
     pub fn manifest_sha256(&self) -> &str {
@@ -288,6 +322,7 @@ impl Bundle {
             self.id(),
             &self.revision,
             self.manifest_sha256(),
+            self.backend(),
             crate::voice::VoiceReadiness::AssetsVerified,
         )
     }
@@ -353,7 +388,20 @@ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
         serde_yaml_ng::from_slice(bytes).map_err(|e| Error::Manifest(e.to_string()))?;
     let manifest: Manifest =
         serde_yaml_ng::from_value(value).map_err(|e| Error::Manifest(e.to_string()))?;
-    let baseline: Manifest = serde_yaml_ng::from_str(BASELINE).expect("checked-in manifest schema");
+    let profile = match (
+        manifest.runtime.get("kind").and_then(Value::as_str),
+        manifest.contract.get("text_tokens").and_then(Value::as_u64),
+    ) {
+        (Some("coreml"), Some(128)) => BASELINE,
+        (Some("coreml"), Some(384)) => RECOMMENDED,
+        (Some("qnn"), Some(128)) => QNN,
+        _ => {
+            return Err(Error::Manifest(
+                "unsupported runtime and normalized-text capacity".into(),
+            ));
+        }
+    };
+    let baseline: Manifest = serde_yaml_ng::from_str(profile).expect("checked-in manifest schema");
     validate_manifest(&manifest, &baseline)?;
     Ok(manifest)
 }
@@ -385,6 +433,12 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
         m.contract == baseline.contract && m.integrity == baseline.integrity,
         "unsupported tensor, audio, preprocessing, or integrity contract",
     )?;
+    if baseline.runtime["kind"] == "qnn" {
+        require(
+            m.runtime == baseline.runtime,
+            "unsupported QNN runtime or target",
+        )?;
+    }
     for key in [
         "kind",
         "format",
@@ -400,7 +454,7 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
     }
     require(
         m.artifacts.keys().eq(baseline.artifacts.keys()),
-        "expected the ten Supertonic baseline artifacts",
+        "unexpected Supertonic artifact set",
     )?;
     let mut seen = BTreeSet::new();
     let mut roots = BTreeSet::new();
@@ -412,6 +466,7 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
             a.kind == expected.kind
                 && a.inputs == expected.inputs
                 && a.outputs == expected.outputs
+                && a.license == expected.license
                 && a.latent_bucket == expected.latent_bucket,
             &format!("unsupported tensor interface for {name}"),
         )?;
@@ -420,6 +475,15 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
             "invalid precision metadata",
         )?;
         let graph = a.kind == "coreml_compiled";
+        let qnn_graph = a.kind == "executorch_qnn";
+        if baseline.runtime["kind"] == "qnn" {
+            require(
+                a.files == expected.files
+                    && a.path == expected.path
+                    && a.precision == expected.precision,
+                "QNN Superfast requires the exact pinned programs and metadata",
+            )?;
+        }
         require(
             !a.files.is_empty() && a.files.len() <= 256,
             "invalid locked file count",
@@ -451,7 +515,7 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
                 "invalid SHA-256 or byte count",
             )?;
             require(
-                graph || entry.size_bytes <= METADATA_LIMIT,
+                graph || qnn_graph || entry.size_bytes <= METADATA_LIMIT,
                 "metadata exceeds 4 MiB",
             )?;
         }

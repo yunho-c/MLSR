@@ -57,10 +57,10 @@ impl Default for JobOptions {
     }
 }
 
-/// Persistent Core ML engine settings. Model/text policy stays in Rust.
+/// Persistent engine settings. Model/text policy stays in Rust.
 #[derive(Clone, Copy, Debug)]
 pub struct EngineOptions {
-    /// Devices Core ML is permitted to use; this is not a placement guarantee.
+    /// Core ML device policy or explicit QNN HTP selection; must match the bundle.
     pub compute_policy: crate::runtime::ComputePolicy,
     /// Offer alternating VE output buffers; consume actual outputs if declined.
     pub reuse_output_buffers: bool,
@@ -110,7 +110,7 @@ impl ExecutionVariant {
 pub struct ExecutionRoute {
     /// All eight VE steps execute in one prediction; no internal cancel checkpoint.
     pub fused_ve: bool,
-    /// Exact latent length of the specialized vocoder, or flexible baseline.
+    /// Fixed input length of the selected vocoder, or the flexible baseline.
     pub fixed_vocoder: Option<usize>,
 }
 

@@ -2,7 +2,7 @@ part of 'synthesis_native.dart';
 
 void checkDeveloperApi() {
   checkSynthesisApi();
-  if (native.mlsr_features() & 8 == 0) {
+  if (native.mlsr_features() & native.MLSR_FEATURE_DEVELOPER_SDK == 0) {
     throw const NativeFailure(
       'unsupported_abi',
       'Developer SDK schema v1 is unavailable',

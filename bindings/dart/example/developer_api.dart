@@ -6,17 +6,20 @@ import 'package:mlsr/mlsr.dart';
 Future<void> main(List<String> args) async {
   if (args.length < 3 ||
       args.length > 4 ||
-      (args.length == 4 && args[3] != 'speak')) {
+      (args.length == 4 && !['speak', 'qnn_htp'].contains(args[3]))) {
     stderr.writeln(
-      'Usage: dart run example/developer_api.dart MANIFEST BUNDLE NEW_WAV [speak]',
+      'Usage: dart run example/developer_api.dart MANIFEST BUNDLE NEW_WAV [speak|qnn_htp]',
     );
     exitCode = 64;
     return;
   }
-  final speak = args.length == 4;
+  final speak = args.length == 4 && args[3] == 'speak';
   final tts = await Tts.open(
     manifest: args[0],
     bundle: args[1],
+    computePolicy: args.length == 4 && args[3] == 'qnn_htp'
+        ? ComputePolicy.qnnHtp
+        : ComputePolicy.cpuAndNeuralEngine,
     options: TtsOptions(
       output: speak ? OutputMode.platformDefault : OutputMode.headless,
     ),

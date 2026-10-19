@@ -11,6 +11,7 @@ from .sdk_types import AudioClip, AudioFormat, Failure, TtsError, WavFile
 
 H, String = old.H, old.String
 P = C.POINTER
+FEATURE_DEVELOPER_SDK = 8
 
 
 class ModelSpec(C.Structure):
@@ -77,7 +78,7 @@ class PcmView(C.Structure):
 @functools.lru_cache(maxsize=1)
 def library():
     lib = old.library()
-    if lib.mlsr_features() & 8 == 0:
+    if lib.mlsr_features() & FEATURE_DEVELOPER_SDK == 0:
         raise old.LibraryLoadError("Native MLSR library lacks developer SDK schema v1")
     signatures = {
         "model_open": [String, P(ModelSpec), P(H), P(H)],
@@ -210,8 +211,9 @@ def speech_options(lib, value, mode):
     lib.mlsr_speech_options_default(C.byref(settings))
     settings.mode = enum(mode, ("replace", "enqueue"), "speech mode")
     settings.playback_rate, settings.volume = value.playback_rate, value.volume
-    settings.paused, settings.retain_audio = bool(value.paused), bool(
-        value.retain_audio
+    settings.paused, settings.retain_audio = (
+        bool(value.paused),
+        bool(value.retain_audio),
     )
     if value.on_demand_seeking:
         settings.retain_audio = 2
@@ -254,7 +256,9 @@ def open_tts(
     engine = old.EngineOptions()
     lib.mlsr_engine_options_default(C.byref(engine))
     engine.compute_policy = enum(
-        compute_policy, ("cpu_only", "cpu_and_neural_engine"), "compute policy"
+        compute_policy,
+        ("cpu_only", "cpu_and_neural_engine", "qnn_htp"),
+        "compute policy",
     )
     engine.reuse_output_buffers = bool(reuse_output_buffers)
     engine.execution_variant = _uint(execution_variant, 32, "execution_variant")

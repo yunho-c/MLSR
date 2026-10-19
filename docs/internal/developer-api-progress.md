@@ -81,7 +81,9 @@ their hashes are indexed by the qualification record.
 
 ## Deferred scope
 
-QNN/Android and physical iOS qualification follow this API milestone. Word
+Windows ARM64 QNN headless SDK integration is recorded separately in the
+[QNN qualification](../qnn-qualification.md); native Windows output, Android and
+physical iOS remain later work. Word
 alignment, persistent synthesis caching, background media controls, voice cloning,
 full SSML and quantization promotion are not hidden acceptance dependencies. All
 essential SDK rows above remain required; platform claims must name tested hosts.

@@ -15,6 +15,7 @@ struct Playback {
     ended_input: bool,
     applied: Desired,
     system_paused: bool,
+    seek_notification_pending: Option<u64>,
 }
 struct Pending {
     start: u64,
@@ -41,6 +42,7 @@ pub(super) fn run(shared: Arc<Shared>, factory: Arc<dyn OutputFactory>, policy: 
                         control.id(),
                         FailureStage::Playback,
                         &Error::WorkerFailed("panic in speech output worker".into()),
+                        control.job.request().voice().voice().backend(),
                     ),
                 },
                 PlaybackPhase::Failed,
@@ -100,7 +102,12 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
                 } else {
                     let error = match error {
                         Error::OperationFailed(error) => error,
-                        other => Failure::new(control.id(), FailureStage::Playback, &other),
+                        other => Failure::new(
+                            control.id(),
+                            FailureStage::Playback,
+                            &other,
+                            control.job.request().voice().voice().backend(),
+                        ),
                     };
                     control.finish(Outcome::Failed { error }, PlaybackPhase::Failed);
                 }
@@ -160,6 +167,7 @@ fn play(
         ended_input: false,
         applied: desired,
         system_paused: false,
+        seek_notification_pending: None,
     };
     loop {
         let cancelled = lock(&control.state).snapshot.cancellation;
@@ -193,6 +201,10 @@ fn play(
             playback.pending = None;
             playback.cursor = frame;
             playback.ended_input = false;
+            playback.seek_notification_pending = seek.map(|s| s.serial);
+            // publish() updates position and its text range together from the
+            // rebased output snapshot; direct snapshot readers must not see a
+            // new position paired with the previous sentence.
         }
         // Apply generation pacing at the new cursor, but keep the previous
         // published position until publish() can detect and notify the change.
@@ -233,15 +245,15 @@ fn play(
                 }
                 apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
             }
-            publish(control, &playback, &snapshot);
-            if let Some(seek) = seek {
-                let mut state = lock(&control.state);
-                if state.seek_serial == seek.serial {
-                    state.snapshot.seeking = false;
-                    state.snapshot.seek_target_frame = None;
-                    control.publish(&mut state);
-                }
-            }
+            // Confirm a seek only after the output reports the rebased epoch,
+            // even if its position and text range match the previous snapshot.
+            publish(
+                control,
+                &playback,
+                &snapshot,
+                playback.seek_notification_pending,
+            );
+            playback.seek_notification_pending = None;
             if playback.ended_input && snapshot.drained {
                 let mut state = lock(&control.state);
                 if let Some(frames) = state.snapshot.duration_frames {
@@ -263,7 +275,12 @@ fn play(
     }
 }
 fn retention_error(control: &Control, error: Error) -> Error {
-    Error::OperationFailed(Failure::new(control.id(), FailureStage::Retention, &error))
+    Error::OperationFailed(Failure::new(
+        control.id(),
+        FailureStage::Retention,
+        &error,
+        control.job.request().voice().voice().backend(),
+    ))
 }
 fn note_segment(control: &Control, start: u64, id: u32) {
     let mut markers = lock(&control.markers);
@@ -412,7 +429,12 @@ fn apply_controls(
     playback.applied = desired;
     Ok(())
 }
-fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
+fn publish(
+    control: &Control,
+    playback: &Playback,
+    output: &OutputSnapshot,
+    seek_applied: Option<u64>,
+) {
     let synthesis = control.job.snapshot();
     let mut state = lock(&control.state);
     let previous = state.snapshot.clone();
@@ -466,7 +488,13 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot) {
                 utf16: segment.utf16_span(),
             })
         });
-    if state.snapshot != previous {
+    if let Some(serial) = seek_applied
+        && state.seek_serial == serial
+    {
+        state.snapshot.seeking = false;
+        state.snapshot.seek_target_frame = None;
+    }
+    if seek_applied.is_some() || state.snapshot != previous {
         control.publish(&mut state);
     }
 }

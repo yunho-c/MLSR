@@ -9,11 +9,15 @@ API usage, start with the [public documentation](../README.md).
 | --- | --- |
 | [Architecture](architecture.md) | Module responsibilities, dependency direction and language adapter boundaries |
 | [Core ML runtime](coreml-runtime.md) | Native ownership, worker sessions, tensor transfers and output-buffer reuse |
+| [QNN runtime](../qnn-runtime.md) | Experimental Windows ARM64 Superfast setup and headless SDK usage |
 | [Supertonic3 synthesis](supertonic3.md) | Model pipeline, preprocessing, duration/noise preparation and reference replay |
 | [Apple output](apple-output.md) | Native playback implementation, clock behavior and adapter qualification |
 | [Execution variants](execution-variants.md) | Experimental graphs, routing, parity, benchmarking and quantization candidates |
 | [Playback feasibility probe](playback-probe.md) | Initial native clock, completion and pitch-preservation investigation |
 | [Text segmentation](text-segmentation.md) | Clause boundaries, conservative text limits and speech-quality regression evidence |
+| [Larger-context experiment](supertonic3-context-experiment.md) | Official-demo controls, T=384 Core ML exports, boundary correction and precision evidence |
+| [FP16 promotion](supertonic3-fp16-promotion.md) | Recommended T=384 bundle, native/app qualification and later INT4 gates |
+| [QNN and FP16 consolidation](qnn-fp16-consolidation.md) | Combined manifest contracts, seek fixes and merge validation |
 
 ## Implementation and qualification records
 
@@ -22,6 +26,7 @@ API usage, start with the [public documentation](../README.md).
 | Core ML proof of concept | [Progress](poc-progress.md) | [POC qualification](poc-qualification.md) |
 | Bundled model delivery | [Progress](model-delivery-progress.md) | [Delivery qualification](model-delivery-qualification.md) |
 | Developer API v0 | [Progress](developer-api-progress.md) | [SDK qualification](developer-api-qualification.md) |
+| QNN Superfast integration | [Runtime and reproduction](../qnn-runtime.md) | [Adapter, model delivery and headless SDK qualification](../qnn-qualification.md) |
 
 Qualification records describe their recorded source revisions, artifacts and
 tested hosts. Historical results do not automatically qualify subsequent changes.

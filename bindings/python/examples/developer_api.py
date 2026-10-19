@@ -19,6 +19,11 @@ def main():
     parser.add_argument("--speak", action="store_true")
     parser.add_argument("--muted", action="store_true")
     parser.add_argument("--cancel-first", action="store_true")
+    parser.add_argument(
+        "--policy",
+        choices=("cpu_only", "cpu_and_neural_engine", "qnn_htp"),
+        default="cpu_and_neural_engine",
+    )
     args = parser.parse_args()
     if args.max_seconds <= 0:
         parser.error("--max-seconds must be positive")
@@ -31,6 +36,7 @@ def main():
     with Tts(
         args.manifest,
         args.bundle,
+        compute_policy=args.policy,
         options=TtsOptions(output_mode="default" if args.speak else "headless"),
     ) as tts:
         if args.cancel_first:

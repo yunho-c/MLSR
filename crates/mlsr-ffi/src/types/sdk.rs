@@ -54,7 +54,7 @@ pub struct MlsrRequest {
     pub locale_fallback: u32,
     /// Finite positive multiplier; default 1.0 maps to Supertonic raw speed 1.05.
     pub speaking_rate: f32,
-    /// Supertonic denoising steps, 1..=64; default 8.
+    /// Supertonic denoising steps, 1..=64; default 8. QNN Superfast requires 8.
     pub supertonic_steps: u32,
     /// Original segment n uses seed.wrapping_add(n).
     pub seed: u64,

@@ -23,7 +23,7 @@ func sdkCheck() error {
 	if _, err := Version(); err != nil {
 		return err
 	}
-	if uint32(C.mlsr_features())&8 == 0 {
+	if uint32(C.mlsr_features())&C.MLSR_FEATURE_DEVELOPER_SDK == 0 {
 		return &SDKError{Code: "unsupported_abi", Message: "developer SDK schema v1 is unavailable"}
 	}
 	return nil
@@ -86,17 +86,23 @@ func sdkRelease(handle uint64, forget bool) error {
 	}
 	return nil
 }
-func sdkSettings(engine EngineOptions, options TTSOptions) (C.MlsrEngineOptions, C.MlsrTtsOptions) {
+func sdkSettings(engine EngineOptions, options TTSOptions) (C.MlsrEngineOptions, C.MlsrTtsOptions, error) {
 	var e C.MlsrEngineOptions
+	var s C.MlsrTtsOptions
+	if engine.CPUOnly && engine.QNNHTP {
+		return e, s, &SDKError{Code: "invalid_argument", Message: "CPUOnly and QNNHTP are mutually exclusive"}
+	}
 	C.mlsr_engine_options_default(&e)
 	if engine.CPUOnly {
 		e.compute_policy = 0
+	}
+	if engine.QNNHTP {
+		e.compute_policy = 2
 	}
 	if engine.DisableOutputReuse {
 		e.reuse_output_buffers = 0
 	}
 	e.execution_variant = C.uint32_t(engine.ExecutionVariant)
-	var s C.MlsrTtsOptions
 	C.mlsr_tts_options_default(&s)
 	s.output_mode = C.uint32_t(options.Output)
 	s.max_requests = C.uint32_t(options.MaxRequests)
@@ -106,7 +112,7 @@ func sdkSettings(engine EngineOptions, options TTSOptions) (C.MlsrEngineOptions,
 	s.max_segment_frames = C.uint32_t(options.MaxSegmentFrames)
 	s.max_retained_stores = C.uint32_t(options.MaxRetainedStores)
 	s.max_retained_bytes = C.uint64_t(options.MaxRetainedBytes)
-	return e, s
+	return e, s, nil
 }
 
 func sdkOpen(manifest, bundle string, engine EngineOptions, options TTSOptions) (uint64, error) {
@@ -117,7 +123,10 @@ func sdkOpen(manifest, bundle string, engine EngineOptions, options TTSOptions) 
 	defer freeM()
 	b, freeB := cstring(bundle)
 	defer freeB()
-	e, s := sdkSettings(engine, options)
+	e, s, err := sdkSettings(engine, options)
+	if err != nil {
+		return 0, err
+	}
 	var output, failure C.MlsrHandle
 	status := C.mlsr_tts_open(m, b, &e, &s, &output, &failure)
 	return uint64(output), sdkError(status, failure)
@@ -441,7 +450,10 @@ func sdkModelRelease(handle uint64) error {
 	return nil
 }
 func sdkFromModel(handle uint64, engine EngineOptions, options TTSOptions) (uint64, error) {
-	e, s := sdkSettings(engine, options)
+	e, s, err := sdkSettings(engine, options)
+	if err != nil {
+		return 0, err
+	}
 	var output, failure C.MlsrHandle
 	status := C.mlsr_tts_from_model(C.MlsrHandle(handle), &e, &s, &output, &failure)
 	return uint64(output), sdkError(status, failure)

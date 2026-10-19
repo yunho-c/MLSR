@@ -1,0 +1,438 @@
+schema_version: 1
+status: experimental_integration_passed_model_quality_gate_failed
+adapter_passed: true
+canonical_screen_passed: false
+production_qualified: false
+manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+device:
+  captured_utc: '2026-10-18T19:28:27.4422394Z'
+  processor:
+    Name: Snapdragon(R) X2 Elite - X2E84100 - Qualcomm Oryon(TM) CPU
+    Manufacturer: Qualcomm Technologies Inc
+    Architecture: 12
+    NumberOfCores: 12
+  operating_system:
+    Caption: Microsoft Windows 11 Home
+    Version: 10.0.28000
+    BuildNumber: '28000'
+    OSArchitecture: ARM 64-bit Processor
+  battery:
+    BatteryStatus: 1
+    EstimatedChargeRemaining: 85
+  power_scheme: 'Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)'
+  thermal: MSAcpi_ThermalZoneTemperature unavailable (CIM access denied); temperatures
+    and energy were not measured
+  rust: "rustc 1.98.1 (48a229cea 2026-09-01)\r\nbinary: rustc\r\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\r\
+    \ncommit-date: 2026-09-01\r\nhost: aarch64-pc-windows-msvc\r\nrelease: 1.98.1\r\
+    \nLLVM version: 22.1.8"
+  power_snapshot_after_final_benchmark:
+    ACLineStatus: 1
+    BatteryFlag: 9
+    BatteryLifePercent: 81
+    SystemStatusFlag: 0
+    BatteryLifeTime: 4294967295
+    BatteryFullLifeTime: 4294967295
+    utc: '2026-10-18T19:48:03.424833+00:00'
+  measurement_conditions: 'Windows Balanced scheme. Post-release-benchmark GetSystemPowerStatus:
+    ACLineStatus=1, BatteryFlag=9, charge=83%. Earlier samples retained. Power and
+    temperature were not held constant; no energy telemetry or thermal soak. No concurrent
+    QNN workload launched by this qualification during the job probe.'
+  power_snapshot_after_release_benchmark:
+    ACLineStatus: 1
+    BatteryFlag: 9
+    BatteryLifePercent: 83
+    SystemStatusFlag: 0
+    BatteryLifeTime: 4294967295
+    BatteryFullLifeTime: 4294967295
+    utc: '2026-10-18T20:01:10.493977+00:00'
+runtime:
+  sdk: 2.50.40.260831
+  executorch: 1.5.0
+  soc: 88
+  htp_arch: 81
+  compile_options:
+    soc_info:
+      soc_model: 88
+      htp_info:
+        htp_arch: 81
+        vtcm_size_in_mb: 8
+      lpai_info: null
+    backend_options:
+      backend_type: 2
+      htp_options:
+        max_sf_buf_size: 0
+        performance_mode: 2
+        precision: 1
+        pd_session: 0
+        use_conv_hmx: true
+        use_dlbc: false
+        use_fold_relu: true
+        use_multi_contexts: false
+        use_weight_sharing: false
+        use_slc_allocator: false
+      gpu_options: null
+      lpai_options: null
+    library_path: ''
+    log_level: 1
+    online_prepare: false
+    dump_intermediate_outputs: false
+    profile_level: 0
+    shared_buffer: false
+    is_from_context_binary: false
+    saver: false
+    saver_output_dir: saver_output
+    op_package_options:
+      op_package_infos: []
+    use_mha2sha: false
+  same_options_all_four_graphs: true
+replay:
+  cases: 23
+  positive_cases: 12
+  negative_cases: 11
+  passes_per_backing_mode: 2
+  backing_modes:
+  - false
+  - true
+  full_raw_runs_revalidated: 48
+  acceptance:
+    adapter: byte_exact_all_tensors_and_frame_counts
+    canonical_stage_relative_l2: 0.05
+    canonical_trajectory_relative_l2: 0.05
+    canonical_spectral_convergence: 0.1
+    rationale: Adapter and reference execute identical PTE bytes with actual saved
+      noise; any bit difference is a regression. The 5% Float32-relative L2 and 10%
+      magnitude-STFT screens retain the feasibility thresholds for FP16 conversion.
+      Waveform L2 is recorded separately because phase changes can amplify it. These
+      are engineering screens, not perceptual qualification. Failures must be retained
+      and reported without changing the thresholds.
+  canonical_comparisons:
+  - case: en_m1_basic
+    true_latent_length: 60
+    frames: 183421
+    passed: false
+    failed_checks:
+    - final_trajectory
+    - spectral_convergence
+    final_latent_relative_l2: 0.188436129963152
+    spectral_convergence: 0.434826185199849
+    vocoder_relative_l2: 0.02500390163589342
+  - case: en_f1_basic
+    true_latent_length: 50
+    frames: 153070
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.016924291302672284
+    spectral_convergence: 0.03993255404135402
+    vocoder_relative_l2: 0.01756757373928222
+  - case: en_normalization
+    true_latent_length: 62
+    frames: 189328
+    passed: false
+    failed_checks:
+    - spectral_convergence
+    final_latent_relative_l2: 0.04802457713740721
+    spectral_convergence: 0.12435037778039953
+    vocoder_relative_l2: 0.02399160615551265
+  - case: en_punctuation
+    true_latent_length: 56
+    frames: 171281
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.015060616776445015
+    spectral_convergence: 0.030656301240099618
+    vocoder_relative_l2: 0.015929476806603594
+  - case: ko_m1_basic
+    true_latent_length: 54
+    frames: 164308
+    passed: false
+    failed_checks:
+    - spectral_convergence
+    final_latent_relative_l2: 0.017649238792497652
+    spectral_convergence: 0.10534509033686883
+    vocoder_relative_l2: 0.02871356202378948
+  - case: ko_f1_basic
+    true_latent_length: 45
+    frames: 136253
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.014252876024400713
+    spectral_convergence: 0.032608068645984534
+    vocoder_relative_l2: 0.018477118293456808
+  - case: ko_normalization
+    true_latent_length: 52
+    frames: 156843
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.01941383497258735
+    spectral_convergence: 0.058300570176492976
+    vocoder_relative_l2: 0.021170690495442297
+  - case: ko_decomposed
+    true_latent_length: 39
+    frames: 119027
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.014080964151565168
+    spectral_convergence: 0.0337332464620057
+    vocoder_relative_l2: 0.016227147424449445
+  - case: qnn_latent_4
+    true_latent_length: 4
+    frames: 10752
+    passed: false
+    failed_checks:
+    - vocoder
+    final_latent_relative_l2: 0.009285437358888479
+    spectral_convergence: 0.03468531471526374
+    vocoder_relative_l2: 0.05728862816349331
+  - case: qnn_latent_95
+    true_latent_length: 95
+    frames: 290304
+    passed: true
+    failed_checks: []
+    final_latent_relative_l2: 0.033345237639067826
+    spectral_convergence: 0.05499697439051704
+    vocoder_relative_l2: 0.015955516679384166
+  - case: qnn_latent_96
+    true_latent_length: 96
+    frames: 293376
+    passed: false
+    failed_checks:
+    - final_trajectory
+    final_latent_relative_l2: 0.05032182951279682
+    spectral_convergence: 0.09981916931766928
+    vocoder_relative_l2: 0.026982275526209326
+  - case: qnn_tokens_128
+    true_latent_length: 96
+    frames: 293376
+    passed: false
+    failed_checks:
+    - final_trajectory
+    - spectral_convergence
+    final_latent_relative_l2: 0.11354827102104872
+    spectral_convergence: 0.2788866265939977
+    vocoder_relative_l2: 0.03634885806722134
+  rust_binary_sha256: f994a7bbe702ce986fc117f58ab7f9f960f4b1500f0ada7d4f1664bc5e3f61ec
+  bridge_sha256: e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad
+  reference_binary_sha256: 427957fbc24d1a3577de3f441d085bf93547aac2cc70f3775606371500b25f21
+jobs:
+  passed: true
+  provenance:
+    binary_sha256: 1a50de3cc82cdf5c0844612038a9eb6078f73f265c3f6cf6c6cee92004dc429b
+    bridge_sha256: e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad
+    manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+  initialization_ms: 998.7882999999999
+  measurement: File-cache warm, new process/context. Initialization includes SHA verification
+    and all model loads. Repeat 0 is warmup; repeats 1..5 are warm. Timers include
+    input preparation, native calls, copies and Rust event consumption. No audio playback
+    or WAV writes.
+  warm:
+  - language: en
+    voice: M1
+    segments: 1
+    frames: 70546
+    first_pcm:
+      count: 5
+      median_ms: 90.1715
+      p90_ms: 105.36538
+      max_ms: 105.8463
+    complete:
+      count: 5
+      median_ms: 90.2701
+      p90_ms: 105.73611999999999
+      max_ms: 106.17219999999999
+  - language: en
+    voice: F1
+    segments: 1
+    frames: 70710
+    first_pcm:
+      count: 5
+      median_ms: 85.8935
+      p90_ms: 94.64622
+      max_ms: 99.4143
+    complete:
+      count: 5
+      median_ms: 85.95800000000001
+      p90_ms: 95.0425
+      max_ms: 99.74130000000001
+  - language: ko
+    voice: M1
+    segments: 2
+    frames: 126328
+    first_pcm:
+      count: 5
+      median_ms: 92.34920000000001
+      p90_ms: 112.19198
+      max_ms: 112.8109
+    complete:
+      count: 5
+      median_ms: 183.5606
+      p90_ms: 208.4803
+      max_ms: 208.9129
+  - language: ko
+    voice: F1
+    segments: 2
+    frames: 126615
+    first_pcm:
+      count: 5
+      median_ms: 86.07289999999999
+      p90_ms: 112.64342
+      max_ms: 125.4955
+    complete:
+      count: 5
+      median_ms: 163.5387
+      p90_ms: 212.91603999999998
+      max_ms: 223.46859999999998
+  memory:
+    after_load:
+      peak_commit_bytes: 228720640
+      peak_working_set_bytes: 462626816
+      private_bytes: 228720640
+      working_set_bytes: 462340096
+    after_shutdown:
+      peak_commit_bytes: 231923712
+      peak_working_set_bytes: 465625088
+      private_bytes: 13189120
+      working_set_bytes: 26341376
+    after_warm:
+      peak_commit_bytes: 231923712
+      peak_working_set_bytes: 465625088
+      private_bytes: 231124992
+      working_set_bytes: 464912384
+    before:
+      peak_commit_bytes: 2523136
+      peak_working_set_bytes: 7974912
+      private_bytes: 1101824
+      working_set_bytes: 6578176
+  model_loads: 4
+  live_client_tensors: 8
+  native_cancellations:
+    count: 20
+    same_call_observed: 20
+    signal:
+      count: 20
+      median_ms: 0.0005
+      p90_ms: 0.0009600000000000008
+      max_ms: 0.0019
+    quiescence:
+      count: 20
+      median_ms: 7.348599999999999
+      p90_ms: 13.880140000000008
+      max_ms: 19.497600000000002
+    stages:
+      text_encoder:
+        count: 7
+        median_ms: 3.6194
+        p90_ms: 4.849740000000001
+        max_ms: 6.562799999999999
+      ve_step_03:
+        count: 7
+        median_ms: 7.7997
+        p90_ms: 10.56046
+        max_ms: 12.5182
+      vocoder:
+        count: 6
+        median_ms: 10.71845
+        p90_ms: 19.414700000000003
+        max_ms: 19.497600000000002
+  backpressure_cancellations:
+    signal:
+      count: 5
+      median_ms: 0.0063999999999999994
+      p90_ms: 0.01082
+      max_ms: 0.0123
+    quiescence:
+      count: 5
+      median_ms: 0.0396
+      p90_ms: 0.0633
+      max_ms: 0.0713
+htp:
+  passed: true
+  scope: SDK detailed profiles on exact extracted contexts, real saved inputs, five
+    executions each. Instrumented HTP proof; not production latency.
+  components:
+  - name: duration_predictor
+    pte_sha256: d5431904b1487c656c68d0af9acdc21ba261f5b27254462076f7f7905e197589
+    total_node_cycles: 8540849.0
+    reference_byte_exact: true
+  - name: text_encoder
+    pte_sha256: c42b0957105ba2c208407585b29ea6174f9e5078345ac3dbd70479f66a69b86e
+    total_node_cycles: 31295647.75
+    reference_byte_exact: true
+  - name: vector_estimator
+    pte_sha256: d394651dd4f8b355e02c3b71823d134050cf43bf31ea3aa84e6d06f5931138e4
+    total_node_cycles: 68328886.5
+    reference_byte_exact: true
+  - name: vocoder
+    pte_sha256: 5cfe8b020b3739abb26d344c9c11245d183b523da9ba2846ff4d9ece76831931
+    total_node_cycles: 30047404.0
+    reference_byte_exact: true
+bindings:
+  passed: true
+  host: Windows ARM64
+  manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+  checks:
+  - rust-build
+  - c-build
+  - c-smoke
+  - python
+  - go
+  - go-vet
+  - dart-get
+  - dart
+  bridge_sha256: e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad
+  native_sha256: 3181767125bf3116762510b1dc2efa63377533d32e9c310c68148e6eccfedcf6
+  versions:
+    python: 3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 11:30:42) [MSC v.1944 64 bit
+      (ARM64)] ARM64
+    go: go version go1.27.2 windows/arm64
+    dart: 'Dart SDK version: 3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on "windows_arm64"'
+    cc: "clang version 23.1.3 (https://github.com/llvm/llvm-project.git 0d261d1ca552c95a8f007e061c787ac7132fbcbc)\r\
+      \nTarget: aarch64-w64-windows-gnu\r\nThread model: posix\r\nInstalledDir: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin\r\
+      \nConfiguration file: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin/aarch64-w64-windows-gnu.cfg"
+  pcm:
+  - byte_exact_across_bindings: true
+    frames: 70546
+    case: en_M1
+    sha256: f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0
+  - byte_exact_across_bindings: true
+    frames: 70710
+    case: en_F1
+    sha256: 2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0
+  - byte_exact_across_bindings: true
+    frames: 126328
+    case: ko_M1
+    sha256: 85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e
+  - byte_exact_across_bindings: true
+    frames: 126615
+    case: ko_F1
+    sha256: 470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37
+limitations:
+- Canonical numerical screen failed; thresholds unchanged. No perceptual listening
+  qualification.
+- Only Windows ARM64 SoC 88 / HTP V81; English/Korean M1/F1 exercised. Other devices/languages
+  unqualified.
+- Exactly eight steps, text capacity 128, true latent length 4..96. No automatic fallback.
+- Power conditions observed; no energy/temperature telemetry, sustained thermal benchmark
+  or cold-disk benchmark.
+- Host process memory excludes accelerator/driver allocations. No zero-copy or hardware-preemption
+  claim.
+- macOS/iOS inference not rerun on this Windows host. SDK/runtime distribution packaging
+  remains external.
+evidence:
+  replay:
+    path: ignore\qnn-replay-20261018-final\report.yaml
+    sha256: 3d095957446ba1946f0d42f14b7be61f8f2499293b44310c3d5de22f53d25067
+  public_rust_jobs:
+    path: ignore\qnn-jobs-20261018-release.json
+    sha256: cefa5da826a4c571c102137676fcc488b6e7095d145611335c2a60452b17a529
+  htp_profile:
+    path: ignore\qnn-profile-20261018-final\report.yaml
+    sha256: 13d58121f3f02d890da9dda08d224ed78cb9f5dc576e593fdee0080331b0a921
+  bindings:
+    path: ignore\qnn-bindings-20261018-final\report.json
+    sha256: 44869456346bc1ecf592ce1e3434f5451133e98c793b34035a3fcd668076432c
+  environment:
+    path: ignore\qnn-environment-20261018-release.json
+    sha256: 55c4e31df2d884ed3b6646bb1703c91783c73c0ccfa716ce02552874ee67ef20
+  serialized_compile_options:
+    path: ignore\qnn-profile-20261018-final\compile-options.json
+    sha256: 8bb3c24f8a9a05d7c34ea4b140e41cafd149f78794b5fe30fde72dc10408a18e

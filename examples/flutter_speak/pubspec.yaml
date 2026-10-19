@@ -14,7 +14,7 @@ dependencies:
   mlsr_flutter:
     path: ../../bindings/flutter
   mlsr_app_models:
-    path: .mlsr/model_assets
+    path: .mlsr/model_assets_fp16_t384
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,101 @@
+schema_version: 1
+kind: supertonic3_fp16_promotion
+date: '2026-10-18'
+base_revision: 229968956d1b0ea7bf99a6f6d84458b00449c24e
+working_tree: uncommitted promotion and preceding context experiment
+bundle_id: supertonic3-coreml-fp16-t384-v1
+manifest_sha256: 4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49
+source_snapshot_sha256: 420db5170cefec71b16cc53dc23a9bc3896e350ff95d136cfa5e4dfdf556d097
+platform: Apple M4 Pro / macOS 27.0.1 / arm64
+product_runtime: coreml
+onnx_scope: development reference and conversion only
+text_capacity: 384
+latent_buckets:
+- 128
+- 256
+- 512
+payload_files: 34
+payload_bytes: 456965584
+evidence_root: /Users/yunhocho/.cache/mlsr/experiments/supertonic3-t384-20261018
+evidence:
+  release-reference/reference.yaml:
+    sha256: 6638470fb96667f1d11e00b180fa6636ff2b0fedde7d2b5f48d71fb035bb42ad
+    cases: 16
+  release-rust-ordinary.yaml:
+    sha256: 0b76eb86c618c043471651fc70cafe1d6ac84dbb676b032f9add80864456d98a
+    passed: true
+    tensor_comparisons: 768
+    all_tensors_exact: true
+    passes: 2
+    output_backings: false
+    rejected_inputs: 5
+    seeded_path_comparisons: 4
+    cases: 32
+  release-rust-backings.yaml:
+    sha256: 0edf99c72fc9790a02f466a1992a71e50d926af4d1010f7249aea2a362b77517
+    passed: true
+    tensor_comparisons: 768
+    all_tensors_exact: true
+    passes: 2
+    output_backings: true
+    rejected_inputs: 5
+    seeded_path_comparisons: 4
+    cases: 32
+  release-flutter-final/report.json:
+    sha256: 6e500cb1e400441a14642d374828da507317e026ec06e583a12c444954e65d05
+    passed: true
+    handles_before: 0
+    handles_after: 0
+  release-app-check/release-validation.json:
+    sha256: f89b5dd21d1a05ffc3c48872ebc054efac3bc88c47fbaff20b65032c9ea06961
+    passed: true
+    live_handles_before: 0
+    live_handles_after: 0
+    frames: 2082770
+    pcm_sha256: c5477b0f7531fb22e5090095a681a6703b7565bbb0e79830c43b00aeb3b52a82
+portable_checks:
+  core_tests: 86
+  cli_tests: 7
+  ffi_tests: 8
+  python_model_tool_tests: 56
+  workspace_all_feature_clippy: passed
+  flutter_analyze: passed
+release_app:
+  path: examples/flutter_speak/build/macos/Build/Products/Release/MLSR Speak.app
+  native_library_sha256: f10621d91d9fbc4c354211265e55347b268e6d663561824b54948b21c787a847
+  build: passed
+  codesign_deep_strict: passed
+paused_seek_fix:
+  before: focused state-observer regression failed
+  after: focused regression, workspace and final Flutter integration passed
+  cause: seek within unchanged segment mutated the snapshot position without publishing
+    a new revision
+passage:
+  sentences: 6
+  segments: 6
+  previous_segments: 14
+  frames: 2082770
+  seconds: 47.22834467120182
+  wav: /Users/yunhocho/Downloads/MLSR-M1-CoreML-FP16-T384.wav
+  wav_sha256: 0a56914dac06a998ec67d171d2c7037561bbecb440e92d380027233ac423206b
+  pcm_sha256: c5477b0f7531fb22e5090095a681a6703b7565bbb0e79830c43b00aeb3b52a82
+l128_compute_plan:
+  path: release-l128-placement.json
+  sha256: 401512ea8f9bbd4d4f68806fc2367c451edd5844218ffab01cd762acf9a052c1
+  assignment:
+    cpu_percent: 0.0
+    gpu_percent: 0.0
+    ane_percent: 100.0
+  scope: static placement plan; no measured residency or utilization
+quality:
+  promotion_basis: user judged earlier corrected FP16 comparison near-identical to
+    FP32
+  new_six_sentence_render: awaiting user listening
+  corpus_perceptual_equivalence: not established
+follow_up: INT4 candidate implemented and runtime checked; listening and broader
+  qualification remain before default promotion. See int4-summary.yaml.
+limits:
+- macOS Apple Silicon tested only
+- no redistributed model or native release published
+- No representative FP16 performance qualification; later small paired observation is in int4-summary.yaml
+- iOS device and minimum OS execution not qualified

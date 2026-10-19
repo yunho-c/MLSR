@@ -3,7 +3,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <pthread.h>
+#endif
 
 static MlsrString str(const char *s) { MlsrString value={(const uint8_t *)s,strlen(s)};return value; }
 static void ok(MlsrStatus status, MlsrHandle error) {
@@ -14,17 +18,25 @@ static void ok(MlsrStatus status, MlsrHandle error) {
     mlsr_error_release(error);
     assert(status==MLSR_OK);
 }
+#ifdef _WIN32
+static DWORD WINAPI cancel_thread(void *pointer) {
+#else
 static void *cancel_thread(void *pointer) {
+#endif
     MlsrHandle error=0;
     MlsrStatus status=mlsr_job_cancel(*(MlsrHandle *)pointer,&error);
-    ok(status,error);return NULL;
+    ok(status,error);return 0;
 }
 int main(int argc,char **argv) {
-    assert(argc==3);
+    assert(argc==3 || argc==4);
     const uint64_t initial=mlsr_live_handles();
     MlsrHandle engine=0,job=0,error=0,event=0,retained=0;
     MlsrEngineOptions engine_options;
     assert(mlsr_engine_options_default(&engine_options)==MLSR_OK);
+    assert(mlsr_features() & MLSR_FEATURE_JOBS);
+    assert(mlsr_features() & MLSR_FEATURE_MODEL_STORE);
+    if(argc==4){assert(strcmp(argv[3],"qnn_htp")==0);engine_options.compute_policy=2;assert(mlsr_features()&MLSR_FEATURE_QNN_HTP);}
+    printf("features=%u\n", mlsr_features());
     MlsrStatus status=mlsr_engine_open(str(argv[1]),str(argv[2]),&engine_options,&engine,&error);ok(status,error);
     MlsrJobOptions options;mlsr_job_options_default(&options);
     options.queue_frames=4096;options.chunk_frames=1024;
@@ -55,7 +67,12 @@ int main(int argc,char **argv) {
     status=mlsr_job_start(engine,str("Busy."),str("en"),str("M1"),&options,&busy,&error);
     assert(status==MLSR_ERROR && busy==0);assert(mlsr_error_release(error)==MLSR_OK);
     status=mlsr_job_poll(job,30000,&event,&error);ok(status,error);mlsr_event_release(event);
+#ifdef _WIN32
+    HANDLE thread=CreateThread(NULL,0,cancel_thread,&job,0,NULL);assert(thread);
+    assert(WaitForSingleObject(thread,30000)==WAIT_OBJECT_0);CloseHandle(thread);
+#else
     pthread_t thread;assert(pthread_create(&thread,NULL,cancel_thread,&job)==0);assert(pthread_join(thread,NULL)==0);
+#endif
     status=mlsr_job_wait(job,30000,&error);ok(status,error);
     status=mlsr_job_poll(job,0,&event,&error);ok(status,error);
     MlsrEventInfo info={0};status=mlsr_event_read(event,&info,sizeof(info),&error);ok(status,error);assert(info.kind==4);

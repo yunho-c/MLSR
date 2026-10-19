@@ -174,10 +174,7 @@ external int mlsr_event_read(
 @ffi.Native<ffi.Int32 Function(ffi.Uint64)>()
 external int mlsr_event_release(int event);
 
-/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
-/// 4 = model ownership and transactional store API, 8 = developer SDK metadata
-/// schema v1, 16 = Apple native output built for this target. ABI 1's old structs
-/// and meanings are unchanged; bindings must check feature bits before new calls.
+/// Bitmask of MLSR_FEATURE_* capabilities built for this target.
 @ffi.Native<ffi.Uint32 Function()>()
 external int mlsr_features();
 
@@ -953,6 +950,18 @@ const int MLSR_END = 2;
 
 const int MLSR_ERROR = -1;
 
+const int MLSR_FEATURE_APPLE_OUTPUT = 16;
+
+const int MLSR_FEATURE_COREML = 2;
+
+const int MLSR_FEATURE_DEVELOPER_SDK = 8;
+
+const int MLSR_FEATURE_JOBS = 1;
+
+const int MLSR_FEATURE_MODEL_STORE = 4;
+
+const int MLSR_FEATURE_QNN_HTP = 32;
+
 const int MLSR_OK = 0;
 
 const int MLSR_TIMEOUT = 1;
@@ -964,7 +973,7 @@ final class MlsrEngineOptions extends ffi.Struct {
   @ffi.Uint32()
   external int struct_size;
 
-  /// 0: CPU only, 1: CPU and Neural Engine permitted.
+  /// 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
   @ffi.Uint32()
   external int compute_policy;
 
@@ -1192,7 +1201,7 @@ final class MlsrRequest extends ffi.Struct {
   @ffi.Float()
   external double speaking_rate;
 
-  /// Supertonic denoising steps, 1..=64; default 8.
+  /// Supertonic denoising steps, 1..=64; default 8. QNN Superfast requires 8.
   @ffi.Uint32()
   external int supertonic_steps;
 

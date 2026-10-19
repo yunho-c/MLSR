@@ -377,11 +377,67 @@ fn real_prepared_segments_match_linear_synthesis() {
         "This is the beginning.\nWe can jump directly to the middle.\nThis is the final sentence.",
         "en", "M1",
     ).unwrap());
+    assert_prepared_segments_match_linear_synthesis(&engine, plan, "M1");
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE pointing to the T384 FP16 bundle and real Core ML execution"]
+fn real_t384_prepared_sentences_match_linear_synthesis() {
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../model-manifests/supertonic3-coreml-fp16.yaml");
+    let engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
+    for (language, voice, text) in [
+        (
+            "en",
+            "M1",
+            concat!(
+                "A thoughtful reader can follow a complete sentence at a comfortable pace, keeping all its words together while the speaker explains the next idea.\n",
+                "We can jump directly to the middle without reading the passages before it, while the reader keeps the original sentence boundaries and source offsets.\n",
+                "This is the final sentence in the same document."
+            ),
+        ),
+        (
+            "ko",
+            "F1",
+            concat!(
+                "문장을 중간에서 끊지 않고 끝까지 읽으면 앞뒤 내용이 자연스럽게 이어지고, 듣는 사람도 이야기의 흐름을 편안하게 따라갈 수 있습니다.\n",
+                "이제 가운데 문장으로 바로 이동해도 처음에 계획한 목소리와 속도는 그대로 유지됩니다.\n",
+                "마지막 문장도 같은 문서에 남아 있습니다."
+            ),
+        ),
+    ] {
+        let plan = Arc::new(engine.plan_text(text, language, voice).unwrap());
+        assert_eq!(plan.sentences().len(), 3);
+        assert!(plan.segments()[0].normalized().chars().count() > 128);
+        assert!(
+            plan.segments()
+                .iter()
+                .all(|s| s.normalized().chars().count() <= 384)
+        );
+        assert_eq!(
+            plan.segments()
+                .iter()
+                .map(|s| &text[s.utf8_span()])
+                .collect::<String>(),
+            text,
+        );
+        assert_prepared_segments_match_linear_synthesis(&engine, plan, voice);
+    }
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+fn assert_prepared_segments_match_linear_synthesis(
+    engine: &Engine,
+    plan: Arc<TextPlan>,
+    voice: &str,
+) {
     assert_eq!(plan.segments().len(), 3);
     let options = SynthesisOptions::new(8, 1.05, 1729).unwrap();
     let mut linear = vec![Vec::new(); 3];
     let job = engine
-        .start_plan(plan.clone(), 0, "M1", options, JobOptions::default())
+        .start_plan(plan.clone(), 0, voice, options, JobOptions::default())
         .unwrap();
     loop {
         match job.poll(Duration::from_secs(30)) {
@@ -399,7 +455,7 @@ fn real_prepared_segments_match_linear_synthesis() {
     }
     let baseline = engine.runtime_stats().unwrap();
     let preparation = engine
-        .prepare_speech(plan, "M1", options, JobOptions::default())
+        .prepare_speech(plan, voice, options, JobOptions::default())
         .unwrap();
     assert!(preparation.wait(Duration::from_secs(30)));
     assert!(matches!(terminal(&preparation).outcome, Outcome::Completed));

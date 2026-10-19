@@ -81,6 +81,8 @@ impl Queue {
         request: Request,
         work: Work,
     ) -> Result<SynthesisJob> {
+        // Reject model/backend mismatches before reserving a job or replacing speech.
+        request.validate_for(&self.voices()?)?;
         let mut gate = lock(&self.shared.gate);
         if gate.closed {
             return Err(Error::Closed);

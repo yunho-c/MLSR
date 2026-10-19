@@ -149,12 +149,27 @@ availability while paused, and reading a document with room for only one segment
 The real prepared-segment test generates in order `2, 0, 1, 2`, compares every
 Float32 bit with linear synthesis and checks that duration predictions are not
 repeated. Real Python/Go and muted macOS Flutter tests exercise far seeks and cached
-returns through the public APIs. These checks qualify the branch's Core ML INT4
-backend on the tested Mac, not every backend or device.
+returns through the public APIs. That original qualification covers Core ML INT4
+on the tested Mac.
 
 ```sh
 MLSR_TEST_BUNDLE=/absolute/verified/model cargo test --locked -p mlsr --all-features \
   real_prepared_segments_match_linear_synthesis -- --ignored --nocapture
+```
+
+The [merge qualification](../tests/fixtures/developer-api/duration-main-merge.json)
+adds the recommended T384 FP16 bundle and its complete-sentence segmentation.
+English/M1 and Korean/F1 sentences exceeding the old 128-token window remain
+whole; their prepared segments match every Float32 bit of linear synthesis in
+order `2, 0, 1, 2`, without repeating duration predictions. The muted macOS Flutter
+reader also passes unbuffered seeks, cached returns, paused controls and export
+with this bundle. The legacy INT4 parity check still passes. Duration preparation
+and generation share backend-specific token types and duration limits; QNN
+execution of the merged reader has not been qualified on Windows hardware.
+
+```sh
+MLSR_TEST_BUNDLE=/absolute/verified/t384-fp16-model cargo test --locked -p mlsr --all-features \
+  real_t384_prepared_sentences_match_linear_synthesis -- --ignored --nocapture
 ```
 
 Earlier full-recording and duration-planning evidence follows; its no-eviction

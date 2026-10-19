@@ -217,7 +217,12 @@ impl Control {
         let outcome = match state.cancel_reason {
             Some(reason) => Outcome::Cancelled { reason },
             None => Outcome::Failed {
-                error: Failure::new(self.id, stage, error),
+                error: Failure::new(
+                    self.id,
+                    stage,
+                    error,
+                    self.request.voice().voice().backend(),
+                ),
             },
         };
         self.complete(&mut state, outcome);
@@ -283,7 +288,12 @@ impl Control {
                 self.complete(
                     &mut state,
                     Outcome::Failed {
-                        error: Failure::new(self.id, stage, &error),
+                        error: Failure::new(
+                            self.id,
+                            stage,
+                            &error,
+                            self.request.voice().voice().backend(),
+                        ),
                     },
                 );
             }

@@ -156,7 +156,7 @@ fn speech_options(settings: MlsrSpeechOptions) -> ApiResult<(SpeechOptions, Spea
 }
 fn catalog(source: MlsrHandle) -> ApiResult<VoiceCatalog> {
     if source == 0 {
-        return Ok(mlsr::models::supertonic3::BundleManifest::baseline().voice_catalog());
+        return Ok(mlsr::models::supertonic3::BundleManifest::recommended().voice_catalog());
     }
     let entry = handles::get_any(source)?;
     match entry.as_ref() {

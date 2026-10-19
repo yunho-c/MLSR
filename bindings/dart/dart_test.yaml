@@ -1,3 +1,3 @@
-# Suites assert process-wide native handle counts shared across Dart isolates.
-# Other suites must not create or release handles during those assertions.
+# Suite isolates share the native registry and its process-wide leak counter.
+# Keep lifecycle assertions independent; worker races within each test still run.
 concurrency: 1

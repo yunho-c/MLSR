@@ -1,0 +1,9 @@
+# Explicit opt-in: adapter parity passed, but the canonical quality screen still
+# fails 6 of 12 cases. This release is deliberately absent from catalog.yaml.
+schema_version: 1
+models:
+  - id: supertonic3-qnn-superfast-v1
+    backend: qnn
+    platforms: [windows-arm64]
+    manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+    asset_path: models/supertonic3-qnn-superfast-v1

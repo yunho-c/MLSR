@@ -25,11 +25,11 @@ impl Bundle {
             self.segment_text(text, language)?,
         )
     }
-    /// Keep sentences within conservative quality targets, preferring clause
-    /// punctuation before word/grapheme fallbacks. Source punctuation and spans
-    /// are preserved. Every segment is token-validated before inference begins.
+    /// Keep complete sentences when they fit the model's text window, preferring
+    /// clauses for oversized sentences. Legacy T=128 bundles retain their
+    /// conservative policy. Every segment is token-validated before inference.
     pub fn segment_text(&self, text: &str, language: &str) -> Result<Vec<TextSegment>> {
-        let segments = segment_text(text, language)?;
+        let segments = segment_text_with_capacity(text, language, self.text_capacity())?;
         for segment in &segments {
             self.encode_text(&segment.original, language)?;
         }
@@ -37,20 +37,49 @@ impl Bundle {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn segment_text(text: &str, language: &str) -> Result<Vec<TextSegment>> {
+    segment_text_with_capacity(text, language, TOKEN_LIMIT)
+}
+
+fn segment_text_with_capacity(
+    text: &str,
+    language: &str,
+    token_limit: usize,
+) -> Result<Vec<TextSegment>> {
     // Validate language, raw request size and the all-empty case once up front.
     // This does not impose the single-segment token limit.
     let _ = normalize_text(text, language)?;
     debug_assert!(text.len() <= MAX_TEXT_BYTES);
     let mut segments = Vec::new();
+    let expanded = token_limit > TOKEN_LIMIT;
     let limit = if matches!(language, "ko" | "ja") {
-        CJK_CHARS
+        if expanded { 120 } else { CJK_CHARS }
     } else {
-        LATIN_CHARS
+        if expanded { 300 } else { LATIN_CHARS }
     };
     for span in sentence_spans(text) {
         let sentence = &text[span.clone()];
         let base = span.start;
+        if expanded {
+            match normalize_text(sentence, language) {
+                Ok(normalized) if normalized.chars().count() <= token_limit => {
+                    segments.push(TextSegment {
+                        id: segments.len() as u32,
+                        span,
+                        original: sentence.into(),
+                        normalized,
+                    });
+                    continue;
+                }
+                Ok(_)
+                | Err(Error::Input {
+                    kind: InputErrorKind::EmptyText,
+                    ..
+                }) => {}
+                Err(error) => return Err(error),
+            }
+        }
         let mut start = 0;
         while start < sentence.len() {
             let mut valid = None;
@@ -74,7 +103,7 @@ pub(crate) fn segment_text(text: &str, language: &str) -> Result<Vec<TextSegment
                 let candidate = &sentence[start..end];
                 match normalize_text(candidate, language) {
                     Ok(normalized)
-                        if normalized.chars().count() <= TOKEN_LIMIT
+                        if normalized.chars().count() <= token_limit
                             && character_count(candidate) <= limit =>
                     {
                         valid = Some(end);
@@ -118,7 +147,15 @@ pub(crate) fn segment_text(text: &str, language: &str) -> Result<Vec<TextSegment
                 {
                     Some(end)
                 } else if let Some(&end) = words.last() {
-                    Some(balance_tail(sentence, start, end, &words, language, limit)?)
+                    Some(balance_tail(
+                        sentence,
+                        start,
+                        end,
+                        &words,
+                        language,
+                        limit,
+                        token_limit,
+                    )?)
                 } else {
                     valid
                 }
@@ -179,6 +216,7 @@ fn balance_tail(
     words: &[usize],
     language: &str,
     limit: usize,
+    token_limit: usize,
 ) -> Result<usize> {
     let minimum = limit / 3;
     // Examine only a small tail. This stays bounded even for a 64 KiB sentence.
@@ -194,7 +232,7 @@ fn balance_tail(
         if count > limit {
             break;
         }
-        if count >= minimum && normalize_text(tail, language)?.chars().count() <= TOKEN_LIMIT {
+        if count >= minimum && normalize_text(tail, language)?.chars().count() <= token_limit {
             return Ok(candidate);
         }
     }
@@ -204,6 +242,47 @@ fn balance_tail(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expanded_context_keeps_sentences_whole_and_navigation_ranges_exact() {
+        let first = "A thoughtful reader can follow a complete sentence at a comfortable pace, keeping all its words together while the speaker explains the next idea.";
+        let text = format!("{first} A second sentence follows.");
+        let parts = segment_text_with_capacity(&text, "en", 384).unwrap();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].original.trim(), first);
+        assert!(parts[0].normalized.chars().count() > 128);
+        let plan = crate::text::TextPlan::build(&text, "en", "test", parts.clone()).unwrap();
+        assert_eq!(plan.sentences().len(), 2);
+        for part in parts {
+            assert_eq!(text[part.span.clone()], part.original);
+        }
+    }
+
+    #[test]
+    fn expanded_context_splits_oversized_sentences_without_loss_or_overflow() {
+        for (language, clause) in [
+            ("en", "Keep all these words in their original order, "),
+            (
+                "ko",
+                "정규화한 글자 수도 확인하면서 문장을 끝까지 읽어 주세요, ",
+            ),
+        ] {
+            let text = format!("{}.", clause.repeat(18));
+            let parts = segment_text_with_capacity(&text, language, 384).unwrap();
+            assert!(parts.len() > 1);
+            assert_eq!(
+                parts
+                    .iter()
+                    .map(|p| p.original.as_str())
+                    .collect::<String>(),
+                text
+            );
+            for part in parts {
+                assert!(part.normalized.chars().count() <= 384);
+                assert_eq!(text[part.span.clone()], part.original);
+            }
+        }
+    }
 
     #[test]
     fn clause_breaks_keep_the_adler_phrase_and_original_punctuation() {

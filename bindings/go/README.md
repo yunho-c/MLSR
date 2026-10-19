@@ -138,6 +138,19 @@ shared library available to the OS loader. Linking `mlsr_ffi` is handled by the
 binding. Cross-compilation also requires a target C toolchain and target Rust
 library. Builds with `CGO_ENABLED=0` are not supported.
 
+For Windows ARM64, follow [QNN setup](../../docs/qnn-runtime.md), build
+`mlsr-ffi --features qnn`, and use native ARM64 Go with a compatible LLVM-MinGW
+C compiler. The Windows binding explicitly links `mlsr_ffi.dll.lib` (the DLL
+import library); `mlsr_ffi.lib` is Rust's separate static archive. Put the shared
+library on PATH and dot-source `tools/qnn_env.ps1` for QNN dependencies. Pass
+`EngineOptions{QNNHTP: true}` to `OpenTTS` or `Open` with the QNN manifest and verified bundle.
+For SDK jobs/rendering, use `DefaultTTSOptions()` with `Output = HeadlessOutput`;
+`TTSFromModel` accepts the same engine options. The public developer example
+accepts `--policy qnn_htp`. Native Windows speech output is unavailable, and
+QNN requires eight steps.
+`CPUOnly` and `QNNHTP` are mutually exclusive. The preset remains
+[experimental because of model-quality failures](../../docs/qnn-qualification.md).
+
 For example, after building the Core ML library from the repository root:
 
 ```sh
@@ -145,7 +158,7 @@ MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release -p mlsr-ffi --featu
 export CGO_CFLAGS="-I$PWD/include"
 export CGO_LDFLAGS="-L$PWD/target/release -Wl,-rpath,$PWD/target/release"
 cd bindings/go
-go run ./examples/synthesize --manifest ../../model-manifests/supertonic3-coreml.yaml \
+go run ./examples/synthesize --manifest ../../model-manifests/supertonic3-coreml-fp16.yaml \
   --bundle /path/to/bundle --output hello.wav --cancel-first
 ```
 

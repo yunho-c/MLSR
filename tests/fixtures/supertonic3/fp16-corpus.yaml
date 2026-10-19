@@ -1,0 +1,136 @@
+schema_version: 1
+id: supertonic3-fp16-t384-v1
+license: Apache-2.0
+description: Original MLSR sentences for corrected T=384 FP16 Core ML; boundary cases
+  calibrate speed and are not listening tests.
+defaults:
+  steps: 8
+  speed: 1.05
+cases:
+- id: en_m1_basic
+  language: en
+  voice: M1
+  seed: 1729
+  text: Hello from MLSR. This speech is generated locally.
+- id: en_f1_basic
+  language: en
+  voice: F1
+  seed: 1730
+  text: The library speaks clearly and stops when asked.
+- id: en_normalization
+  language: en
+  voice: M1
+  seed: 1731
+  text: '  Café—ＡＢＣ costs １２ dollars, e.g., at noon 🙂 '
+- id: en_punctuation
+  language: en
+  voice: F1
+  seed: 1732
+  text: At 3.14 p.m., Dr. Lee said, “Ready?”
+- id: ko_m1_basic
+  language: ko
+  voice: M1
+  seed: 1733
+  text: 안녕하세요. 오늘도 좋은 하루 보내세요.
+- id: ko_f1_basic
+  language: ko
+  voice: F1
+  seed: 1734
+  text: 새로운 문장을 천천히 읽어 주세요.
+- id: ko_normalization
+  language: ko
+  voice: M1
+  seed: 1735
+  text: '  한글과 ＡＢＣ, １２３을 함께 읽어요! 🙂 '
+- id: ko_decomposed
+  language: ko
+  voice: F1
+  seed: 1736
+  text: 안녕하세요. 반갑습니다!
+- id: latent_127
+  language: en
+  voice: M1
+  seed: 1740
+  target_latent_length: 127
+  text: The quiet library is a pleasant place to read a book and think about the day
+    ahead.
+- id: latent_128
+  language: en
+  voice: M1
+  seed: 1741
+  target_latent_length: 128
+  text: The quiet library is a pleasant place to read a book and think about the day
+    ahead.
+- id: latent_129
+  language: en
+  voice: M1
+  seed: 1742
+  target_latent_length: 129
+  text: The quiet library is a pleasant place to read a book and think about the day
+    ahead.
+- id: latent_255
+  language: en
+  voice: F1
+  seed: 1743
+  target_latent_length: 255
+  text: We can read this paragraph at a comfortable pace, then pause and continue
+    with the next part of the story.
+- id: latent_256
+  language: en
+  voice: F1
+  seed: 1744
+  target_latent_length: 256
+  text: We can read this paragraph at a comfortable pace, then pause and continue
+    with the next part of the story.
+- id: latent_257
+  language: en
+  voice: F1
+  seed: 1745
+  target_latent_length: 257
+  text: We can read this paragraph at a comfortable pace, then pause and continue
+    with the next part of the story.
+- id: empty
+  language: en
+  voice: M1
+  seed: 1750
+  text: '   '
+  expected_error: empty_text
+- id: emoji_only
+  language: ko
+  voice: F1
+  seed: 1751
+  text: 🙂
+  expected_error: empty_text
+- id: unsupported_language
+  language: xx
+  voice: M1
+  seed: 1752
+  text: Hello.
+  expected_error: unsupported_language
+- id: unsupported_scalar
+  language: en
+  voice: M1
+  seed: 1753
+  text: 'A rare character: 𠀀.'
+  expected_error: unsupported_character
+- id: ko_overflow_after_normalization
+  language: ko
+  voice: F1
+  seed: 1754
+  text: 한글은 정규화하면 글자 수가 늘어납니다. 문장이 길어져도 뒤에 있는 중요한 내용을 조용히 잘라 버리면 안 됩니다.한글은 정규화하면 글자
+    수가 늘어납니다. 문장이 길어져도 뒤에 있는 중요한 내용을 조용히 잘라 버리면 안 됩니다.한글은 정규화하면 글자 수가 늘어납니다. 문장이 길어져도
+    뒤에 있는 중요한 내용을 조용히 잘라 버리면 안 됩니다.
+  expected_error: text_too_long
+- id: en_long_sentence
+  language: en
+  voice: M1
+  seed: 1760
+  text: A thoughtful reader can follow a complete sentence at a comfortable pace,
+    keeping all its words together while the speaker explains the next idea and leaves
+    enough time for everyone to understand the story.
+- id: ko_long_sentence
+  language: ko
+  voice: F1
+  seed: 1761
+  text: 새로운 도서관에서 책을 읽으며 이야기의 흐름을 천천히 따라가고 문장에 담긴 뜻을 생각하면서 마지막에 있는 중요한 내용까지 빠짐없이 듣고
+    싶습니다.

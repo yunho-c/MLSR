@@ -34,7 +34,7 @@ enum Command {
         #[command(subcommand)]
         command: models::Models,
     },
-    /// Verify local manifest/payloads and list voices without loading Core ML.
+    /// Verify local manifest/payloads and list voices without loading native graphs.
     Verify(Assets),
     /// Generate a new mono Float32 WAV file; existing files are never overwritten.
     Synthesize(Synthesize),
@@ -83,6 +83,7 @@ struct Synthesize {
 enum Policy {
     CpuOnly,
     CpuAndNeuralEngine,
+    QnnHtp,
 }
 #[derive(Clone, Copy, ValueEnum)]
 enum Variant {
@@ -145,6 +146,7 @@ fn run(cli: Cli) -> Result<()> {
                     compute_policy: match args.compute_policy {
                         Policy::CpuOnly => ComputePolicy::CpuOnly,
                         Policy::CpuAndNeuralEngine => ComputePolicy::CpuAndNeuralEngine,
+                        Policy::QnnHtp => ComputePolicy::QnnHtp,
                     },
                     reuse_output_buffers: !args.no_output_reuse,
                     execution_variant: match args.execution_variant {

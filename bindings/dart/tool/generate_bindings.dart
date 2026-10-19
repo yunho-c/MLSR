@@ -19,6 +19,7 @@ Future<void> main(List<String> args) async {
         )
       : committed;
   await generated.parent.create(recursive: true);
+  final libclangPath = Platform.environment['LIBCLANG_PATH'];
 
   await FfiGenerator(
     output: Output(
@@ -40,7 +41,9 @@ Future<void> main(List<String> args) async {
             node.isIncluded = node.name.startsWith('MLSR_'),
       ),
     ],
-  ).generate();
+  ).generate(
+    libclangDylib: libclangPath == null ? null : File(libclangPath).uri,
+  );
 
   if (check &&
       await generated.readAsString() != await committed.readAsString()) {

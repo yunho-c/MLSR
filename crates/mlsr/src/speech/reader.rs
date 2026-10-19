@@ -18,7 +18,12 @@ struct Generation {
 }
 
 fn failure(control: &Control, stage: FailureStage, error: Error) -> Error {
-    Error::OperationFailed(Failure::new(control.id(), stage, &error))
+    Error::OperationFailed(Failure::new(
+        control.id(),
+        stage,
+        &error,
+        control.job.request().voice().voice().backend(),
+    ))
 }
 fn check(control: &Control) -> Result<()> {
     if lock(&control.state).snapshot.cancellation.is_some() {

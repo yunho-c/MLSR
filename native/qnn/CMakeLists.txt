@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.24)
+project(mlsr_qnn_bridge LANGUAGES CXX)
+if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+  message(FATAL_ERROR "The first MLSR QNN bridge requires Windows ARM64")
+endif()
+if(NOT CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64")
+  message(FATAL_ERROR "Configure with the Visual Studio generator and -A ARM64")
+endif()
+find_package(executorch CONFIG REQUIRED)
+add_library(mlsr_qnn_bridge SHARED bridge.cpp)
+target_compile_features(mlsr_qnn_bridge PRIVATE cxx_std_17)
+target_compile_options(mlsr_qnn_bridge PRIVATE /EHsc /W4)
+target_compile_definitions(mlsr_qnn_bridge PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(mlsr_qnn_bridge PRIVATE
+  executorch extension_module extension_tensor qnn_executorch_backend)
+add_custom_command(TARGET mlsr_qnn_bridge POST_BUILD COMMAND ${CMAKE_COMMAND} -E
+  copy_if_different $<TARGET_FILE:qnn_executorch_backend> $<TARGET_FILE_DIR:mlsr_qnn_bridge>)

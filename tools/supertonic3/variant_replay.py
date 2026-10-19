@@ -50,6 +50,7 @@ def replay(bundle, reference, output, binary):
         DEFAULT_MANIFEST,
         VARIANT_MANIFEST,
         ROOT / "crates/mlsr/examples/coreml_synthesis_replay.rs",
+        ROOT / "crates/mlsr/examples/support/synthesis_replay.rs",
         *sorted((ROOT / "crates/mlsr/src").rglob("*.rs")),
         *sorted(Path(__file__).parent.glob("*.py")),
     ]

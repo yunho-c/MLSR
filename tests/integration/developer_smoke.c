@@ -32,12 +32,17 @@ static void contains(MlsrHandle json, const char *expected) {
     assert(mlsr_sdk_release(json) == MLSR_OK);
 }
 int main(int argc, char **argv) {
-    assert(argc == 4); // Manifest, bundle, existing new evidence directory.
-    assert((mlsr_features() & 24) == 24);
+    assert(argc == 4 || argc == 5); // Manifest, bundle, new evidence directory, optional qnn_htp.
+    const int qnn = argc == 5 && strcmp(argv[4], "qnn_htp") == 0;
+    assert(argc == 4 || qnn);
+    assert(mlsr_features() & MLSR_FEATURE_DEVELOPER_SDK);
+    if (qnn) assert(mlsr_features() & MLSR_FEATURE_QNN_HTP);
+    else assert(mlsr_features() & MLSR_FEATURE_APPLE_OUTPUT);
     const uint64_t initial = mlsr_live_handles();
     MlsrEngineOptions engine;
     MlsrTtsOptions options;
     assert(mlsr_engine_options_default(&engine) == MLSR_OK);
+    if (qnn) engine.compute_policy = 2;
     assert(mlsr_tts_options_default(&options) == MLSR_OK);
     options.output_mode = 1; // Headless: never opens output for rendering.
     MlsrHandle tts = 0, error = 0, value = 0;
@@ -45,10 +50,19 @@ int main(int argc, char **argv) {
     ok(status, error);
     status = mlsr_voice_catalog(tts, &value, &error); ok(status, error);
     contains(value, "\"readiness\":\"engine_ready\"");
+    status = mlsr_voice_catalog(tts, &value, &error); ok(status, error);
+    contains(value, qnn ? "\"backend\":\"qnn\"" : "\"backend\":\"coreml\"");
     MlsrRequest request;
     assert(mlsr_request_default(&request) == MLSR_OK);
     request.text = str("Never start from observation.");
     MlsrHandle lazy = 0;
+    if (qnn) {
+        request.supertonic_steps = 7;
+        status = mlsr_tts_synthesize(tts, &request, &lazy, &error);
+        assert(status == MLSR_ERROR && lazy == 0);
+        assert(mlsr_error_release(error) == MLSR_OK); error = 0;
+        request.supertonic_steps = 8;
+    }
     status = mlsr_tts_synthesize(tts, &request, &lazy, &error); ok(status, error);
     status = mlsr_sdk_wait(lazy, 1, &value, &error);
     assert(status == MLSR_TIMEOUT && value == 0 && error == 0);
@@ -98,7 +112,20 @@ int main(int argc, char **argv) {
     assert(mlsr_speech_options_default(&playback) == MLSR_OK);
     playback.volume = 0; playback.playback_rate = 2;
     MlsrHandle speech = 0;
-    status = mlsr_speak(tts, &request, &playback, &speech, &error); ok(status, error);
+    status = mlsr_speak(tts, &request, &playback, &speech, &error);
+    if (qnn) {
+        assert(status == MLSR_ERROR && speech == 0);
+        MlsrErrorInfo info = {0};
+        assert(mlsr_error_read(error, &info, sizeof(info)) == MLSR_OK);
+        assert(info.code.len == strlen("unsupported_capability"));
+        assert(memcmp(info.code.data, "unsupported_capability", info.code.len) == 0);
+        assert(mlsr_error_release(error) == MLSR_OK);
+        assert(mlsr_sdk_release(tts) == MLSR_OK);
+        assert(mlsr_live_handles() == initial);
+        puts("Developer C ABI passed: QNN headless SDK, lazy cancellation, owned PCM, four WAVs, unsupported playback");
+        return 0;
+    }
+    ok(status, error);
     assert(mlsr_sdk_id(speech) != 0);
     status = mlsr_sdk_wait(speech, 30000, &value, &error); ok(status, error);
     contains(value, "\"kind\":\"completed\"");
