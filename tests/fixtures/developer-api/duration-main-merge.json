@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-10-19T12:24:34.604121+00:00",
+  "purpose": "Integrate main T384 FP16 segmentation, model delivery and QNN progress with duration planning and on-demand seeking.",
+  "feature_parent": "cfda7aece1ca6415ac0d2d21d3734e25197ab32d",
+  "main_parent": "74b91a6a68a82757298ab18327217a81fcac43eb",
+  "common_ancestor": "229968956d1b0ea7bf99a6f6d84458b00449c24e",
+  "integration": [
+    "Keep incoming main segmentation, model manifests, backend duration policies and Flutter model selection unchanged.",
+    "Use backend-specific Int32/Core ML or Int64/QNN token inputs in both duration preparation and waveform generation.",
+    "Construct cached duration plans with backend-specific duration bounds, latent buckets and noise shapes.",
+    "Validate model/backend identity before admission for stream, preparation and segment jobs.",
+    "Combine seek notification with the latest seek serial and atomically publish confirmed position, text range and pending state.",
+    "Preserve backend attribution on reader and planning failures."
+  ],
+  "source_sha256": {
+    "crates/mlsr/src/engine.rs": "065491498f8528643b20efe4371a1869a9f1b0c93959c2ad326ca10dd5607ddd",
+    "crates/mlsr/src/engine/prepared.rs": "5bd52cb5bff894eba81e17154f95d986f6f7c9490037fec20782466884de56f0",
+    "crates/mlsr/src/engine/job_tests.rs": "c2652c5742c10e1c4685b21ed87ebdd8c64ad09f41bb195e46d7bf1bd3f9fbaf",
+    "crates/mlsr/src/models/supertonic3/bundle.rs": "078666111a76b26fa42e472e182c0d40ac1d87e75175872becf643cc075300de",
+    "crates/mlsr/src/models/supertonic3/frontend.rs": "db9ee3348be2644b044eaa8b596e61b18a7d5ca537cdeb5b2c097aa895d07921",
+    "crates/mlsr/src/models/supertonic3/segmentation.rs": "a42440f84296a2a36eb1b96cb62c527e88dc4e7bee034a5dec76c9d8c685134b",
+    "crates/mlsr/src/models/supertonic3/planning.rs": "878ac8caf0eb6c79f620375e6aead924792fe6ea78c1cbf93d8577025058fb14",
+    "crates/mlsr/src/models/supertonic3/pipeline.rs": "81323e14fd09bbd7e07ce10d7597dea0c167cc9a8ad9e28f99d8761370bc43b1",
+    "crates/mlsr/src/request.rs": "b9c509f74e2ea2743bc69379da61f1050943b959f6cdc339dc5bbad7c0c88dbc",
+    "crates/mlsr/src/synthesis/queue.rs": "ab8bf2fc0a97c2fc1f3869fb79973721aff8114069b03a4d40fe8b53669adeb1",
+    "crates/mlsr/src/synthesis/mod.rs": "e8ca3e2eeca027b4dbe25aa61fda89a57d0628d144b0816ac2e4eda63a128fe6",
+    "crates/mlsr/src/speech/worker.rs": "c9872d62238a3c33d3d00258d98864035d18673c719d6cdf8991113861fcb915",
+    "crates/mlsr/src/speech/reader.rs": "d0fb4bc680242cbc0475aa9573893943c0a34f313d1d3a8561a24b821642d531",
+    "crates/mlsr/src/speech/document.rs": "115a37c33b0b6d9c3a176e41e0236a47ec4906e1caae0be61c0247608cbe5a96",
+    "crates/mlsr/src/speech/tests.rs": "68b3171d3533fc623d0dc25bd7387e169b5cf7f9a8b283d9395d4fc8d7bf3a32",
+    "crates/mlsr/src/speech/tests/reader_tests.rs": "125b14916e6c270825b2b2390c85d269578ce86c1cb835689b24a0481593fdba",
+    "examples/flutter_speak/mlsr-models.yaml": "fcc32a62d4628f8ce19385e3cd1d45b7fa1aeadb9ebe121c73490009e221ec78",
+    "examples/flutter_speak/integration_test/speak_test.dart": "eca40b2279278b6b744f9e530c588e1c67e40d039ba260cdb0ca075cfdb6d2db",
+    "bindings/python/tests/test_sdk.py": "26d3db3861d2ecbf305d9f06f9071c5a2f205b45d99e6b9c78a79c8a8fbc0344",
+    "bindings/go/sdk_test.go": "80ffc66a12081462c44bd45105e1bbbe8619002ad41ee88d292082e5466d8f31",
+    "include/mlsr.h": "681ea70b07a61a7e2e5209c351eaa279a22776d84b63f6a4cc1957cf466e7d70",
+    "bindings/dart/lib/src/bindings.g.dart": "cbb3f542d910d52717e33f18fc84638e605cdf75f8049fa0888fe4e6840113de"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "hardware": "Apple M4 Pro",
+  "toolchains": {
+    "rust": "1.95.0",
+    "rust_msrv": "1.88.0",
+    "flutter": "3.41.4",
+    "dart": "3.11.1",
+    "python": "3.14.8",
+    "go": "1.27.1"
+  },
+  "models": {
+    "t384_fp16": {
+      "manifest": "model-manifests/supertonic3-coreml-fp16.yaml",
+      "manifest_sha256": "4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49",
+      "bundle": "/Users/yunhocho/.cache/mlsr/models/supertonic3-coreml-fp16-t384-v1"
+    },
+    "legacy_int4": {
+      "manifest": "model-manifests/supertonic3-coreml.yaml",
+      "manifest_sha256": "958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5",
+      "bundle": "/Users/yunhocho/.cache/mlsr/models/supertonic3-coreml-int4-v1"
+    }
+  },
+  "native_libraries_sha256": {
+    "python_go_debug": "652748f8d8452025098b7802b8865075e952e428bd34b375521d976707fc5660",
+    "flutter_bundled": "46516ace7f8dd9a5bb86207d82455a6853ad19a66d3b5251f21e54a3a5eb2f2a"
+  },
+  "external_evidence": "/Users/yunhocho/.cache/mlsr/qualification/duration-main-merge-6iuts3mn",
+  "rust_workspace": {
+    "passed": 129,
+    "ignored_external_tests": 15,
+    "log": "rust-tests.log"
+  },
+  "prepared_segment_parity": {
+    "t384_fp16": {
+      "result": "pass",
+      "language_voices": [
+        "en/M1",
+        "ko/F1"
+      ],
+      "first_sentence_normalized_tokens": ">128 and <=384",
+      "original_sentence_spans": "preserved as three complete model segments",
+      "test": "real_t384_prepared_sentences_match_linear_synthesis",
+      "log": "fp16-prepared.log"
+    },
+    "legacy_int4": {
+      "result": "pass",
+      "language_voices": [
+        "en/M1"
+      ],
+      "test": "real_prepared_segments_match_linear_synthesis",
+      "log": "int4-prepared.log"
+    },
+    "command_template": "MLSR_TEST_BUNDLE=<verified bundle> cargo test --locked -p mlsr --all-features <test> -- --ignored --nocapture",
+    "per_language_case": {
+      "seed": 1729,
+      "steps": 8,
+      "raw_speed": 1.05,
+      "duration_predictions": 3,
+      "generation_order": [
+        2,
+        0,
+        1,
+        2
+      ],
+      "additional_model_calls": 40,
+      "pcm_comparison": "every Float32 bit equals the corresponding original linear-synthesis segment",
+      "live_native_tensors": "unchanged"
+    }
+  },
+  "bindings": {
+    "dart": "4 portable passed, 7 model/native skipped; real native path covered by Flutter integration",
+    "python": "7 portable passed, 7 model/native skipped; real FP16 on-demand seek passed separately",
+    "go": "portable race suite and real FP16 on-demand seek race test passed",
+    "native_environment": {
+      "MLSR_TEST_MANIFEST": "/Users/yunhocho/GitHub/MLSR-duration-planning/model-manifests/supertonic3-coreml-fp16.yaml",
+      "MLSR_TEST_BUNDLE": "/Users/yunhocho/.cache/mlsr/models/supertonic3-coreml-fp16-t384-v1",
+      "MLSR_TEST_NATIVE_OUTPUT": "1",
+      "MLSR_LIBRARY_PATH": "/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug/libmlsr_ffi.dylib",
+      "PYTHONPATH": "bindings/python/src:bindings/python/tests",
+      "CGO_CFLAGS": "-I/Users/yunhocho/GitHub/MLSR-duration-planning/include",
+      "CGO_LDFLAGS": "-L/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug -Wl,-rpath,/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug"
+    }
+  },
+  "flutter": {
+    "passed": true,
+    "muted": true,
+    "timing_boundary": "UI observation at 20 ms pump intervals; not acoustic or native flush timing",
+    "first_retained_pcm_observed_ms": 641.489,
+    "early_duration_estimate_frames": 4864764,
+    "position_at_early_estimate_frames": 3855,
+    "buffer_at_early_estimate_frames": 94910,
+    "first_position_observed_ms": 665.465,
+    "retained_peak_bytes": 379640,
+    "cancel_to_terminal_observed_ms": 92.43,
+    "paused_retained_segment_frames": 198351,
+    "segment_start_lookahead_frames": 88200,
+    "seek_beyond_lookahead_frame": 92296,
+    "unbuffered_seek_observed_ms": 125.223,
+    "unbuffered_seek_target_frame": 3502630,
+    "unbuffered_seek_preserved_request": true,
+    "disjoint_buffered_ranges": [
+      [
+        0,
+        94910
+      ],
+      [
+        3338086,
+        3517406
+      ]
+    ],
+    "return_to_cached_frame": 4096,
+    "generation_finished_while_playing": true,
+    "wav_frames": 70669,
+    "unsupported_character_rejected": true,
+    "handles_before": 0,
+    "handles_after": 0,
+    "heartbeat_ticks": 2008,
+    "heartbeat_max_gap_ms": 106.221
+  },
+  "flutter_widgets_passed": 8,
+  "commands_by_log": {
+    "rust-tests.log": "cargo test --locked --workspace --all-features",
+    "clippy.log": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+    "msrv.log": "cargo +1.88.0 check --locked --workspace --all-targets --all-features",
+    "codegen.log": "cargo run --locked -p mlsr-codegen -- --check",
+    "ffi-build.log": "cargo build --locked -p mlsr-ffi --features coreml,apple-output",
+    "dart-codegen.log": "dart run tool/generate_bindings.dart --check (bindings/dart)",
+    "dart-analyze.log": "dart analyze --fatal-infos (bindings/dart)",
+    "dart-tests.log": "dart test (bindings/dart)",
+    "flutter-analyze.log": "flutter analyze (examples/flutter_speak)",
+    "flutter-widgets.log": "flutter test test (examples/flutter_speak)",
+    "python-tests.log": "python3 -m unittest discover -v -s bindings/python/tests",
+    "go-tests.log": "go test -race ./... (bindings/go)",
+    "python-native.log": "python3 -m unittest -v test_sdk.RealNativeSpeech.test_on_demand_seek_preserves_document_and_pause",
+    "go-native.log": "go test -race -run TestRealSDKOnDemandSeek -v ./... (bindings/go)",
+    "prepare-models.log": "cargo run --locked -p mlsr-cli -- models prepare-flutter --config examples/flutter_speak/mlsr-models.yaml",
+    "flutter-native.log": "flutter test integration_test/speak_test.dart -d macos --no-pub --dart-define=MLSR_TEST_OUTPUT=/Users/yunhocho/.cache/mlsr/qualification/duration-main-merge-6iuts3mn/flutter"
+  },
+  "additional_checks_passed": [
+    "cargo fmt --all -- --check",
+    "git diff --check",
+    "no unresolved Git index entries",
+    "main segmentation, bundle/frontend/planning policies, model manifests and Flutter selection match incoming main"
+  ],
+  "scope": "Core ML T384 FP16 and legacy INT4 on this Apple Silicon Mac; portable scheduling/cache/backend contracts. The merged reader was not run on QNN/Windows hardware. Muted UI state observations do not qualify audible quality, acoustic latency or throughput."
+}

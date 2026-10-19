@@ -91,8 +91,10 @@ pub unsafe extern "C" fn mlsr_speech_command(
         })
     }
 }
-/// Seek an active/paused speech in exact source frames. Invalid ranges do not
-/// move output. Paused seeks stay paused; retained PCM is never synthesized again.
+/// Seek active/paused speech in source frames. Full-retention mode requires ready
+/// PCM. Reader cache mode (retain_audio=2) generates missing destinations using
+/// the document's planned timeline. State reports pending seeking/target and
+/// resolved position; paused seeks stay paused. Invalid targets do not move output.
 /// # Safety
 /// A non-null error output is aligned/writable.
 #[unsafe(no_mangle)]
@@ -113,8 +115,9 @@ pub unsafe extern "C" fn mlsr_speech_seek(
         })
     }
 }
-/// Replay completed retained audio with a new Speech identity/outcome. Storage
-/// is shared, with no inference or second PCM disk copy. The old outcome remains.
+/// Replay completed speech with a new identity/outcome. Full recordings share
+/// retained PCM without inference; reader sessions share their document/cache
+/// and may regenerate evicted segments. The old outcome remains immutable.
 /// # Safety
 /// Settings are readable; output/error are aligned, writable and disjoint.
 #[unsafe(no_mangle)]

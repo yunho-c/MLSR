@@ -104,7 +104,7 @@ impl Diagnostics {
 }
 
 impl Pipeline {
-    /// Load all six graphs once and upload both voices. Reuse allocates two
+    /// Load the bundle's graphs once and upload both voices. Reuse allocates two
     /// dedicated output buffers per VE bucket; Core ML may decline to use them.
     pub fn load(bundle: Bundle, policy: ComputePolicy, reuse_output_buffers: bool) -> Result<Self> {
         Self::load_variant(
@@ -149,20 +149,17 @@ impl Pipeline {
             Session::coreml(policy)?
         };
         let mut models = BTreeMap::new();
-        let names: &[&str] = if qnn {
-            &["duration_predictor", "text_encoder", "ve_96", "vocoder"]
-        } else {
-            &[
-                "duration_predictor",
-                "text_encoder",
-                "ve_128",
-                "ve_256",
-                "ve_512",
-                "vocoder",
-            ]
-        };
-        for &name in names {
-            models.insert(name.into(), session.load(bundle.model_path(name)?)?);
+        let mut names = std::collections::BTreeSet::from([
+            "duration_predictor".to_owned(),
+            "text_encoder".to_owned(),
+        ]);
+        for &bucket in bundle.latent_buckets() {
+            names.insert(format!("ve_{bucket}"));
+            names.insert(bundle.vocoder_name(bucket));
+        }
+        for name in names {
+            let model = session.load(bundle.model_path(&name)?)?;
+            models.insert(name, model);
         }
         for (name, path) in additional {
             models.insert(name, session.load(path)?);
@@ -180,8 +177,7 @@ impl Pipeline {
         }
         let mut backings = BTreeMap::new();
         if reuse_output_buffers {
-            let buckets: &[usize] = if qnn { &[96] } else { &[128, 256, 512] };
-            for &bucket in buckets {
+            for &bucket in bundle.latent_buckets() {
                 backings.insert(
                     bucket,
                     [
@@ -214,8 +210,17 @@ impl Pipeline {
         voice: &str,
         options: SynthesisOptions,
     ) -> Result<SynthesisOutput> {
-        self.run(text, language, voice, options, None, false, &mut Unobserved)
-            .map(|(output, _)| output)
+        self.run(
+            text,
+            language,
+            voice,
+            options,
+            None,
+            None,
+            false,
+            &mut Unobserved,
+        )
+        .map(|(output, _)| output)
     }
     /// Execute the same pipeline while recording all intermediates. A supplied
     /// noise tensor replaces generation only; text, durations, masks, buckets,
@@ -233,21 +238,80 @@ impl Pipeline {
             language,
             voice,
             options,
+            None,
             saved_noise,
             true,
             &mut Unobserved,
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn synthesize_controlled(
         &mut self,
         text: &str,
         language: &str,
         voice: &str,
         options: SynthesisOptions,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<SynthesisOutput> {
-        self.run(text, language, voice, options, None, false, observer)
-            .map(|(output, _)| output)
+        self.run(
+            text, language, voice, options, planned, None, false, observer,
+        )
+        .map(|(output, _)| output)
+    }
+    /// Prepare only a duration/shape decision. Temporary native inputs are
+    /// released after each segment; no text embeddings, noise or PCM are kept.
+    pub(crate) fn plan_duration(
+        &mut self,
+        text: &str,
+        language: &str,
+        voice: &str,
+        options: SynthesisOptions,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        self.validate_options(options)?;
+        let encoded = self.bundle.encode_text(text, language)?;
+        self.bundle.voice(voice)?;
+        let ids = self
+            .session
+            .upload(runtime_text_ids(encoded.ids(), self.bundle.backend())?)?;
+        let text_mask = self.session.upload(encoded.mask().clone())?;
+        let plan = self.predict_duration(&ids, &text_mask, voice, options, observer)?;
+        observer.planned(&plan)?;
+        Ok(plan)
+    }
+
+    fn predict_duration(
+        &self,
+        ids: &Tensor,
+        text_mask: &Tensor,
+        voice: &str,
+        options: SynthesisOptions,
+        observer: &dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        let duration = self.predict(
+            "duration_predictor",
+            &[
+                ("text_ids", ids),
+                ("text_mask", text_mask),
+                ("style_dp", &self.voices[voice].dp),
+            ],
+            "duration",
+            &[1],
+        )?;
+        observer.checkpoint()?;
+        let raw = self.session.read(&duration)?;
+        SynthesisPlan::for_bundle(floats(&raw, "duration")?[0], options, &self.bundle)
+    }
+    fn validate_options(&self, options: SynthesisOptions) -> Result<()> {
+        if self.bundle.backend() == BackendKind::QnnHtp && options.steps() != 8 {
+            return Err(Error::InvalidOptions(
+                "QNN Superfast requires exactly eight steps".into(),
+            ));
+        }
+        Ok(())
     }
     pub(crate) fn segments(
         &self,
@@ -319,17 +383,14 @@ impl Pipeline {
         language: &str,
         voice: &str,
         options: SynthesisOptions,
+        planned: Option<&SynthesisPlan>,
         saved_noise: Option<HostTensor>,
         diagnostic: bool,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<(SynthesisOutput, Diagnostics)> {
         observer.checkpoint()?;
         let qnn = self.bundle.backend() == BackendKind::QnnHtp;
-        if qnn && options.steps() != 8 {
-            return Err(Error::InvalidOptions(
-                "QNN Superfast requires exactly eight steps".into(),
-            ));
-        }
+        self.validate_options(options)?;
         let encoded = self.bundle.encode_text(text, language)?;
         let host_voice = self.bundle.voice(voice)?;
         let native_voice = &self.voices[voice];
@@ -338,43 +399,20 @@ impl Pipeline {
         trace.record(diagnostic, "text_mask", encoded.mask());
         trace.record(diagnostic, "style_ttl", host_voice.style_ttl());
         trace.record(diagnostic, "style_dp", host_voice.style_dp());
-        let ids = if qnn {
-            let TensorData::I32(values) = encoded.ids().data() else {
-                return Err(Error::Synthesis("tokenizer must return Int32 IDs".into()));
-            };
-            HostTensor::new(
-                encoded.ids().shape().to_vec(),
-                TensorData::I64(values.iter().map(|&v| i64::from(v)).collect()),
-            )?
-        } else {
-            encoded.ids().clone()
-        };
+        let ids = runtime_text_ids(encoded.ids(), self.bundle.backend())?;
         if qnn {
             trace.record(diagnostic, "runtime_text_ids", &ids);
         }
         let ids = self.session.upload(ids)?;
         let text_mask = self.session.upload(encoded.mask().clone())?;
         observer.checkpoint()?;
-        let duration = self.predict(
-            "duration_predictor",
-            &[
-                ("text_ids", &ids),
-                ("text_mask", &text_mask),
-                ("style_dp", &native_voice.dp),
-            ],
-            "duration",
-            &[1],
-        )?;
-        observer.checkpoint()?;
-        let raw = self.session.read(&duration)?;
-        let plan = SynthesisPlan::for_backend(
-            floats(&raw, "duration")?[0],
-            options,
-            self.bundle.backend(),
-        )?;
+        let plan = match planned {
+            Some(plan) => plan.clone(),
+            None => self.predict_duration(&ids, &text_mask, voice, options, observer)?,
+        };
         observer.planned(&plan)?;
         observer.checkpoint()?;
-        trace.record(diagnostic, "duration_raw", &raw);
+        trace.record(diagnostic, "duration_raw", &scalar(plan.raw_duration())?);
         trace.record(diagnostic, "duration", &scalar(plan.duration_seconds())?);
         let prepared = match saved_noise {
             Some(noise) => plan.prepare_saved_noise(noise)?,
@@ -416,7 +454,7 @@ impl Pipeline {
             .variant
             .route(options.steps(), bucket, plan.latent_length());
         if qnn {
-            route.fixed_vocoder = Some(96);
+            route.fixed_vocoder = Some(bucket);
         }
         let model = &self.models[&format!("ve_{bucket}")];
         if route.fused_ve {
@@ -499,7 +537,7 @@ impl Pipeline {
         };
         observer.checkpoint()?;
         let vocoder = if qnn {
-            "vocoder".into()
+            self.bundle.vocoder_name(bucket)
         } else {
             route
                 .fixed_vocoder
@@ -543,6 +581,22 @@ impl Drop for Pipeline {
     }
 }
 
+// Duration preparation and waveform generation must upload the same token
+// representation: Core ML consumes Int32; the QNN graphs consume Int64.
+fn runtime_text_ids(ids: &HostTensor, backend: BackendKind) -> Result<HostTensor> {
+    if backend == BackendKind::QnnHtp {
+        let TensorData::I32(values) = ids.data() else {
+            return Err(Error::Synthesis("tokenizer must return Int32 IDs".into()));
+        };
+        Ok(HostTensor::new(
+            ids.shape().to_vec(),
+            TensorData::I64(values.iter().map(|&v| i64::from(v)).collect()),
+        )?)
+    } else {
+        Ok(ids.clone())
+    }
+}
+
 fn scalar(value: f32) -> Result<HostTensor> {
     Ok(HostTensor::new(vec![1], TensorData::F32(vec![value]))?)
 }
@@ -560,6 +614,29 @@ fn floats<'a>(tensor: &'a HostTensor, name: &str) -> Result<&'a [f32]> {
         _ => Err(Error::Synthesis(format!(
             "{name} must contain finite Float32 values"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+
+    #[test]
+    fn planning_and_synthesis_token_inputs_preserve_values_shape_and_backend_dtype() {
+        for capacity in [128, 384] {
+            let values: Vec<i32> = (0..capacity).map(|id| id as i32 - 1).collect();
+            let ids = HostTensor::new(vec![1, capacity], TensorData::I32(values.clone())).unwrap();
+            let coreml = runtime_text_ids(&ids, BackendKind::CoreMl).unwrap();
+            assert_eq!(coreml.shape(), &[1, capacity]);
+            assert!(matches!(coreml.data(), TensorData::I32(v) if v == &values));
+            let qnn = runtime_text_ids(&ids, BackendKind::QnnHtp).unwrap();
+            assert_eq!(qnn.shape(), &[1, capacity]);
+            assert!(
+                matches!(qnn.data(), TensorData::I64(v) if *v == values.iter().map(|&v| i64::from(v)).collect::<Vec<_>>())
+            );
+        }
+        let invalid = HostTensor::new(vec![1, 128], TensorData::F32(vec![0.; 128])).unwrap();
+        assert!(runtime_text_ids(&invalid, BackendKind::QnnHtp).is_err());
     }
 }
 

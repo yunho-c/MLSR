@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_app_models/app_models.dart';
 import 'file_dialog.dart';
+import 'speech_timeline.dart';
 
 class _Presentation {
   final Speech speech;
@@ -35,6 +36,7 @@ class DemoController extends ChangeNotifier {
 
   Speech? get speech => _current?.speech;
   SpeechState? get state => _current?.state;
+  SpeechTimeline get timeline => SpeechTimeline(state);
   String get original => _current?.original ?? '';
   bool get speaking => _current != null && state?.completion == null;
   bool get paused => state?.playback == PlaybackPhase.paused;
@@ -42,7 +44,8 @@ class DemoController extends ChangeNotifier {
       speaking &&
       state?.synthesis != SynthesisPhase.generated &&
       state?.synthesis != SynthesisPhase.terminal;
-  bool get canExport => state?.completion?.kind == OutcomeKind.completed;
+  bool get canReplay => state?.completion?.kind == OutcomeKind.completed;
+  bool get canExport => canReplay && (state?.recordingComplete ?? false);
   int get generatedFrames => state?.bufferedUntilFrame ?? 0;
   int get playedFrames => state?.positionFrame ?? 0;
   int get pendingCount => _presentations.values
@@ -54,13 +57,14 @@ class DemoController extends ChangeNotifier {
   String get status {
     if (loading || !ready) return _loadStatus;
     if (_current == null) return 'Ready when you are';
+    if (state?.seeking ?? false) return 'Preparing selected passage…';
     return switch (state?.playback) {
       null || PlaybackPhase.queued => 'Waiting to speak…',
       PlaybackPhase.buffering => 'Finding the next words…',
       PlaybackPhase.playing => 'Reading aloud',
       PlaybackPhase.draining => 'Finishing playback',
       PlaybackPhase.paused => 'Paused',
-      PlaybackPhase.ended => 'All spoken. Yours to keep.',
+      PlaybackPhase.ended => 'Finished reading',
       PlaybackPhase.stopped => 'Stopped',
       PlaybackPhase.failed => 'Speech interrupted',
     };
@@ -119,6 +123,7 @@ class DemoController extends ChangeNotifier {
   }
 
   SpeechOptions _options({bool paused = false}) => SpeechOptions(
+    onDemandSeeking: true,
     volume: muted ? 0 : volume,
     playbackRate: playbackRate,
     paused: paused,
@@ -234,7 +239,7 @@ class DemoController extends ChangeNotifier {
   }
 
   void togglePause() => _control((current) {
-    if (canExport) {
+    if (canReplay) {
       final next = current.replayFrom(0, options: _options());
       final text = original;
       _retire(_current!);
@@ -262,7 +267,7 @@ class DemoController extends ChangeNotifier {
   }
 
   void seek(int frame) => _control((current) {
-    if (canExport) {
+    if (canReplay) {
       final next = current.replayFrom(frame, options: _options(paused: true));
       final text = original;
       _retire(_current!);

@@ -1,6 +1,65 @@
 use super::*;
 
 #[test]
+fn qnn_context_routes_all_boundaries_and_crops_capacity_512_noise_per_channel() {
+    let options = SynthesisOptions::new(8, 1.0, 7).unwrap();
+    let plan_for = |duration, options| {
+        SynthesisPlan::with_contract(
+            duration,
+            options,
+            BackendKind::QnnHtp,
+            &[128, 256, 512],
+            Some(512),
+        )
+    };
+    for (length, bucket) in [
+        (4, 128),
+        (127, 128),
+        (128, 128),
+        (129, 256),
+        (255, 256),
+        (256, 256),
+        (257, 512),
+        (511, 512),
+        (512, 512),
+    ] {
+        let plan = plan_for((length * 3072 - 100) as f32 / 44100.0, options).unwrap();
+        assert_eq!(plan.latent_length(), length);
+        assert_eq!(plan.latent_bucket(), bucket);
+        let noise = HostTensor::new(
+            vec![1, 144, 512],
+            TensorData::F32((0..144 * 512).map(|v| v as f32).collect()),
+        )
+        .unwrap();
+        let prepared = plan.prepare_saved_noise(noise).unwrap();
+        let TensorData::F32(values) = prepared.padded_noise().data() else {
+            panic!("float32")
+        };
+        for (channel, row) in values.chunks_exact(bucket).enumerate() {
+            assert_eq!(row[0], (channel * 512) as f32);
+            assert_eq!(row[length - 1], (channel * 512 + length - 1) as f32);
+            assert!(row[length..].iter().all(|&v| v.to_bits() == 0));
+        }
+        assert_eq!(
+            plan.prepare_noise(7).unwrap().noise().shape(),
+            &[1, 144, 512]
+        );
+        assert!(
+            plan.prepare_saved_noise(
+                HostTensor::new(vec![1, 144, 128], TensorData::F32(vec![0.; 144 * 128]),).unwrap()
+            )
+            .is_err()
+        );
+    }
+    let boundary = (512 * 3072) as f32 / 44100.0;
+    assert!(plan_for(f32::from_bits(boundary.to_bits() - 1), options).is_ok());
+    assert!(plan_for(f32::from_bits(boundary.to_bits() + 1), options).is_err());
+    assert!(plan_for(1.0, SynthesisOptions::new(5, 1., 7).unwrap()).is_err());
+    assert!(plan_for(0.05, options).is_err());
+    assert!(plan_for(f32::NAN, options).is_err());
+}
+
+#[test]
 fn qnn_bounds_schedule_and_channel_crop() {
     let options = SynthesisOptions::new(8, 1.0, 7).unwrap();
     let plan = SynthesisPlan::for_backend(5.0, options, BackendKind::QnnHtp).unwrap();

@@ -1,0 +1,109 @@
+{
+  "result": "pass",
+  "base_commit": "849790e64830715c7f387c58c2b56e011197b71c",
+  "branch": "feat/duration-planning",
+  "source_state": "uncommitted changes identified by per-file SHA-256",
+  "source_sha256": {
+    "bindings/dart/lib/src/sdk_types.dart": "92632b6fa467f5d13cbd9fd65b1fbf31bdcee0bf18cd2a95223ddaf1de85c167",
+    "bindings/go/sdk_types.go": "87365024911c5f35eec618f5bde914ea9f5657b86b1fd8bfb058cd96707c55ee",
+    "bindings/python/src/mlsr/sdk_types.py": "81bd1cd61e8372e8f61b1d6a796f11640da879a492aaa8a94764cedc807c5ad1",
+    "crates/mlsr-ffi/src/types/sdk.rs": "e0e6859b3b183a24b401986c540acc36ae8b2876e820f61ef4c15636b736d1c1",
+    "crates/mlsr/src/engine.rs": "5cb7da564b34e8c40579d5b857a28072a5752ba79ea25fee438c163e56b8df59",
+    "crates/mlsr/src/engine/job_tests.rs": "2865aa17c3f0d17bab08e5227cc05df469ccbc3bbbb22ff92d7c1d1cb7e7d4b5",
+    "crates/mlsr/src/job.rs": "f7d421770920a7c719b041467fa4b898840b4f1b59f4787486a4712766db172d",
+    "crates/mlsr/src/request.rs": "5c0612a43b583437e32ec8a1eeed1a12052ccdaf498cd45781564097ecceb9a8",
+    "crates/mlsr/src/speech/mod.rs": "19d43c278da22b9754d85fb7e811107bbe176af4103ed950f3a675b146004ed6",
+    "crates/mlsr/src/speech/tests.rs": "6c1650816bcdc9e820c20b552fe6e855338b1b5dcd137ebd69b220098fc79713",
+    "crates/mlsr/src/speech/worker.rs": "39e827b67639469b8b27dd75e69cb93312ae60636b8bc59a158ed4e14eb55157",
+    "crates/mlsr/src/synthesis/mod.rs": "162bc51995cb3623bb4ecfef727f50a811ce1fe1ddc465980ae5273e6d3b0711",
+    "crates/mlsr/src/synthesis/queue.rs": "d76bd6b122ddac30f6a99f8a3c04b96ef6a45d5491cafce368659320c936263b",
+    "examples/flutter_speak/integration_test/speak_test.dart": "c927331cea90777e297e79f3c472dd692765bb7eb8a57679aced100218a9bb39",
+    "include/mlsr.h": "34787f436a3b60e44bcd6ccbfa7d13edbb816e8c8b5b9b9b5255a1588fe4b659"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "native_library_sha256": "ed0ab8d16a22a476eb7998771a5f1f7d0aa55e71425c83d70183d8387fed9725",
+  "model_manifest_sha256": "958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5",
+  "external_evidence": "/Users/yunhocho/.cache/mlsr/qualification/segment-retention-rfh1781n",
+  "regression": {
+    "name": "completed_segments_are_seekable_beyond_lookahead_with_full_paused_output",
+    "before_fix": "failed: paused retained range never reached the generated segment end",
+    "after_fix": "pass",
+    "segment_frames": 352800,
+    "lookahead_frames": 88200,
+    "native_output_frame_limit": 65536,
+    "paused_retained_frames": 352800,
+    "paused_seek_frame": 176400,
+    "inference_calls_after_backward_seek": 1,
+    "retained_frames_after_seek_to_endpoint": 705600,
+    "inference_calls_after_seek_to_endpoint": 2,
+    "owner_close_while_paced": "pass; cancels and releases retained PCM"
+  },
+  "additional_regressions": [
+    "Two actual 41,000-frame segments fit exactly into an 82,000-frame horizon despite 42,000-frame estimates; advancing the cursor admits the third.",
+    "Replacement cancels a request waiting at the generation horizon and starts the replacement.",
+    "Paused quota exhaustion fails with Retention/retention_quota_exceeded and releases owned storage without exceeding the byte cap.",
+    "64 KiB raw UTF-8 admission boundary accepts exact size and rejects larger ASCII and multibyte text."
+  ],
+  "rust_workspace": {
+    "passed": 102,
+    "ignored_external_tests": 12,
+    "command": "cargo test --locked --workspace --all-features --quiet"
+  },
+  "checks": [
+    "strict all-feature/all-target clippy",
+    "Rust 1.88 all-feature/all-target workspace check",
+    "generated C header check",
+    "cargo fmt and git diff whitespace checks",
+    "Flutter analyzer",
+    "seven Flutter unit/widget tests"
+  ],
+  "native_reader": {
+    "completed_replay": "new request identity; shared retained PCM; paused rebase and seek to zero",
+    "first_complete_retained_segment_frames": 70669,
+    "muted": true,
+    "navigation": "new request with original sentence/segment IDs and seed offsets",
+    "original_frames": 160493,
+    "paused_seek_frame": 35334,
+    "result": "pass",
+    "retained_suffix": "every Float32 sample bit equals independently rendered original-plan suffix",
+    "retention_bytes_before_replay": 359296,
+    "retention_final": {
+      "live_stores": 0,
+      "peak_bytes": 359296,
+      "peak_stores": 2,
+      "used_bytes": 0
+    },
+    "seek_while_playing_frame": 1024,
+    "segment_admission_lookahead_frames": 8192,
+    "suffix_frames": 89824
+  },
+  "flutter": {
+    "passed": true,
+    "muted": true,
+    "timing_boundary": "UI observation at 20 ms pump intervals; not acoustic or native flush timing",
+    "first_retained_pcm_observed_ms": 371.576,
+    "early_duration_estimate_frames": 4860828,
+    "position_at_early_estimate_frames": 0,
+    "buffer_at_early_estimate_frames": 94746,
+    "first_position_observed_ms": 461.957,
+    "retained_peak_bytes": 378984,
+    "cancel_to_terminal_observed_ms": 69.442,
+    "paused_retained_segment_frames": 199007,
+    "segment_start_lookahead_frames": 88200,
+    "seek_beyond_lookahead_frame": 92296,
+    "generation_finished_while_playing": true,
+    "wav_frames": 70669,
+    "unsupported_character_rejected": true,
+    "handles_before": 0,
+    "handles_after": 0,
+    "heartbeat_ticks": 441,
+    "heartbeat_max_gap_ms": 83.485
+  },
+  "default_limits": {
+    "retained_pcm_bytes_per_tts": 134217728,
+    "retained_stores_per_tts": 128,
+    "pcm_bytes_per_source_second": 176400,
+    "raw_utf8_bytes_per_request": 65536
+  },
+  "scope": "macOS native playback and portable scheduling tests; no acoustic latency or throughput claim; no ABI layout change"
+}

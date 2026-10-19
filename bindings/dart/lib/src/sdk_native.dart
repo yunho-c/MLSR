@@ -110,7 +110,9 @@ Pointer<native.MlsrSpeechOptions> _sdkSpeechOptions(
     ..playback_rate = args['playbackRate'] as double
     ..volume = args['volume'] as double
     ..paused = (args['paused'] as bool) ? 1 : 0
-    ..retain_audio = (args['retainAudio'] as bool) ? 1 : 0
+    ..retain_audio = (args['retainAudio'] as bool)
+        ? ((args['onDemandSeeking'] as bool? ?? false) ? 2 : 1)
+        : 0
     ..lookahead_frames = args['lookaheadFrames'] as int;
   return s;
 }
