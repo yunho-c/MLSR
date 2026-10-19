@@ -198,8 +198,17 @@ impl Pipeline {
         voice: &str,
         options: SynthesisOptions,
     ) -> Result<SynthesisOutput> {
-        self.run(text, language, voice, options, None, false, &mut Unobserved)
-            .map(|(output, _)| output)
+        self.run(
+            text,
+            language,
+            voice,
+            options,
+            None,
+            None,
+            false,
+            &mut Unobserved,
+        )
+        .map(|(output, _)| output)
     }
     /// Execute the same pipeline while recording all intermediates. A supplied
     /// noise tensor replaces generation only; text, durations, masks, buckets,
@@ -217,21 +226,69 @@ impl Pipeline {
             language,
             voice,
             options,
+            None,
             saved_noise,
             true,
             &mut Unobserved,
         )
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn synthesize_controlled(
         &mut self,
         text: &str,
         language: &str,
         voice: &str,
         options: SynthesisOptions,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<SynthesisOutput> {
-        self.run(text, language, voice, options, None, false, observer)
-            .map(|(output, _)| output)
+        self.run(
+            text, language, voice, options, planned, None, false, observer,
+        )
+        .map(|(output, _)| output)
+    }
+    /// Prepare only a duration/shape decision. Temporary native inputs are
+    /// released after each segment; no text embeddings, noise or PCM are kept.
+    pub(crate) fn plan_duration(
+        &mut self,
+        text: &str,
+        language: &str,
+        voice: &str,
+        options: SynthesisOptions,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        let encoded = self.bundle.encode_text(text, language)?;
+        self.bundle.voice(voice)?;
+        let ids = self.session.upload(encoded.ids().clone())?;
+        let text_mask = self.session.upload(encoded.mask().clone())?;
+        let plan = self.predict_duration(&ids, &text_mask, voice, options, observer)?;
+        observer.planned(&plan)?;
+        Ok(plan)
+    }
+
+    fn predict_duration(
+        &self,
+        ids: &Tensor,
+        text_mask: &Tensor,
+        voice: &str,
+        options: SynthesisOptions,
+        observer: &dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        let duration = self.predict(
+            "duration_predictor",
+            &[
+                ("text_ids", ids),
+                ("text_mask", text_mask),
+                ("style_dp", &self.voices[voice].dp),
+            ],
+            "duration",
+            &[1],
+        )?;
+        observer.checkpoint()?;
+        let raw = self.session.read(&duration)?;
+        SynthesisPlan::from_duration(floats(&raw, "duration")?[0], options)
     }
     pub(crate) fn segments(
         &self,
@@ -295,6 +352,7 @@ impl Pipeline {
         language: &str,
         voice: &str,
         options: SynthesisOptions,
+        planned: Option<&SynthesisPlan>,
         saved_noise: Option<HostTensor>,
         diagnostic: bool,
         observer: &mut dyn SynthesisObserver,
@@ -311,22 +369,13 @@ impl Pipeline {
         let ids = self.session.upload(encoded.ids().clone())?;
         let text_mask = self.session.upload(encoded.mask().clone())?;
         observer.checkpoint()?;
-        let duration = self.predict(
-            "duration_predictor",
-            &[
-                ("text_ids", &ids),
-                ("text_mask", &text_mask),
-                ("style_dp", &native_voice.dp),
-            ],
-            "duration",
-            &[1],
-        )?;
-        observer.checkpoint()?;
-        let raw = self.session.read(&duration)?;
-        let plan = SynthesisPlan::from_duration(floats(&raw, "duration")?[0], options)?;
+        let plan = match planned {
+            Some(plan) => plan.clone(),
+            None => self.predict_duration(&ids, &text_mask, voice, options, observer)?,
+        };
         observer.planned(&plan)?;
         observer.checkpoint()?;
-        trace.record(diagnostic, "duration_raw", &raw);
+        trace.record(diagnostic, "duration_raw", &scalar(plan.raw_duration())?);
         trace.record(diagnostic, "duration", &scalar(plan.duration_seconds())?);
         let prepared = match saved_noise {
             Some(noise) => plan.prepare_saved_noise(noise)?,

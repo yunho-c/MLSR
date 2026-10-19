@@ -722,6 +722,19 @@ fn retained_seek_replay_and_disposal_preserve_pcm_identity_and_outcomes() {
     assert_eq!(speech.seek(84001).unwrap_err().code(), "invalid_seek");
     assert_eq!(lock(&device).epoch, before);
     assert_eq!(speech.snapshot().position_frame, 0);
+    // Observe before the command so the seek must publish a new revision, even
+    // when both positions highlight the same segment and playback stays paused.
+    let mut observer = speech.states();
+    let SpeechStatePoll::Snapshot(before_seek) = observer.poll(Duration::ZERO) else {
+        panic!("missing initial reader snapshot")
+    };
+    speech.seek(4096).unwrap();
+    let SpeechStatePoll::Snapshot(after_seek) = observer.poll(Duration::from_secs(1)) else {
+        panic!("same-segment paused seek did not notify state observers")
+    };
+    assert_eq!(after_seek.position_frame, 4096);
+    assert!(after_seek.revision > before_seek.revision);
+    assert_eq!(after_seek.active_text_range, before_seek.active_text_range);
     speech.seek(43000).unwrap();
     let seeked = wait(&speech, |s| s.position_frame == 43000);
     assert_eq!(seeked.playback, PlaybackPhase::Paused);
@@ -858,9 +871,10 @@ fn paused_lookahead_is_bounded_and_ungenerated_navigation_reuses_original_plan()
     let first = wait(&original, |s| s.buffered_until_frame >= 8192);
     assert_eq!(first.buffered_until_frame, 8192);
     assert_eq!(first.position_frame, 0);
-    assert!(
-        first.estimated_frames.is_none(),
-        "partial prediction cannot be a whole-request estimate"
+    assert_eq!(
+        first.estimated_frames,
+        Some(original.plan().unwrap().segments().len() as u64 * 42000),
+        "paused lookahead must not hold back the whole-request estimate"
     );
     std::thread::sleep(Duration::from_millis(40));
     assert_eq!(original.snapshot().buffered_until_frame, 8192);

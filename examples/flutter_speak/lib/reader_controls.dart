@@ -13,18 +13,25 @@ class ReaderControls extends StatefulWidget {
 class _ReaderControlsState extends State<ReaderControls> {
   double? _seekPreview;
   int? _dragRequest;
+  int? _unavailableRequest;
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final state = controller.state;
+    final timeline = controller.timeline;
     final active = controller.speaking;
-    final ranges = state?.seekableRanges ?? [];
-    final maximum = ranges.isEmpty ? 0 : ranges.last.end;
-    final sameRequest = _dragRequest == controller.speech?.id;
+    final maximum = timeline.hasTotal ? timeline.totalFrames!.toDouble() : 1.0;
+    final sameRequest = _dragRequest == state?.requestId;
     final position =
-        ((sameRequest ? _seekPreview : null) ??
-                controller.playedFrames.toDouble())
-            .clamp(0.0, maximum.toDouble());
+        (timeline.hasTotal
+                ? ((sameRequest ? _seekPreview : null) ??
+                      timeline.position.toDouble())
+                : 0.0)
+            .clamp(0.0, maximum);
+    final canSeek =
+        timeline.hasTotal &&
+        timeline.ranges.isNotEmpty &&
+        (active || controller.canExport);
     final original = controller.original;
     final highlight = state?.activeTextRange;
     final spans = highlight == null
@@ -103,17 +110,39 @@ class _ReaderControlsState extends State<ReaderControls> {
         Slider(
           key: const Key('seek'),
           value: position,
-          max: maximum > 0 ? maximum.toDouble() : 1,
-          label: '${(position / 44100).toStringAsFixed(1)} s',
-          onChanged: maximum > 0 && (active || controller.canExport)
+          max: maximum,
+          secondaryTrackValue: timeline.hasTotal
+              ? timeline.seekableUntil.toDouble().clamp(0.0, maximum)
+              : null,
+          label: timeline.canSeek(position.round())
+              ? timeline.time(position.round())
+              : '${timeline.time(position.round())} · Not ready',
+          semanticFormatterCallback: (value) =>
+              '${timeline.time(value.round())} of ${timeline.totalLabel}'
+              '${timeline.canSeek(value.round()) ? '' : ', audio not ready'}',
+          onChangeStart: canSeek
               ? (value) => setState(() {
-                  _dragRequest = controller.speech?.id;
+                  _dragRequest = state?.requestId;
                   _seekPreview = value;
+                  _unavailableRequest = null;
                 })
               : null,
+          onChanged: canSeek
+              ? (value) {
+                  if (_dragRequest != controller.state?.requestId) return;
+                  setState(() => _seekPreview = value);
+                }
+              : null,
           onChangeEnd: (value) {
-            if (_dragRequest == controller.speech?.id) {
-              controller.seek(value.round());
+            // Recheck the current request and retention at release, rather than
+            // committing a stale drag after replacement or navigation.
+            if (_dragRequest != null &&
+                _dragRequest == controller.state?.requestId) {
+              if (controller.timeline.canSeek(value.round())) {
+                controller.seek(value.round());
+              } else {
+                _unavailableRequest = _dragRequest;
+              }
             }
             setState(() {
               _seekPreview = null;
@@ -122,11 +151,11 @@ class _ReaderControlsState extends State<ReaderControls> {
           },
         ),
         Text(
-          state?.durationFrames != null
-              ? 'Duration: ${(state!.durationFrames! / 44100).toStringAsFixed(1)} s'
-              : state?.estimatedFrames != null
-              ? 'Estimated duration: ${(state!.estimatedFrames! / 44100).toStringAsFixed(1)} s'
-              : 'Duration becomes available as the text is prepared.',
+          _unavailableRequest != null && _unavailableRequest == state?.requestId
+              ? 'Audio at this position is not ready yet.'
+              : '${timeline.durationLabel}'
+                    '${timeline.seekableUntil > 0 ? ' · Ready through ${timeline.time(timeline.seekableUntil)}' : ''}',
+          key: const Key('timeline-detail'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 14),

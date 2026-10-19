@@ -189,9 +189,18 @@ fn play(
             playback.pending = None;
             playback.cursor = frame;
             playback.ended_input = false;
-            lock(&control.state).snapshot.position_frame = frame;
         }
-        pump(control, &mut playback, output.as_mut(), current_epoch)?;
+        // Apply lookahead at the new cursor immediately, but keep the previous
+        // published position until publish() can detect and notify the change.
+        // Otherwise a paused seek within one text segment has no new revision.
+        let position = seek.unwrap_or_else(|| lock(&control.state).snapshot.position_frame);
+        pump(
+            control,
+            &mut playback,
+            output.as_mut(),
+            current_epoch,
+            position,
+        )?;
         if lock(&control.state).snapshot.cancellation.is_some() {
             // Do not poll/drain an epoch after consuming its cancellation. The
             // loop's independent cancellation path flushes before joining work.
@@ -261,6 +270,7 @@ fn pump(
     playback: &mut Playback,
     output: &mut dyn AudioOutput,
     epoch: u64,
+    position: u64,
 ) -> Result<()> {
     for _ in 0..8 {
         if !playback.ended_generation
@@ -272,9 +282,7 @@ fn pump(
             return Ok(());
         }
         if let Some(store) = playback.retained.clone() {
-            let ahead = store
-                .frames()
-                .saturating_sub(lock(&control.state).snapshot.position_frame);
+            let ahead = store.frames().saturating_sub(position);
             if !playback.ended_generation
                 && ahead + control.job.chunk_frames() as u64 <= control.lookahead_frames as u64
             {

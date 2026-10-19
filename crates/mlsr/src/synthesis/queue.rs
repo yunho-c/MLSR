@@ -201,7 +201,6 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
     let (plan, start) = control.request.prepare(engine)?;
     {
         let mut state = lock(&control.state);
-        state.expected_segments = plan.segments().len() - start;
         state.plan = Some(plan.clone());
         state.snapshot.plan_ready = true;
         control.publish(&mut state);
@@ -224,14 +223,24 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
     {
         let mut state = lock(&control.state);
         state.native = Some(native.clone());
-        state.snapshot.phase = SynthesisPhase::Synthesizing;
         control.publish(&mut state);
     }
     loop {
         if control.cancelled() {
             native.cancel();
         }
-        match native.poll(Duration::from_millis(20)) {
+        let event = native.poll(Duration::from_millis(20));
+        // Planning metadata must be observable even with paused/full PCM
+        // queues, and must precede delivery of the first generated audio.
+        if let Some(frames) = native.estimated_frames() {
+            let mut state = lock(&control.state);
+            if state.cancel_reason.is_none() && state.snapshot.estimated_frames.is_none() {
+                state.snapshot.estimated_frames = Some(frames);
+                state.snapshot.phase = SynthesisPhase::Synthesizing;
+                control.publish(&mut state);
+            }
+        }
+        match event {
             job::Poll::Timeout => {}
             job::Poll::End => {
                 return Err(Error::Synthesis(
@@ -239,15 +248,7 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
                 ));
             }
             job::Poll::Event(event) => match event.event {
-                job::Event::Predicted(info) => {
-                    let mut state = lock(&control.state);
-                    state.predicted += 1;
-                    if state.predicted == state.expected_segments {
-                        state.snapshot.estimated_frames =
-                            Some(info.start_frame + info.predicted_frames);
-                    }
-                    control.publish(&mut state);
-                }
+                job::Event::Predicted(_) => {}
                 job::Event::Audio(chunk) => control.push(chunk),
                 job::Event::Terminal(report) => {
                     control.finish_native(report);

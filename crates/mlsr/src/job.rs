@@ -155,6 +155,12 @@ impl Job {
     pub fn queue_stats(&self) -> QueueStats {
         lock(&self.control.state).stats
     }
+    /// Whole-request prediction from start_plan's duration-only pass, available
+    /// before PCM and independent of queue capacity. None until every remaining
+    /// segment is planned, or for legacy start() jobs. Final frames may differ.
+    pub fn estimated_frames(&self) -> Option<u64> {
+        lock(&self.control.state).estimated_frames
+    }
 }
 impl Drop for Job {
     fn drop(&mut self) {
@@ -172,6 +178,7 @@ struct State {
     report: Option<JobReport>,
     terminal_delivered: bool,
     stats: QueueStats,
+    estimated_frames: Option<u64>,
 }
 pub(crate) struct Control {
     pub(crate) id: u64,
@@ -191,6 +198,7 @@ impl Control {
                 report: None,
                 terminal_delivered: false,
                 stats: QueueStats::default(),
+                estimated_frames: None,
             }),
             changed: Condvar::new(),
         })
@@ -244,6 +252,13 @@ impl Control {
         let mut state = self.capacity(0)?;
         state.queue.push_back(Event::Predicted(segment));
         self.queued(&mut state);
+        Ok(())
+    }
+    pub(crate) fn estimate(&self, frames: u64) -> Result<()> {
+        let mut state = lock(&self.state);
+        self.checkpoint()?;
+        state.estimated_frames = Some(frames);
+        self.changed.notify_all();
         Ok(())
     }
     pub(crate) fn audio(

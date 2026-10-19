@@ -12,6 +12,8 @@ use crate::{
     voice::{VoiceCatalog, VoiceReadiness},
 };
 #[cfg(test)]
+pub(crate) use job_tests::duration_fake;
+#[cfg(test)]
 pub(crate) use job_tests::fake as fake_engine;
 #[cfg(test)]
 pub(crate) use job_tests::gated_fake as gated_fake_engine;
@@ -79,8 +81,15 @@ trait Backend: Send {
         &mut self,
         request: &Request,
         segment: &TextSegment,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<Audio>;
+    fn plan_duration(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan>;
     fn stats(&self) -> Result<SessionStats>;
     fn shutdown(&mut self) -> Result<()>;
 }
@@ -104,6 +113,7 @@ impl Backend for Pipeline {
             &request.language,
             &request.voice,
             request.options,
+            None,
             observer,
         )
     }
@@ -111,6 +121,7 @@ impl Backend for Pipeline {
         &mut self,
         request: &Request,
         segment: &TextSegment,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<Audio> {
         let options = SynthesisOptions::new(
@@ -123,9 +134,24 @@ impl Backend for Pipeline {
             &request.language,
             &request.voice,
             options,
+            planned,
             observer,
         )
         .map(SynthesisOutput::into_audio)
+    }
+    fn plan_duration(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        self.plan_duration(
+            &segment.original,
+            &request.language,
+            &request.voice,
+            request.options,
+            observer,
+        )
     }
     fn stats(&self) -> Result<SessionStats> {
         self.stats()
@@ -241,6 +267,9 @@ impl Engine {
     }
     /// Execute a previously frozen plan or a suffix, preserving original source
     /// ranges, segment IDs and noise seeds. Does not segment the suffix again.
+    /// Runs a cancellable duration-only pass before PCM generation and reuses
+    /// those decisions. Job::estimated_frames exposes the complete prediction
+    /// independently of PCM backpressure; final emitted frames are authoritative.
     pub fn start_plan(
         &self,
         plan: Arc<TextPlan>,
@@ -384,14 +413,41 @@ fn stream(
     segments: &mut u32,
 ) -> Result<()> {
     control.checkpoint()?;
-    let parts = match &request.plan {
+    let parts: Vec<TextSegment> = match &request.plan {
         Some((plan, start)) => plan.segments()[*start..]
             .iter()
             .map(|p| p.text_segment().clone())
             .collect(),
         None => backend.segments(request)?,
     };
-    for segment in parts {
+    // Frozen-plan requests (including the developer facade) prepare the whole
+    // remaining request before generating audio. Keep only scalar/shape plans,
+    // bounded by the validated source text; native tensors are per-call locals.
+    // Legacy start() retains its incremental segment-prediction event contract.
+    let planned = if request.plan.is_some() {
+        let mut plans = Vec::with_capacity(parts.len());
+        let mut total = 0u64;
+        for segment in &parts {
+            let plan = backend.plan_duration(
+                request,
+                segment,
+                &mut Observer {
+                    control,
+                    segment: None,
+                },
+            )?;
+            control.checkpoint()?;
+            total = total
+                .checked_add(plan.requested_frames() as u64)
+                .ok_or_else(|| Error::Synthesis("duration estimate overflow".into()))?;
+            plans.push(plan);
+        }
+        control.estimate(total)?;
+        plans
+    } else {
+        Vec::new()
+    };
+    for (index, segment) in parts.into_iter().enumerate() {
         // A stopped consumer cannot trigger generation of another segment while
         // its queue is full, even before the next duration event is published.
         control.wait_capacity(control.options.chunk_frames())?;
@@ -407,7 +463,7 @@ fn stream(
             control,
             segment: Some(info),
         };
-        let audio = backend.segment(request, &segment, &mut observer)?;
+        let audio = backend.segment(request, &segment, planned.get(index), &mut observer)?;
         control.checkpoint()?;
         if audio.frames() > control.options.segment_frames() {
             return Err(Error::Synthesis(

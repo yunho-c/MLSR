@@ -55,6 +55,14 @@ shows the immutable accepted text. Seek commits once at the end of a slider drag
 Seeking a completed recording creates a new paused replay with a new request ID.
 The UI retains only active/queued handles and the latest displayed recording.
 
+Both progress and seek controls use the SDK's final duration or whole-request
+estimate for their full scale. Estimates are labeled `~`; while duration planning
+is pending, progress is indeterminate and seeking is disabled. The seek track
+shows retained audio separately, and releasing a drag on audio that is not ready
+leaves playback unchanged with an explanation. Buffered audio never substitutes
+for the total length. The native duration pass is cancellable and its predictions
+are reused during synthesis; the default two-second lookahead stays bounded.
+
 Export calls `Tts.writeSpeech` for a completed recording, using the shared
 incremental WAV writer. It does not synthesize again or collect a full PCM array
 in Dart. Existing destinations are preserved; partial cancelled speech is not
@@ -64,7 +72,7 @@ exportable. Closing the app joins native work and releases owned retention.
 
 ```sh
 flutter analyze --no-pub
-flutter test test/audio_clip_test.dart --no-pub
+flutter test test --no-pub
 flutter test integration_test/speak_test.dart -d macos --no-pub \
   --dart-define=MLSR_TEST_OUTPUT=/absolute/path/to/new-evidence-directory
 ```

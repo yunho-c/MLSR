@@ -5,11 +5,16 @@ use std::{
     time::Duration,
 };
 
+#[derive(Default)]
 struct Fake {
     calls: Arc<AtomicUsize>,
     entered: Option<SyncSender<()>>,
     release: Option<Receiver<()>>,
     panic: bool,
+    duration_calls: Arc<AtomicUsize>,
+    reused: Arc<AtomicUsize>,
+    planning_gate: Option<(u32, SyncSender<()>, Receiver<()>)>,
+    trim_frames: usize,
 }
 impl Backend for Fake {
     fn voice_catalog(&self) -> VoiceCatalog {
@@ -28,11 +33,21 @@ impl Backend for Fake {
         &mut self,
         request: &Request,
         segment: &TextSegment,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<Audio> {
         observer.checkpoint()?;
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let plan = SynthesisPlan::from_duration(1., request.options)?;
+        let plan = match planned {
+            Some(plan) => {
+                self.reused.fetch_add(1, Ordering::SeqCst);
+                plan.clone()
+            }
+            None => {
+                self.duration_calls.fetch_add(1, Ordering::SeqCst);
+                SynthesisPlan::from_duration(1., request.options)?
+            }
+        };
         observer.planned(&plan)?;
         if let Some(entered) = self.entered.take() {
             entered.send(()).unwrap();
@@ -46,7 +61,32 @@ impl Backend for Fake {
         }
         observer.checkpoint()?;
         assert!(!self.panic, "injected inference panic");
-        Audio::mono(vec![segment.id as f32; plan.requested_frames()], 44100)
+        Audio::mono(
+            vec![segment.id as f32; plan.requested_frames() - self.trim_frames],
+            44100,
+        )
+    }
+    fn plan_duration(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        self.duration_calls.fetch_add(1, Ordering::SeqCst);
+        if self
+            .planning_gate
+            .as_ref()
+            .is_some_and(|(id, _, _)| *id == segment.id)
+        {
+            let (_, entered, release) = self.planning_gate.take().unwrap();
+            entered.send(()).unwrap();
+            let _ = release.recv_timeout(Duration::from_secs(3));
+        }
+        observer.checkpoint()?;
+        let plan = SynthesisPlan::from_duration(1., request.options)?;
+        observer.planned(&plan)?;
+        Ok(plan)
     }
     fn stats(&self) -> Result<SessionStats> {
         Ok(SessionStats {
@@ -134,6 +174,7 @@ pub(crate) fn fake() -> (Engine, Arc<AtomicUsize>) {
         entered: None,
         release: None,
         panic: false,
+        ..Fake::default()
     }))
     .unwrap();
     (engine, calls)
@@ -146,9 +187,42 @@ pub(crate) fn gated_fake() -> (Engine, Receiver<()>, SyncSender<()>) {
         entered: Some(entered_tx),
         release: Some(release_rx),
         panic: false,
+        ..Fake::default()
     }))
     .unwrap();
     (engine, entered_rx, release_tx)
+}
+pub(crate) struct DurationTest {
+    pub engine: Engine,
+    pub predictions: Arc<AtomicUsize>,
+    pub reused: Arc<AtomicUsize>,
+    pub calls: Arc<AtomicUsize>,
+    pub entered: Receiver<()>,
+    pub release: SyncSender<()>,
+}
+pub(crate) fn duration_fake(gated_segment: Option<u32>, trim_frames: usize) -> DurationTest {
+    let (entered_tx, entered) = mpsc::sync_channel(1);
+    let (release, release_rx) = mpsc::sync_channel(1);
+    let predictions = Arc::new(AtomicUsize::new(0));
+    let reused = Arc::new(AtomicUsize::new(0));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let engine = Engine::with_backend(Box::new(Fake {
+        duration_calls: predictions.clone(),
+        reused: reused.clone(),
+        calls: calls.clone(),
+        planning_gate: gated_segment.map(|id| (id, entered_tx, release_rx)),
+        trim_frames,
+        ..Fake::default()
+    }))
+    .unwrap();
+    DurationTest {
+        engine,
+        predictions,
+        reused,
+        calls,
+        entered,
+        release,
+    }
 }
 fn terminal(job: &Job) -> JobReport {
     loop {
@@ -361,6 +435,102 @@ fn real_frozen_suffix_preserves_seeded_pcm() {
     assert!(!actual.is_empty());
     assert_eq!(actual, expected);
 }
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE and real Core ML execution"]
+fn real_duration_planning_reuses_predictions_and_preserves_pcm() {
+    fn collect(job: &Job, planned: bool) -> (Vec<u32>, JobReport) {
+        let mut pcm = Vec::new();
+        let mut estimate = None;
+        loop {
+            let Poll::Event(event) = job.poll(Duration::from_secs(30)) else {
+                panic!("missing duration-planning event")
+            };
+            if planned {
+                let total = job.estimated_frames().expect("total precedes first PCM");
+                assert_eq!(*estimate.get_or_insert(total), total);
+            } else {
+                assert_eq!(job.estimated_frames(), None);
+            }
+            match event.event {
+                Event::Predicted(_) => {}
+                Event::Audio(chunk) => {
+                    pcm.extend(chunk.audio.samples().iter().map(|v| v.to_bits()))
+                }
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    if planned {
+                        assert_eq!(estimate, Some(report.frames));
+                    }
+                    return (pcm, report);
+                }
+            }
+        }
+    }
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let engine =
+        Engine::from_bundle(Bundle::open(root).unwrap(), EngineOptions::default()).unwrap();
+    let cases = [
+        (
+            "Hello from MLSR.\nThis is another sentence.\nThe final sentence follows.",
+            "en",
+            "M1",
+        ),
+        (
+            "안녕하세요.\n오늘도 좋은 하루 보내세요.\n이것은 마지막 문장입니다.",
+            "ko",
+            "F1",
+        ),
+    ];
+    for (text, language, voice) in cases {
+        let plan = Arc::new(engine.plan_text(text, language, voice).unwrap());
+        for speed in [0.84, 1.05, 1.26] {
+            let options = SynthesisOptions::new(8, speed, 1729).unwrap();
+            let legacy = engine
+                .start(
+                    SynthesisRequest {
+                        text,
+                        language,
+                        voice,
+                        options,
+                    },
+                    JobOptions::default(),
+                )
+                .unwrap();
+            let (expected, _) = collect(&legacy, false);
+            let before = engine.runtime_stats().unwrap();
+            let job = engine
+                .start_plan(
+                    plan.clone(),
+                    0,
+                    voice,
+                    options,
+                    JobOptions::new(4096, 4096, 512 * 3072).unwrap(),
+                )
+                .unwrap();
+            let (actual, report) = collect(&job, true);
+            let after = engine.runtime_stats().unwrap();
+            assert_eq!(actual, expected, "{language}/{voice} at raw speed {speed}");
+            assert_eq!(
+                after.predictions - before.predictions,
+                11 * plan.segments().len() as u64,
+                "one DP, one TE, eight VE, one vocoder per segment; no repeated DP"
+            );
+            assert_eq!(
+                after.live_tensors, before.live_tensors,
+                "duration pass releases native inputs"
+            );
+            assert!(job.queue_stats().peak_frames <= 4096);
+            eprintln!(
+                "exact duration-planned PCM: {language}/{voice}, speed={speed}, segments={}, frames={}, predictions={}",
+                plan.segments().len(),
+                report.frames,
+                after.predictions - before.predictions
+            );
+        }
+    }
+}
 #[test]
 fn cancellation_bypasses_inflight_call_and_engine_is_busy_until_quiescent() {
     let (entered_tx, entered_rx) = mpsc::sync_channel(1);
@@ -370,6 +540,7 @@ fn cancellation_bypasses_inflight_call_and_engine_is_busy_until_quiescent() {
         entered: Some(entered_tx),
         release: Some(release_rx),
         panic: false,
+        ..Fake::default()
     }))
     .unwrap();
     let job = engine
@@ -453,6 +624,7 @@ fn duration_limit_fails_before_audio_and_panic_retires_backend() {
         entered: None,
         release: None,
         panic: true,
+        ..Fake::default()
     }))
     .unwrap();
     let job = panicking

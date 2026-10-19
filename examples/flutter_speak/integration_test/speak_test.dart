@@ -107,6 +107,28 @@ void main() {
       expect(speech.error, isNull);
       report['first_retained_pcm_observed_ms'] =
           onset.elapsedMicroseconds / 1000;
+      // A long request has a whole-document scale before playback has advanced,
+      // while generation/retention still obey their small lookahead budgets.
+      final earlyTimeline = speech.state!;
+      expect(earlyTimeline.estimatedFrames, isNotNull);
+      expect(earlyTimeline.durationFrames, isNull);
+      expect(
+        earlyTimeline.estimatedFrames!,
+        greaterThan(earlyTimeline.bufferedUntilFrame),
+      );
+      final seek = tester.widget<Slider>(find.byKey(const Key('seek')));
+      expect(seek.max, earlyTimeline.estimatedFrames!.toDouble());
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.byKey(const Key('playback-progress')),
+      );
+      expect(
+        progress.value,
+        earlyTimeline.positionFrame / earlyTimeline.estimatedFrames!,
+      );
+      report['early_duration_estimate_frames'] = earlyTimeline.estimatedFrames;
+      report['position_at_early_estimate_frames'] = earlyTimeline.positionFrame;
+      report['buffer_at_early_estimate_frames'] =
+          earlyTimeline.bufferedUntilFrame;
       await until(() => speech.playedFrames > 0 || speech.error != null);
       report['first_position_observed_ms'] = onset.elapsedMicroseconds / 1000;
       final retained = (await speech.engineState()).retention;

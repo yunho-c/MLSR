@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_app_models/app_models.dart';
 import 'file_dialog.dart';
+import 'speech_timeline.dart';
 
 class _Presentation {
   final Speech speech;
@@ -35,6 +36,7 @@ class DemoController extends ChangeNotifier {
 
   Speech? get speech => _current?.speech;
   SpeechState? get state => _current?.state;
+  SpeechTimeline get timeline => SpeechTimeline(state);
   String get original => _current?.original ?? '';
   bool get speaking => _current != null && state?.completion == null;
   bool get paused => state?.playback == PlaybackPhase.paused;

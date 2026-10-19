@@ -174,8 +174,13 @@ Previous/next sentence use sentence IDs from the plan, including sentences split
 into several model segments. Navigation to ungenerated text is an explicit new
 speech request from that plan position, with original source mappings and seeds;
 the previous handle terminates as navigation-cancelled. It does not pretend that
-ungenerated text has a known time offset. Optional duration-only planning can
-predict a whole request; final PCM duration always remains authoritative.
+ungenerated text has a known time offset. A cancellable duration-only pass
+predicts the complete request before PCM generation and reuses those decisions
+during synthesis; final PCM duration always remains authoritative. The pass
+adds preparation latency proportional to the number of remaining segments,
+without expanding audio queues or retained lookahead. UI timeline scales use
+the final duration or whole-request estimate, with buffered/seekable regions
+shown separately and an explicit unknown-total state while planning.
 Navigation returns an explicit retained seek, new speech handle, or document
 boundary. Pending requests retain their order behind a new navigation request;
 an older handle cannot navigate over another current speech. See the

@@ -59,7 +59,7 @@ pub enum SynthesisPhase {
     Created,
     /// In the shared FIFO, waiting for the inference lane.
     Queued,
-    /// Validating voice and freezing original text.
+    /// Validating voice, freezing original text and predicting the total duration.
     Preparing,
     /// Generating and delivering bounded PCM.
     Synthesizing,
@@ -91,7 +91,8 @@ pub struct SynthesisSnapshot {
     pub peak_queued_frames: usize,
     /// PCM format, independent of playback rate.
     pub format: AudioFormat,
-    /// Whole-request estimate only; unknown until all necessary predictions exist.
+    /// Whole-request estimate from the duration-only pass, before PCM delivery.
+    /// Unknown until all remaining segments have been predicted; never a partial sum.
     pub estimated_frames: Option<u64>,
     /// Authoritative final frames once native synthesis completes successfully.
     pub duration_frames: Option<u64>,
@@ -104,8 +105,6 @@ struct State {
     consumer_claimed: bool,
     cancel_reason: Option<CancelReason>,
     plan: Option<Arc<TextPlan>>,
-    predicted: usize,
-    expected_segments: usize,
     native: Option<Arc<job::Job>>,
     native_finished: bool,
 }
@@ -143,8 +142,6 @@ impl Control {
                 consumer_claimed: false,
                 cancel_reason: None,
                 plan: None,
-                predicted: 0,
-                expected_segments: 0,
                 native: None,
                 native_finished: false,
             }),
@@ -260,10 +257,15 @@ impl Control {
             job::Outcome::Failed(error) => {
                 state.audio.clear();
                 state.snapshot.queued_frames = 0;
+                let stage = if state.snapshot.phase == SynthesisPhase::Preparing {
+                    FailureStage::Planning
+                } else {
+                    FailureStage::Synthesis
+                };
                 self.complete(
                     &mut state,
                     Outcome::Failed {
-                        error: Failure::new(self.id, FailureStage::Synthesis, &error),
+                        error: Failure::new(self.id, stage, &error),
                     },
                 );
             }

@@ -53,9 +53,24 @@ unchanged. Queued requests keep their order behind the navigation request.
 
 `buffered_until_frame` is the end ready in the retained store; `seekable_ranges`
 describe replayable data. Whole-request `estimated_frames` remains null until all
-required predictions are known. `duration_frames` comes from final generated
-frames. Neither field changes with playback rate. Highlighting follows the
+required predictions are known. The developer facade runs a cancellable
+duration-only pass over the remaining frozen segments before generating PCM,
+then reuses each prediction during synthesis. The complete estimate is available
+even while playback is paused or PCM queues are full. Planning retains only
+small duration/shape decisions, bounded by the validated text, and releases each
+segment's temporary native tensors. It adds an upfront predictor pass to first
+audio latency; it does not run the predictor twice or expand PCM lookahead.
+Cancellation takes effect between predictions and waits for an in-flight call.
+
+`duration_frames` comes from final generated frames and overrides the estimate.
+Neither field changes with playback rate. Highlighting follows the
 presented segment through seeks/rate changes; it does not claim word alignment.
+
+A progress bar or scrubber uses `duration_frames ?? estimated_frames` as its
+full scale. Retained ranges describe which parts of that scale can be selected;
+their growing endpoint is not a total duration. The Flutter example shows the
+available region separately, stays indeterminate while the total is unknown,
+and leaves playback unchanged when a drag ends outside retained audio.
 
 ## Evidence
 
@@ -64,6 +79,29 @@ paused lookahead, long sentences, original Unicode ranges, plan reuse, inference
 free replay, shared storage, replay queue limits, stale-handle navigation, quota
 failure, OS write failure, no-retention behavior and cleanup. They also preserve
 the earlier cancellation/output/scheduler tests.
+
+Duration-planning regressions check cancellation during an in-flight predictor,
+no partial total publication, estimates under PCM backpressure, one prediction
+per segment, frame-limit failure before audio, and final-length correction. The
+Flutter widget tests cover both timeline scales, buffer appends, unknown duration,
+unavailable targets and replacement during a held drag. A paused seek within the
+same text segment must also publish a new state revision; the controller keeps
+its previous snapshot until the output clock confirms the new cursor.
+
+The real duration test compares every PCM sample against the incremental path
+for English/M1 and Korean/F1 at raw synthesis speeds 0.84, 1.05 and 1.26. It also
+checks exactly 11 predictions per segment at eight steps and unchanged retained
+native tensor counts. The [duration-planning qualification](../tests/fixtures/developer-api/duration-planning.json)
+records source hashes, Flutter integration, the repaired seek notification, and
+a 59.94-second playback with its total estimated before the first retained PCM
+and no backward progress steps across 2,471 sampled snapshots. These are muted
+state observations, not acoustic timing or a throughput benchmark. Run the
+exact-PCM test with:
+
+```sh
+MLSR_TEST_BUNDLE=/absolute/verified/model cargo test --locked -p mlsr --all-features \
+  real_duration_planning_reuses_predictions_and_preserves_pcm -- --ignored --nocapture
+```
 
 The opt-in muted native reader test uses real Core ML and AVAudioEngine. It seeks
 while paused and playing, navigates to a new sentence, and compares every retained

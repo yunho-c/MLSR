@@ -1,0 +1,106 @@
+{
+  "result": "pass",
+  "base_commit": "229968956d1b0ea7bf99a6f6d84458b00449c24e",
+  "branch": "feat/duration-planning",
+  "source_state": "uncommitted changes identified by per-file SHA-256",
+  "source_sha256": {
+    "crates/mlsr/src/engine.rs": "7c05546c1d10e4898a3b2824a6f585e51ddee6beb87ae69f2c0cd0519077cd5b",
+    "crates/mlsr/src/engine/job_tests.rs": "f775aca5aa3fcbc8d9efeb65fd642a7ae13e1f4c5072af4bb4b8583cd6c59e7f",
+    "crates/mlsr/src/job.rs": "b28700b85434344eebf482cffd3724b6bd11d9852b317dee225924ff585c6029",
+    "crates/mlsr/src/models/supertonic3/pipeline.rs": "6e6860a48f5fe9ca03cec4596842a4f4e9b12bf91c3fd1aa3c320a33c73b0a96",
+    "crates/mlsr/src/speech/tests.rs": "13f3f4f7110a6df27e12b89c64790568c1bf78dcdd117797c41e8bda3fc8534c",
+    "crates/mlsr/src/speech/worker.rs": "b5de84be443f212b458637b39698b5a7cf03707845631d7ed15d28e5ce133e36",
+    "crates/mlsr/src/synthesis/mod.rs": "182e00f7d0679329db30f886a45b848adc1d17e986783d96cd9011b9eae37fa0",
+    "crates/mlsr/src/synthesis/queue.rs": "542f885806e85ee4ca4a72c945d6e4c7781310c7d5b1e583c15d1bb4a6791ea2",
+    "crates/mlsr/src/synthesis/tests.rs": "7627dae876b87f6f7288a7c08bd11def90bf3c0488b65c1b443568770f5049cc",
+    "examples/flutter_speak/integration_test/speak_test.dart": "6680721167f174b6ffbf703092b0b9283b8cf9b065c0d5122171ae57999b0e16",
+    "examples/flutter_speak/lib/main.dart": "050d156f7d2e535c077843d7b5beeee3ce1b3172d8de19e0b4f79714b9d1db2e",
+    "examples/flutter_speak/lib/reader_controls.dart": "af6d592db0dbecdb211febff8d5ed6221d2407b74673b4f5823e6c32e5ff923f",
+    "examples/flutter_speak/lib/speech_controller.dart": "ce79d20950f6c860fb2b3eed904957ffe3b7b492ec6d38c0b900b4ed240c4925",
+    "examples/flutter_speak/lib/speech_timeline.dart": "4d579b5bec26fb9f531fdfd1e69b38a7bf3b8bee1ec54bb525f6457aa5ccb90f",
+    "examples/flutter_speak/test/timeline_test.dart": "be1eaee9e21baab52d463f2bbd489715727dc8b6ede4307215c9e9597b9831d1"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "native_library_sha256": "528436547d7641b54bccde0686ff596207ff970562a57fd8ade9ead20d03d086",
+  "model_manifest_sha256": "958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5",
+  "external_evidence": "/Users/yunhocho/.cache/mlsr/qualification/duration-planning-kdxxbvmc",
+  "rust_workspace": {
+    "passed": 99,
+    "ignored_external_tests": 12,
+    "command": "cargo test --locked --workspace --all-features --quiet"
+  },
+  "checks": [
+    "strict all-feature/all-target clippy",
+    "Rust 1.88 all-feature/all-target workspace check",
+    "Flutter analyzer",
+    "Flutter AudioClip test and six timeline tests",
+    "muted macOS Flutter speak/reader/export integration"
+  ],
+  "exact_coreml_parity": {
+    "languages_voices": [
+      "en/M1",
+      "ko/F1"
+    ],
+    "raw_speeds": [
+      0.84,
+      1.05,
+      1.26
+    ],
+    "steps": 8,
+    "seed": 1729,
+    "segments_per_case": 3,
+    "predictions_per_case": 33,
+    "pcm_comparison": "every Float32 bit matches the incremental Engine::start path",
+    "retained_native_tensor_counts": "unchanged"
+  },
+  "native_reader": {
+    "result": "pass",
+    "retained_pcm": "exact independent original-plan suffix",
+    "retention_final_bytes": 0
+  },
+  "repaired_during_validation": "The initial broader native run passed six tests but timed out on paused replay seeking within the same segment. A deterministic observer regression failed before the fix; the final workspace and native reader rerun pass after preserving the previous snapshot until publication.",
+  "flutter": {
+    "passed": true,
+    "muted": true,
+    "timing_boundary": "UI observation at 20 ms pump intervals; not acoustic or native flush timing",
+    "first_retained_pcm_observed_ms": 349.008,
+    "early_duration_estimate_frames": 4860828,
+    "position_at_early_estimate_frames": 0,
+    "buffer_at_early_estimate_frames": 86016,
+    "first_position_observed_ms": 485.006,
+    "retained_peak_bytes": 360448,
+    "cancel_to_terminal_observed_ms": 75.263,
+    "generation_finished_while_playing": true,
+    "wav_frames": 70669,
+    "unsupported_character_rejected": true,
+    "handles_before": 0,
+    "handles_after": 0,
+    "heartbeat_ticks": 1285,
+    "heartbeat_max_gap_ms": 81.199
+  },
+  "long_playback": {
+    "muted": true,
+    "seed": 1729,
+    "steps": 8,
+    "raw_speed": 1.05,
+    "playback_rate": 2.0,
+    "segments": 20,
+    "source_frames": 2643367,
+    "lookahead_frames": 88200,
+    "sample_count": 2471,
+    "first_estimate": {
+      "wall": 0.14486241608392447,
+      "p": 0,
+      "b": 0,
+      "e": 2643367,
+      "d": null,
+      "playback": "buffering",
+      "synthesis": "synthesizing"
+    },
+    "source_position_regressions": 0,
+    "displayed_fraction_regressions": 0,
+    "baseline_first_estimate_source_seconds": 55.03557823129252,
+    "baseline_displayed_fraction_regressions": 617,
+    "boundary": "one muted playback observation; snapshot sampling, not acoustic timing or a throughput benchmark"
+  }
+}
