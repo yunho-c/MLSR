@@ -83,6 +83,19 @@ audio in 194.7–198.9 ms per warm call, all using L256. Three repetitions per
 case reproduced identical PCM. These are measurements from this host and
 workload, not a performance guarantee for every bucket.
 
+The [qualification snapshot](../tests/fixtures/supertonic3/qnn-context-summary.json)
+records program identities, measurements and evidence hashes. Installed Python
+and relocated Go packages passed their SDK tests and produced identical PCM
+through legacy synthesis, developer rendering and WAV examples. The original
+T128/L96 profile still matches its prior EN/KO × M1/F1 PCM hashes exactly.
+
+Combining this implementation with `backend/windows-output` also passed real,
+muted WASAPI playback: pause/resume, seek/replay, retention, cancellation,
+replacement and native drain. Python and Go passed their on-demand seek tests
+against that combined build. Windows playback remains a separate branch/feature;
+the headless build does not open an audio endpoint. The snapshot records the
+exact combined tree used for these checks.
+
 The device probe saves four Float32 WAVs and `device.json` when a fresh report
 directory is supplied. Subjective listening remains pending; numerical export
 equivalence and device checks do not establish perceptual quality. The bundle
