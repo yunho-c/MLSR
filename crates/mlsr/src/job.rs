@@ -161,6 +161,19 @@ impl Job {
     pub fn estimated_frames(&self) -> Option<u64> {
         lock(&self.control.state).estimated_frames
     }
+    /// Reusable full-document plans after a successful Engine::prepare_speech.
+    /// This never starts work, consumes events or retains native tensors.
+    pub fn prepared_speech(&self) -> Option<Arc<crate::engine::PreparedSpeech>> {
+        let state = lock(&self.control.state);
+        if matches!(
+            state.report.as_ref().map(|r| &r.outcome),
+            Some(Outcome::Completed)
+        ) {
+            state.prepared.clone()
+        } else {
+            None
+        }
+    }
     pub(crate) fn set_generation_limit(&self, end: Option<u64>) {
         self.control.set_generation_limit(end);
     }
@@ -183,6 +196,7 @@ struct State {
     stats: QueueStats,
     estimated_frames: Option<u64>,
     generation_limit: Option<u64>,
+    prepared: Option<Arc<crate::engine::PreparedSpeech>>,
 }
 pub(crate) struct Control {
     pub(crate) id: u64,
@@ -204,6 +218,7 @@ impl Control {
                 stats: QueueStats::default(),
                 estimated_frames: None,
                 generation_limit: None,
+                prepared: None,
             }),
             changed: Condvar::new(),
         })
@@ -214,6 +229,13 @@ impl Control {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn prepared(&self, prepared: Arc<crate::engine::PreparedSpeech>) -> Result<()> {
+        let mut state = lock(&self.state);
+        self.checkpoint()?;
+        state.prepared = Some(prepared);
+        self.changed.notify_all();
+        Ok(())
     }
     pub(crate) fn cancel(&self) {
         let mut state = lock(&self.state);

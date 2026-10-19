@@ -28,6 +28,8 @@ use std::{
     },
     thread::{self, JoinHandle},
 };
+mod prepared;
+pub use prepared::PreparedSpeech;
 
 /// Borrowed request. Starting a job copies strings before returning.
 #[derive(Clone, Copy, Debug)]
@@ -47,6 +49,9 @@ struct Request {
     voice: String,
     options: SynthesisOptions,
     plan: Option<(Arc<TextPlan>, usize)>,
+    prepared: Option<Arc<PreparedSpeech>>,
+    end_segment: Option<usize>,
+    planning_only: bool,
 }
 impl Request {
     fn copy(input: SynthesisRequest<'_>) -> Result<Self> {
@@ -67,6 +72,9 @@ impl Request {
             voice: input.voice.into(),
             options: input.options,
             plan: None,
+            prepared: None,
+            end_segment: None,
+            planning_only: false,
         })
     }
 }
@@ -292,6 +300,67 @@ impl Engine {
         limits: JobOptions,
         generation_limit: Option<u64>,
     ) -> Result<Job> {
+        let mut request = self.planned_request(plan, start_segment, voice, options)?;
+        request.end_segment = None;
+        Ok(Job {
+            control: self.submit(limits, |control| {
+                control.set_generation_limit(generation_limit);
+                Command::Stream(request, control)
+            })?,
+        })
+    }
+    /// Predict every segment without generating PCM. The returned job is
+    /// cancellable and completes without an audio consumer. On success,
+    /// `Job::prepared_speech` provides reusable plans for random segment access.
+    pub fn prepare_speech(
+        &self,
+        plan: Arc<TextPlan>,
+        voice: &str,
+        options: SynthesisOptions,
+        limits: JobOptions,
+    ) -> Result<Job> {
+        let mut request = self.planned_request(plan, 0, voice, options)?;
+        request.planning_only = true;
+        Ok(Job {
+            control: self.submit(limits, |control| Command::Stream(request, control))?,
+        })
+    }
+    /// Generate exactly one original segment using previously computed duration
+    /// decisions. No earlier segments are synthesized and no duration predictor
+    /// is rerun. PCM starts at local frame zero; segment IDs and seeds stay fixed.
+    pub fn start_prepared_segment(
+        &self,
+        prepared: Arc<PreparedSpeech>,
+        segment: usize,
+        limits: JobOptions,
+    ) -> Result<Job> {
+        let mut request = self.planned_request(
+            prepared.text_plan().clone(),
+            segment,
+            prepared.voice(),
+            prepared.options(),
+        )?;
+        if prepared
+            .segment_frames(segment)
+            .is_none_or(|frames| frames > limits.segment_frames())
+        {
+            return Err(Error::InvalidOptions(
+                "prepared segment exceeds the configured frame limit".into(),
+            ));
+        }
+        request.prepared = Some(prepared);
+        request.end_segment = Some(segment + 1);
+        Ok(Job {
+            control: self.submit(limits, |control| Command::Stream(request, control))?,
+        })
+    }
+    fn planned_request(
+        &self,
+        plan: Arc<TextPlan>,
+        start_segment: usize,
+        voice: &str,
+        options: SynthesisOptions,
+    ) -> Result<Request> {
         if start_segment >= plan.segments().len()
             || self
                 .catalog
@@ -313,12 +382,7 @@ impl Engine {
             options,
         })?;
         request.plan = Some((plan, start_segment));
-        Ok(Job {
-            control: self.submit(limits, |control| {
-                control.set_generation_limit(generation_limit);
-                Command::Stream(request, control)
-            })?,
-        })
+        Ok(request)
     }
     fn submit(
         &self,
@@ -431,7 +495,8 @@ fn stream(
 ) -> Result<()> {
     control.checkpoint()?;
     let parts: Vec<TextSegment> = match &request.plan {
-        Some((plan, start)) => plan.segments()[*start..]
+        Some((plan, start)) => plan.segments()
+            [*start..request.end_segment.unwrap_or(plan.segments().len())]
             .iter()
             .map(|p| p.text_segment().clone())
             .collect(),
@@ -441,7 +506,12 @@ fn stream(
     // remaining request before generating audio. Keep only scalar/shape plans,
     // bounded by the validated source text; native tensors are per-call locals.
     // Legacy start() retains its incremental segment-prediction event contract.
-    let planned = if request.plan.is_some() {
+    let planned = if let Some(prepared) = &request.prepared {
+        let start = request.plan.as_ref().expect("prepared text plan").1;
+        let plans = prepared.plans[start..start + parts.len()].to_vec();
+        control.estimate(plans.iter().map(|p| p.requested_frames() as u64).sum())?;
+        plans
+    } else if request.plan.is_some() {
         let mut plans = Vec::with_capacity(parts.len());
         let mut total = 0u64;
         for segment in &parts {
@@ -464,6 +534,20 @@ fn stream(
     } else {
         Vec::new()
     };
+    if request.planning_only {
+        let (plan, start) = request
+            .plan
+            .as_ref()
+            .expect("planning requires frozen text");
+        debug_assert_eq!(*start, 0);
+        control.prepared(Arc::new(PreparedSpeech::new(
+            plan.clone(),
+            request.voice.clone(),
+            request.options,
+            planned,
+        )?))?;
+        return Ok(());
+    }
     for (index, segment) in parts.into_iter().enumerate() {
         // A stopped consumer cannot trigger generation of another segment while
         // its queue is full, even before the next duration event is published.

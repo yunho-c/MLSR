@@ -244,6 +244,200 @@ fn terminal(job: &Job) -> JobReport {
     }
 }
 #[test]
+fn prepared_speech_generates_only_requested_segments_without_repredicting() {
+    let fixture = duration_fake(None, 1000);
+    let plan = Arc::new(
+        fixture
+            .engine
+            .plan_text(
+                "First sentence.\nSecond sentence.\nThird sentence.\nLast sentence.",
+                "en",
+                "M1",
+            )
+            .unwrap(),
+    );
+    let count = plan.segments().len();
+    assert_eq!(count, 4);
+    let limits = JobOptions::new(1024, 1024, 100000).unwrap();
+    let preparation = fixture
+        .engine
+        .prepare_speech(plan.clone(), "M1", SynthesisOptions::default(), limits)
+        .unwrap();
+    assert!(preparation.wait(Duration::from_secs(2)));
+    let report = terminal(&preparation);
+    assert!(matches!(report.outcome, Outcome::Completed));
+    assert_eq!((report.frames, report.segments), (0, 0));
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
+    let prepared = preparation.prepared_speech().unwrap();
+    assert_eq!(fixture.predictions.load(Ordering::SeqCst), count);
+    assert_eq!(prepared.estimated_frames(), 168000);
+    assert_eq!(prepared.locate(42001), Some((1, 1)));
+    assert_eq!(prepared.locate(168000), Some((3, 42000)));
+    assert_eq!(prepared.locate(168001), None);
+    assert_eq!(prepared.text_plan().original(), plan.original());
+    for (call, index) in [2, 0, 3, 2].into_iter().enumerate() {
+        let job = fixture
+            .engine
+            .start_prepared_segment(prepared.clone(), index, limits)
+            .unwrap();
+        let mut frames = 0;
+        loop {
+            match job.poll(Duration::from_secs(2)) {
+                Poll::Event(event) => match event.event {
+                    Event::Audio(chunk) => {
+                        assert_eq!(chunk.start_frame, frames);
+                        assert_eq!(chunk.segment.id, index as u32);
+                        assert_eq!(chunk.segment.text_span, plan.segments()[index].utf8_span());
+                        assert!(
+                            chunk
+                                .audio
+                                .samples()
+                                .iter()
+                                .all(|&sample| sample == index as f32)
+                        );
+                        frames += chunk.audio.frames() as u64;
+                    }
+                    Event::Predicted(info) => assert_eq!(info.id, index as u32),
+                    Event::Terminal(report) => {
+                        assert!(matches!(report.outcome, Outcome::Completed));
+                        assert_eq!((report.frames, report.segments), (41000, 1));
+                        break;
+                    }
+                },
+                other => panic!("missing prepared segment: {other:?}"),
+            }
+        }
+        assert_eq!(frames, 41000);
+        assert_eq!(fixture.calls.load(Ordering::SeqCst), call + 1);
+        assert_eq!(fixture.reused.load(Ordering::SeqCst), call + 1);
+        assert_eq!(fixture.predictions.load(Ordering::SeqCst), count);
+    }
+    assert!(
+        fixture
+            .engine
+            .start_prepared_segment(prepared.clone(), count, limits)
+            .is_err()
+    );
+    assert!(
+        fixture
+            .engine
+            .start_prepared_segment(prepared, 0, JobOptions::new(1024, 1024, 41000).unwrap(),)
+            .is_err()
+    );
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 4);
+}
+
+#[test]
+fn cancelled_preparation_never_exposes_a_partial_duration_index() {
+    let fixture = duration_fake(Some(1), 0);
+    let plan = Arc::new(
+        fixture
+            .engine
+            .plan_text(
+                "First sentence.\nSecond sentence.\nThird sentence.",
+                "en",
+                "M1",
+            )
+            .unwrap(),
+    );
+    let job = fixture
+        .engine
+        .prepare_speech(
+            plan,
+            "M1",
+            SynthesisOptions::default(),
+            JobOptions::default(),
+        )
+        .unwrap();
+    fixture
+        .entered
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    assert!(job.prepared_speech().is_none());
+    assert!(job.estimated_frames().is_none());
+    job.cancel();
+    fixture.release.send(()).unwrap();
+    assert!(job.wait(Duration::from_secs(2)));
+    assert!(matches!(terminal(&job).outcome, Outcome::Cancelled));
+    assert!(job.prepared_speech().is_none());
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.predictions.load(Ordering::SeqCst), 2);
+    fixture.engine.runtime_stats().unwrap();
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE and real Core ML execution"]
+fn real_prepared_segments_match_linear_synthesis() {
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let manifest =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../model-manifests/supertonic3-coreml.yaml");
+    let engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
+    let plan = Arc::new(engine.plan_text(
+        "This is the beginning.\nWe can jump directly to the middle.\nThis is the final sentence.",
+        "en", "M1",
+    ).unwrap());
+    assert_eq!(plan.segments().len(), 3);
+    let options = SynthesisOptions::new(8, 1.05, 1729).unwrap();
+    let mut linear = vec![Vec::new(); 3];
+    let job = engine
+        .start_plan(plan.clone(), 0, "M1", options, JobOptions::default())
+        .unwrap();
+    loop {
+        match job.poll(Duration::from_secs(30)) {
+            Poll::Event(event) => match event.event {
+                Event::Audio(chunk) => linear[chunk.segment.id as usize]
+                    .extend(chunk.audio.samples().iter().map(|v| v.to_bits())),
+                Event::Predicted(_) => {}
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    break;
+                }
+            },
+            other => panic!("missing reference audio: {other:?}"),
+        }
+    }
+    let baseline = engine.runtime_stats().unwrap();
+    let preparation = engine
+        .prepare_speech(plan, "M1", options, JobOptions::default())
+        .unwrap();
+    assert!(preparation.wait(Duration::from_secs(30)));
+    assert!(matches!(terminal(&preparation).outcome, Outcome::Completed));
+    let prepared = preparation.prepared_speech().unwrap();
+    let planned = engine.runtime_stats().unwrap();
+    assert_eq!(planned.predictions - baseline.predictions, 3);
+    assert_eq!(planned.live_tensors, baseline.live_tensors);
+    for index in [2, 0, 1, 2] {
+        let job = engine
+            .start_prepared_segment(prepared.clone(), index, JobOptions::default())
+            .unwrap();
+        let mut actual = Vec::new();
+        loop {
+            match job.poll(Duration::from_secs(30)) {
+                Poll::Event(event) => match event.event {
+                    Event::Audio(chunk) => {
+                        assert_eq!(chunk.segment.id, index as u32);
+                        actual.extend(chunk.audio.samples().iter().map(|v| v.to_bits()));
+                    }
+                    Event::Predicted(_) => {}
+                    Event::Terminal(report) => {
+                        assert!(matches!(report.outcome, Outcome::Completed));
+                        break;
+                    }
+                },
+                other => panic!("missing random-access audio: {other:?}"),
+            }
+        }
+        assert_eq!(actual, linear[index]);
+    }
+    let generated = engine.runtime_stats().unwrap();
+    assert_eq!(generated.predictions - planned.predictions, 40);
+    assert_eq!(generated.live_tensors, baseline.live_tensors);
+    eprintln!(
+        "Prepared three segments with 3 duration calls; generated [2,0,1,2] with 40 model calls; every PCM bit matches linear synthesis."
+    );
+}
+#[test]
 fn stream_orders_metadata_spans_and_frames_with_exactly_one_terminal() {
     let (engine, calls) = fake();
     let text = "Hello world.\nAnother sentence.";
