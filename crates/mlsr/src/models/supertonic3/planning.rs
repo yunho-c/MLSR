@@ -27,10 +27,33 @@ impl SynthesisPlan {
         options: SynthesisOptions,
         backend: BackendKind,
     ) -> Result<Self> {
-        let max_length = match backend {
-            BackendKind::CoreMl => 512,
-            BackendKind::QnnHtp => 96,
+        let (buckets, noise_capacity): (&[usize], _) = match backend {
+            BackendKind::CoreMl => (&[128, 256, 512], None),
+            BackendKind::QnnHtp => (&[96], Some(128)),
         };
+        Self::with_contract(raw_duration, options, backend, buckets, noise_capacity)
+    }
+    pub(super) fn for_bundle(
+        raw_duration: f32,
+        options: SynthesisOptions,
+        bundle: &super::Bundle,
+    ) -> Result<Self> {
+        Self::with_contract(
+            raw_duration,
+            options,
+            bundle.backend(),
+            bundle.latent_buckets(),
+            bundle.noise_capacity(),
+        )
+    }
+    fn with_contract(
+        raw_duration: f32,
+        options: SynthesisOptions,
+        backend: BackendKind,
+        buckets: &[usize],
+        noise_capacity: Option<usize>,
+    ) -> Result<Self> {
+        let max_length = *buckets.last().expect("verified nonempty bucket contract");
         if backend == BackendKind::QnnHtp && options.steps() != 8 {
             return Err(Error::InvalidOptions(
                 "QNN Superfast requires exactly eight steps".into(),
@@ -53,10 +76,6 @@ impl SynthesisPlan {
                 "vocoder cannot accept latent length {length}; expected 4..={max_length}"
             )));
         }
-        let buckets: &[usize] = match backend {
-            BackendKind::CoreMl => &[128, 256, 512],
-            BackendKind::QnnHtp => &[96],
-        };
         let bucket = buckets
             .iter()
             .copied()
@@ -68,11 +87,7 @@ impl SynthesisPlan {
             frames,
             length,
             bucket,
-            noise_length: if backend == BackendKind::QnnHtp {
-                128
-            } else {
-                length
-            },
+            noise_length: noise_capacity.unwrap_or(length),
         })
     }
     /// Unscaled duration graph output.
@@ -87,11 +102,11 @@ impl SynthesisPlan {
     pub fn requested_frames(&self) -> usize {
         self.frames
     }
-    /// True latent length. Core ML crops before vocoding; QNN keeps masked L96.
+    /// True latent length. Core ML crops before vocoding; QNN keeps its masked bucket.
     pub fn latent_length(&self) -> usize {
         self.length
     }
-    /// Selected fixed VectorEstimator length: Core ML 128/256/512 or QNN 96.
+    /// Selected fixed VectorEstimator length from the verified bundle contract.
     pub fn latent_bucket(&self) -> usize {
         self.bucket
     }
@@ -110,7 +125,8 @@ impl SynthesisPlan {
         )?)
     }
     /// Use captured Float32 noise: [1,144,true_length] for Core ML or
-    /// [1,144,128] for QNN. Crop each channel, then zero-pad to the VE bucket.
+    /// [1,144,noise_capacity] for QNN (128 or 512, as pinned by the bundle).
+    /// Crop each channel, then zero-pad to the VE bucket.
     /// Shape, dtype, and finiteness are checked before any padding or inference.
     pub fn prepare_saved_noise(&self, noise: HostTensor) -> Result<PreparedLatent> {
         if noise.shape() != [1, 144, self.noise_length] {

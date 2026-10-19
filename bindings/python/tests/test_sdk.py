@@ -2,11 +2,11 @@ import array
 import asyncio
 import gc
 import os
-from pathlib import Path
 import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 
 from mlsr import (
     AudioClip,
@@ -209,7 +209,9 @@ class RealNativeSpeech(unittest.TestCase):
         lib = ffi.library()
         before = lib.mlsr_live_handles()
         with Tts(
-            os.environ["MLSR_TEST_MANIFEST"], os.environ["MLSR_TEST_BUNDLE"]
+            os.environ["MLSR_TEST_MANIFEST"],
+            os.environ["MLSR_TEST_BUNDLE"],
+            compute_policy=os.environ.get("MLSR_TEST_POLICY", "cpu_and_neural_engine"),
         ) as tts:
             options = SpeechOptions(paused=True, volume=0.0, on_demand_seeking=True)
             request = Request("Hello from MLSR. This is another passage to read.\n" * 8)
@@ -230,13 +232,17 @@ class RealNativeSpeech(unittest.TestCase):
                 )
                 target = initial.estimated_frames * 3 // 4
                 self.assertEqual(len(initial.seekable_ranges), 1)
-                self.assertEqual(initial.seekable_ranges[0].end, initial.estimated_frames)
+                self.assertEqual(
+                    initial.seekable_ranges[0].end, initial.estimated_frames
+                )
                 self.assertLess(initial.buffered_until_frame, target)
                 speech.seek(target)
                 ready = wait_for(
-                    lambda s: s.position_frame == target
-                    and not s.seeking
-                    and len(s.buffered_ranges) >= 2
+                    lambda s: (
+                        s.position_frame == target
+                        and not s.seeking
+                        and len(s.buffered_ranges) >= 2
+                    )
                 )
                 self.assertEqual(ready.request_id, speech.id)
                 self.assertEqual(ready.playback, "paused")

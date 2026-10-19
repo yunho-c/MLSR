@@ -403,7 +403,11 @@ fn a_document_longer_than_the_cache_plays_to_the_end_with_one_cached_segment() {
         state.allow_drain = true;
     }
     speech.resume().unwrap();
-    let done = speech.wait(Duration::from_secs(5)).unwrap();
+    // This moves 160 seconds of PCM through a one-segment cache in debug CI.
+    // Keep a bounded deadlock check without making throughput a test contract.
+    let done = speech
+        .wait(Duration::from_secs(30))
+        .unwrap_or_else(|| panic!("reader did not finish: {:?}", speech.snapshot()));
     assert!(matches!(done.outcome, Outcome::Completed), "{done:?}");
     assert_eq!(done.frames, 20 * SEGMENT);
     assert_eq!(calls.load(Ordering::SeqCst), 20);

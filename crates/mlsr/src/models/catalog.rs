@@ -236,6 +236,15 @@ mod tests {
         .unwrap();
         let model = catalog.resolve(manifest.id(), "windows-arm64").unwrap();
         model.verify_manifest(&manifest).unwrap();
+        let context = BundleManifest::parse(include_bytes!(
+            "../../../../model-manifests/supertonic3-qnn-superfast-t384.yaml"
+        ))
+        .unwrap();
+        catalog
+            .resolve(context.id(), "windows-arm64")
+            .unwrap()
+            .verify_manifest(&context)
+            .unwrap();
         assert!(catalog.resolve(manifest.id(), "macos-arm64").is_err());
         assert!(
             ModelCatalog::builtin()
