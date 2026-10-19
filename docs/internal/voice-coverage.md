@@ -63,3 +63,25 @@ voice expansion require their own evidence. The demo's external voice-cloning
 service is outside this preset-coverage change.
 
 See [preparation and reproduction](../../tools/supertonic3/README.md#recommended-fp16-bundle).
+
+## Integration with duration planning and T384 QNN
+
+Merge `ed097e9` combines the voice feature with remote `main` at `5c55b45`.
+The [merge receipt](../../tests/fixtures/supertonic3/voices-main-merge.yaml)
+records validation of the combined runtime. All 310 voice/language PCM outputs
+remain byte-identical to the original voice-feature results, and all four legacy
+M1/F1 regressions pass. Existing Core ML and QNN manifest bytes are preserved.
+
+The combined Flutter integration passes voice selection, Arabic synthesis,
+whole-document duration planning, uncached seeking, cached return and export,
+with zero native handles remaining. The rebuilt release app passes signature
+verification, and its packaged native library/model reproduce the Arabic export.
+Rust, generated bindings, real-model Python/Go/Dart checks, model tooling and
+Flutter unit checks also pass; skipped asset/platform cases are in the receipt.
+
+Desktop test launches can leave the window hidden, disabling Flutter frame
+delivery. The integration harness now controls a resumed Flutter lifecycle and
+registers the test keyboard, with explicit assertions that the editor and SDK
+receive the intended long text. These checks do not qualify native window
+lifecycle transitions or manual IME behavior. Initial failed/stalled runs and
+the successful rerun are retained in the evidence directory named by the receipt.

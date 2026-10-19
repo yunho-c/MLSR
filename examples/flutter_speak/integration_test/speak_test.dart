@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 // Native registry counts are diagnostic test-only evidence.
@@ -30,9 +31,20 @@ int wavFrames(Uint8List bytes) {
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  // This suite drives a resumed lifecycle. Desktop automation can launch a
+  // hidden window, whose native lifecycle messages would otherwise stop pumps.
+  SystemChannels.lifecycle.setMessageHandler((_) async => null);
+  binding.platformDispatcher.initialLifecycleStateTestValue =
+      'AppLifecycleState.resumed';
+  binding.resetInternalState();
+  binding.readTestInitialLifecycleStateFromNativeWindow();
   testWidgets('public SDK speak, reader and export keep the UI responsive', (
     tester,
   ) async {
+    // Track enterText client IDs with the test keyboard; the integration binding
+    // otherwise delegates input connections to the native window's IME.
+    tester.testTextInput.register();
+    addTearDown(tester.testTextInput.unregister);
     const output = String.fromEnvironment('MLSR_TEST_OUTPUT');
     expect(output, isNotEmpty);
     final directory = Directory(output);
@@ -53,6 +65,8 @@ void main() {
     final report = <String, Object?>{
       'passed': false,
       'muted': true,
+      'controlled_flutter_lifecycle': 'resumed',
+      'keyboard': 'flutter_test',
       'timing_boundary':
           'UI observation at 20 ms pump intervals; not acoustic or native flush timing',
     };
@@ -184,12 +198,20 @@ void main() {
         8,
       );
       await tester.pump();
-      await tester.enterText(
-        find.byKey(const Key('script')),
-        List.filled(12, english).join('\n'),
+      final longText = List.filled(12, english).join('\n');
+      await tester.enterText(find.byKey(const Key('script')), longText);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('script')))
+            .controller!
+            .text,
+        longText,
       );
       final onset = Stopwatch()..start();
       await tap('speak');
+      report['long_request_characters'] = speech.original.length;
+      report['long_request_language'] = speech.originalLanguage;
+      expect(speech.original, longText);
       await until(() => speech.generatedFrames >= 8192 || speech.error != null);
       expect(speech.error, isNull);
       report['first_retained_pcm_observed_ms'] =
