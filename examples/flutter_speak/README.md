@@ -44,6 +44,57 @@ tooling. This example currently builds only for the Apple Silicon host.
 Notarization, App Store submission, Intel/mobile inference, and additional device
 qualification remain separate work. See [model delivery](../../docs/model-delivery.md).
 
+## Capture startup with Instruments
+
+After preparing the model assets as described above, run from the repository root:
+
+```sh
+tools/trace_flutter --build --open
+```
+
+This builds the Flutter **profile** app, then launches it under Instruments with
+Time Profiler, Core ML, and signposts enabled. The default recording lasts 30
+seconds; `--open` opens the saved trace in Instruments when recording finishes.
+The helper uses `/usr/bin/env` to execute the exact binary inside the selected
+app bundle, preserving its process ID and model location. This avoids Instruments'
+Launch Services ambiguity between worktrees with the same bundle identifier.
+The recording includes the small launcher interval before the app executable.
+Instruments can display the launch target as `env`; use the recorded PID to
+identify the app's native samples and model events. At the time limit, Instruments
+terminates the app it launched. The helper records that termination in its report.
+Build time is outside the recording. The helper uses Python 3.11+ and the active
+Xcode, with no additional Python packages.
+
+For subsequent captures, reuse the built app at the same location:
+
+```sh
+tools/trace_flutter --duration 30 --open
+```
+
+Use `--mode release` to select/build the release app, or
+`--app "/absolute/path/to/MLSR Speak.app"` to record an existing app directly.
+`--app` and `--build` are mutually exclusive. The helper refuses to record an
+already-running instance of the selected executable; close it before retrying.
+It does not stop an app running from another worktree, relocate the app, clear
+caches, download models, or change signing/permissions.
+
+Each invocation creates a new directory under `ignore/startup-traces/`, or the
+new directory supplied with `--output`. It retains `startup.trace`, app stdout,
+command logs, an exported trace table of contents, and `capture.json` with the
+app path, binary/manifest hashes, tool version, and capture outcome. The recorded
+checkout revision identifies the helper, not the source of an arbitrary prebuilt
+app. Hashes are collected after recording to avoid pre-reading model payloads.
+Failures retain their logs and any partial trace.
+
+Inspect the target process's **Core ML** loading intervals for cached loads and
+device specialization, and **Time Profiler** for native stacks around the loads.
+Compare initial observed launches and relaunches of the same build and path;
+neither is a controlled cold-cache measurement. The fixed recording window does
+not detect when voices become ready, and a successful capture does not establish
+app readiness. Instrumented durations are diagnostic, not unprofiled startup
+benchmarks. The separate `tools/trace_synthesis.py` attaches after initialization
+and therefore does not capture this startup interval.
+
 ## Ownership and playback
 
 `DemoController` owns public `Tts` and `Speech` handles and bounded presentation

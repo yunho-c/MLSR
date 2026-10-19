@@ -1,0 +1,389 @@
+#!/usr/bin/env python3
+"""Launch MLSR Speak under Instruments and retain a bounded startup capture.
+
+Uses Python's standard library and the active Xcode. Models must already be
+prepared before --build; the default records an existing Flutter profile app.
+"""
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import plistlib
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import uuid
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+EXAMPLE = ROOT / "examples/flutter_speak"
+
+
+def positive_seconds(value):
+    seconds = int(value)
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError(
+            "duration must be a positive number of seconds"
+        )
+    return seconds
+
+
+def app_info(app):
+    if app.suffix != ".app" or not app.is_dir():
+        raise RuntimeError(
+            f"App not found: {app}\n"
+            "Use --build after preparing the model assets, or --app /path/to/MLSR Speak.app."
+        )
+    with (app / "Contents/Info.plist").open("rb") as stream:
+        info = plistlib.load(stream)
+    name = info.get("CFBundleExecutable", "")
+    if not name or Path(name).name != name:
+        raise RuntimeError("App Info.plist has no valid CFBundleExecutable")
+    binary = app / "Contents/MacOS" / name
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        raise RuntimeError(f"App executable is missing or not executable: {binary}")
+    return info, binary
+
+
+def require_stopped(binary):
+    # Match the executable path, not its name: another worktree may be in use.
+    processes = subprocess.check_output(["ps", "-axww", "-o", "pid=,comm="], text=True)
+    for line in processes.splitlines():
+        fields = line.strip().split(None, 1)
+        if len(fields) == 2 and fields[1] == str(binary):
+            raise RuntimeError(
+                f"This app is already running (PID {fields[0]}): {binary}\n"
+                "Close it before capturing a fresh launch. No process was stopped."
+            )
+
+
+def identity_files(app, binary):
+    paths = [
+        app / "Contents/Info.plist",
+        binary,
+        app / "Contents/Frameworks/App.framework/App",
+        app / "Contents/Frameworks/mlsr_ffi.framework/mlsr_ffi",
+    ]
+    assets = app / "Contents/Frameworks/App.framework/Resources/flutter_assets"
+    paths.extend(assets.glob("packages/mlsr_app_models/models/*/mlsr-bundle.yaml"))
+    return [path for path in paths if path.is_file()]
+
+
+def file_state(paths):
+    return {
+        str(path): (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+        for path in paths
+        for s in [path.stat()]
+    }
+
+
+def sha(path):
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+class Capture:
+    def __init__(self, output):
+        self.output = output
+        self.report = {
+            "schema_version": 1,
+            "kind": "flutter_startup_instruments_capture",
+            "status": "incomplete",
+            "started_utc": datetime.now(timezone.utc).isoformat(),
+            "platform": platform.platform(),
+            "scope": "Process launch through a fixed recording duration; no app-ready signal",
+            "cache_policy": "Existing app location and OS caches are retained",
+            "commands": [],
+        }
+
+    def save(self):
+        (self.output / "capture.json").write_text(
+            json.dumps(self.report, indent=2) + "\n", encoding="utf-8"
+        )
+
+    def run(self, command, log_name, *, cwd=ROOT, timeout=None, accepted_codes=(0,)):
+        command = list(map(str, command))
+        log_path = self.output / log_name
+        entry = {"argv": command, "cwd": str(cwd), "log": log_name}
+        self.report["commands"].append(entry)
+        self.save()
+        print("+ " + shlex.join(command), flush=True)
+        print(f"  Log: {log_path}", flush=True)
+        started = time.monotonic()
+        with log_path.open("x") as log:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            try:
+                code = process.wait(timeout=timeout)
+            except (KeyboardInterrupt, subprocess.TimeoutExpired):
+                # Give xctrace a chance to save its partial trace before exiting.
+                # Commands own a fresh process group, so interrupted builds also
+                # stop their children without signaling another worktree's app.
+                def stop_group(sig):
+                    try:
+                        os.killpg(process.pid, sig)
+                    except ProcessLookupError:
+                        pass
+
+                stop_group(signal.SIGINT)
+                try:
+                    process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    stop_group(signal.SIGTERM)
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        stop_group(signal.SIGKILL)
+                        process.wait()
+                raise
+            finally:
+                entry["exit_code"] = process.returncode
+                entry["command_wall_seconds"] = time.monotonic() - started
+                self.save()
+        if code not in accepted_codes:
+            tail = "\n".join(log_path.read_text(errors="replace").splitlines()[-15:])
+            raise RuntimeError(f"Command exited with {code}; see {log_path}\n{tail}")
+        return log_path.read_text(errors="replace")
+
+
+def capture(args):
+    if platform.system() != "Darwin" or platform.machine() != "arm64":
+        raise RuntimeError("Requires Apple Silicon macOS and Xcode Instruments")
+    if not shutil.which("xcrun"):
+        raise RuntimeError("xcrun is unavailable; select a full Xcode installation")
+    app = (
+        (
+            args.app
+            or (
+                EXAMPLE
+                / "build/macos/Build/Products"
+                / args.mode.title()
+                / "MLSR Speak.app"
+            )
+        )
+        .expanduser()
+        .resolve()
+    )
+    if app.exists() or not args.build:
+        _, binary = app_info(app)
+        require_stopped(binary)
+    if args.build and not shutil.which("flutter"):
+        raise RuntimeError("flutter is unavailable on PATH")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    output = (
+        (
+            args.output
+            or (ROOT / "ignore/startup-traces" / f"{stamp}-{uuid.uuid4().hex[:8]}")
+        )
+        .expanduser()
+        .resolve()
+    )
+    if output == app or app in output.parents:
+        raise RuntimeError("Capture output must be outside the app bundle")
+    output.mkdir(parents=True, exist_ok=False)
+    recording = Capture(output)
+    trace = output / "startup.trace"
+    print(f"Capture directory: {output}", flush=True)
+    try:
+        recording.report["capture_checkout"] = {
+            "path": str(ROOT),
+            "head": recording.run(["git", "rev-parse", "HEAD"], "git-head.log").strip(),
+            "status": recording.run(["git", "status", "--short"], "git-status.log"),
+            "script_sha256": sha(Path(__file__)),
+            "note": "Identifies the capture helper checkout, not a prebuilt app's source revision",
+        }
+        recording.report["xctrace_version"] = recording.run(
+            ["xcrun", "xctrace", "version"], "xctrace-version.log", timeout=30
+        ).strip()
+        instruments = recording.run(
+            ["xcrun", "xctrace", "list", "instruments"], "instruments.log", timeout=30
+        ).splitlines()
+        for name in ["Time Profiler", "Core ML", "os_signpost"]:
+            if name not in [line.strip() for line in instruments]:
+                raise RuntimeError(f"The selected Xcode has no {name!r} instrument")
+        if args.build:
+            recording.run(
+                ["flutter", "pub", "get", "--enforce-lockfile"],
+                "pub-get.log",
+                cwd=EXAMPLE,
+            )
+            recording.run(
+                ["flutter", "build", "macos", f"--{args.mode}", "--no-pub"],
+                "build.log",
+                cwd=EXAMPLE,
+            )
+        info, binary = app_info(app)
+        require_stopped(binary)
+        paths = identity_files(app, binary)
+        before = file_state(paths)
+        recording.report["app"] = {
+            "path": str(app),
+            "executable": str(binary),
+            "bundle_id": info.get("CFBundleIdentifier"),
+            "version": info.get("CFBundleShortVersionString"),
+            "build_number": info.get("CFBundleVersion"),
+            "built_by_helper": args.build,
+            "selected_mode": args.mode if args.app is None else None,
+        }
+        recording.report["duration_seconds"] = args.duration
+        recording.run(
+            [
+                "xcrun",
+                "xctrace",
+                "record",
+                "--template",
+                "Time Profiler",
+                "--instrument",
+                "Core ML",
+                "--instrument",
+                "os_signpost",
+                "--time-limit",
+                f"{args.duration}s",
+                "--output",
+                trace,
+                # xctrace resolves even an app's Mach-O path through Launch
+                # Services, which is ambiguous across worktrees with the same
+                # bundle ID. env execs the exact binary, preserving the traced
+                # PID and the app/model locations without changing registration.
+                "--target-stdout",
+                output / "app-stdout.log",
+                "--launch",
+                "--",
+                "/usr/bin/env",
+                binary,
+            ],
+            "record.log",
+            timeout=args.duration + 120,
+            accepted_codes=(0, 54),
+        )
+        record_code = recording.report["commands"][-1]["exit_code"]
+        recording.run(
+            [
+                "xcrun",
+                "xctrace",
+                "export",
+                "--input",
+                trace,
+                "--toc",
+                "--output",
+                output / "trace-toc.xml",
+            ],
+            "export.log",
+            timeout=60,
+        )
+        toc = ET.parse(output / "trace-toc.xml").getroot()
+        target = toc.find("run/info/target/process")
+        end_reason = toc.findtext("run/info/summary/end-reason")
+        if target is None or target.get("arguments") != str(binary):
+            raise RuntimeError("The trace does not identify the requested app launch")
+        recording.report["recording"] = {
+            "target": dict(target.attrib),
+            "end_reason": end_reason,
+            "duration_seconds": toc.findtext("run/info/summary/duration"),
+            "xctrace_exit_code": record_code,
+        }
+        # Xcode 27.1 returns 54 when its time limit kills a launched GUI app.
+        # Accept only that observed case, with the target and stop reason verified
+        # in the exported trace. Other nonzero exits remain capture failures.
+        if record_code == 54 and not (
+            end_reason == "Time limit reached"
+            and target.get("termination-reason") == "SIGKILL"
+            and target.get("return-exit-status") == "9"
+        ):
+            raise RuntimeError(
+                "xctrace exited with 54 without a verified time-limit stop"
+            )
+        recording.report["trace_tables"] = sorted(
+            {
+                table.get("schema")
+                for table in toc.findall(".//table")
+                if table.get("schema")
+            }
+        )
+        if not {"coreml-os-signpost", "time-profile"}.issubset(
+            recording.report["trace_tables"]
+        ):
+            raise RuntimeError("The trace is missing Core ML or Time Profiler tables")
+        if file_state(paths) != before:
+            raise RuntimeError("App binaries or manifests changed during capture")
+        # Fingerprint code and manifests after capture, without pre-reading model
+        # payloads or warming the executable's file cache ahead of startup.
+        recording.report["app"]["files_sha256"] = {
+            str(path.relative_to(app)): sha(path) for path in paths
+        }
+        recording.report["status"] = "captured"
+    except KeyboardInterrupt:
+        recording.report["status"] = "interrupted"
+        raise
+    except Exception as error:
+        recording.report.update(status="failed", error=str(error))
+        raise
+    finally:
+        recording.report["finished_utc"] = datetime.now(timezone.utc).isoformat()
+        recording.save()
+        print(f"Capture report: {output / 'capture.json'}", flush=True)
+    print(f"Trace: {trace}")
+    if args.open:
+        subprocess.run(["open", "-a", "Instruments", str(trace)], check=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--app", type=Path, help="Record this existing .app at its current location"
+    )
+    source.add_argument(
+        "--build", action="store_true", help="Build the example before recording"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["profile", "release"],
+        default="profile",
+        help="Build/default app directory (default: profile; ignored with --app)",
+    )
+    parser.add_argument(
+        "--duration", type=positive_seconds, default=30, metavar="SECONDS"
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="New directory (default: ignore/startup-traces/TIMESTAMP-ID)",
+    )
+    parser.add_argument(
+        "--open", action="store_true", help="Open the saved trace in Instruments"
+    )
+    args = parser.parse_args()
+    try:
+        capture(args)
+    except KeyboardInterrupt:
+        print(
+            "Capture interrupted; retained any partial trace and logs.", file=sys.stderr
+        )
+        return 130
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        subprocess.SubprocessError,
+        ET.ParseError,
+    ) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

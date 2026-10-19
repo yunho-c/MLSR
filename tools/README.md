@@ -113,3 +113,19 @@ fit both a speech-request interval and an ANE evaluation interval from the
 workload PID. It rejects missing intervals and unexpected counts. Attached traces
 can lack model names; generic events establish process execution, not individual
 model placement. These are diagnostic traces, not latency benchmarks.
+
+For the Flutter example's **startup**, use the standard-library-only helper:
+
+```sh
+tools/trace_flutter --build --open
+tools/trace_flutter --duration 30 --open
+```
+
+The first command builds the profile app using already prepared model assets;
+the second reuses that app at the same path. Instruments launches the app under
+Time Profiler, Core ML, and signpost recording. `--app` selects another existing
+app, `--mode release` selects the release build, and `--output` selects a new
+capture directory. The default is `ignore/startup-traces/TIMESTAMP-ID/`. Traces,
+logs, table-of-contents XML, and app/capture metadata are retained, including on
+failure. See the [example's startup capture instructions](../examples/flutter_speak/README.md#capture-startup-with-instruments)
+for cache, readiness, and measurement boundaries.
