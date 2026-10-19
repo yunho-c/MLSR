@@ -141,8 +141,9 @@ helper sets `MLSR_DLL_DIRECTORIES`; the binding registers those semicolon-separa
 directories with Python's Windows DLL loader and keeps them alive with the library.
 Use `TtsOptions(output_mode="headless")` for SDK jobs/rendering and the same
 policy with `Tts.from_model`. The public developer example accepts
-`--policy qnn_htp`. Native Windows speech output is unavailable; eight steps are
-required. The preset has [open model-quality failures](../../docs/qnn-qualification.md).
+`--policy qnn_htp`. Add `windows-output` to the native build for
+[Windows speech](../../docs/windows-output.md) at playback rate 1. Eight synthesis
+steps are required. The preset's [listening qualification is pending](../../docs/qnn-qualification.md).
 
 From a repository checkout, run `python3 tools/dev.py test-python` at the root.
 `python3 tools/dev.py package-python` builds a wheel and tests an installed copy

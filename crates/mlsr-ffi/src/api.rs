@@ -118,6 +118,11 @@ pub extern "C" fn mlsr_features() -> u32 {
         } else {
             0
         }
+        | if cfg!(all(feature = "windows-output", target_os = "windows")) {
+            MLSR_FEATURE_WINDOWS_OUTPUT
+        } else {
+            0
+        }
 }
 /// Number of registry handles, for leak diagnostics; not a memory measurement.
 #[unsafe(no_mangle)]

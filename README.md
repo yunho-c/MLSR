@@ -12,9 +12,10 @@ native Apple playback, retained seeking and original-text reader alignment. The
 
 Real inference/output qualification targets macOS Apple Silicon, English/Korean
 and voices M1/F1. The experimental Windows ARM64 [QNN Superfast backend](docs/qnn-runtime.md)
-supports the headless SDK with the same voices, lazy jobs and WAV export;
+supports the headless SDK with the same voices, lazy jobs and WAV export, plus
+optional [Windows speech playback](docs/windows-output.md) at normal speed;
 its [subjective listening qualification is pending](docs/qnn-qualification.md).
-Native Windows playback, physical iOS, other devices/minimum OS versions and
+Windows pitch-preserving variable playback rate, physical iOS, other devices/minimum OS versions and
 published native distribution packages need separate work and qualification.
 See [platform support](docs/platforms.md) for the current matrix and requirements.
 Builds never download model weights.

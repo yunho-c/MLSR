@@ -2,7 +2,8 @@
 
 The additive SDK uses ABI 1 with feature bit `8`. Existing engine/job functions,
 layouts, raw model speed and UTF-8 event offsets retain their meanings. Bit `16`
-advertises compiled macOS native output; model execution needs Core ML bit `2`
+advertises compiled macOS native output; bit `64` advertises Windows WASAPI output.
+Model execution needs Core ML bit `2`
 or QNN HTP bit `32`, the matching compute policy and a verified model. See the
 generated [header](../include/mlsr.h) for every pointer,
 layout and ownership contract. Initialize options with their default functions.

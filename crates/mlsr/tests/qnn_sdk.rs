@@ -88,7 +88,7 @@ fn qnn_sdk_preserves_pcm_plans_failures_and_model_ownership()
         }
         expected.push(pcm);
     }
-    let tts = Tts::new(engine, QueueOptions::default())?;
+    let tts = Tts::configured(engine, QueueOptions::default(), Default::default(), None)?;
     drop(model);
     assert!(store.remove(descriptor).is_err());
     let voices = tts.voices()?;

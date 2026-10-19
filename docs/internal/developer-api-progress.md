@@ -81,8 +81,9 @@ their hashes are indexed by the qualification record.
 
 ## Deferred scope
 
-Windows ARM64 QNN headless SDK integration is recorded separately in the
-[QNN qualification](../qnn-qualification.md); native Windows output, Android and
+Windows ARM64 QNN SDK integration is recorded separately in the
+[QNN qualification](../qnn-qualification.md), with normal-speed native
+[Windows output](../windows-output.md). Windows variable playback rate, Android and
 physical iOS remain later work. Word
 alignment, persistent synthesis caching, background media controls, voice cloning,
 full SSML and quantization promotion are not hidden acceptance dependencies. All

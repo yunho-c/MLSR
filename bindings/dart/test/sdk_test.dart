@@ -346,7 +346,15 @@ void main() {
           expect((await queued.done).reason, CancelReason.requested);
           await queued.dispose();
           speech.setVolume(0);
-          speech.setPlaybackRate(2);
+          if ((await tts.snapshot()).outputCapabilities!.rateRange == null) {
+            expect(
+              () => speech.setPlaybackRate(2),
+              throwsA(isA<SynthesisException>()),
+            );
+            speech.setPlaybackRate(1);
+          } else {
+            speech.setPlaybackRate(2);
+          }
           speech.seek(0);
           speech.resume();
           final done = await speech.done.timeout(const Duration(seconds: 10));

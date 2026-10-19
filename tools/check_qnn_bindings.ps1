@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Go,
     [Parameter(Mandatory = $true)][string]$Dart,
     [Parameter(Mandatory = $true)][string]$CCompiler,
+    [switch]$NativeOutput,
     [string]$SdkRoot = 'C:/Qualcomm/AIStack/QAIRT/2.50.40.260831'
 )
 $ErrorActionPreference = 'Stop'
@@ -35,7 +36,8 @@ Push-Location $projectRoot
 try {
     . (Join-Path $PSScriptRoot 'qnn_env.ps1') -SdkRoot $SdkRoot
     $report.bridge_sha256 = (Get-FileHash (Join-Path $env:MLSR_QNN_BRIDGE_DIR 'mlsr_qnn_bridge.dll')).Hash.ToLower()
-    Invoke-Check 'rust-build' 'cargo' @('build', '--locked', '--release', '-p', 'mlsr-ffi', '--features', 'qnn')
+    $features = if ($NativeOutput) { 'qnn,windows-output' } else { 'qnn' }
+    Invoke-Check 'rust-build' 'cargo' @('build', '--locked', '--release', '-p', 'mlsr-ffi', '--features', $features)
     $env:PATH = "$native;$(Split-Path -Parent $CCompiler);$env:PATH"
     $env:MLSR_LIBRARY_PATH = Join-Path $native 'mlsr_ffi.dll'
     $env:MLSR_TEST_MANIFEST = $manifest
@@ -48,6 +50,7 @@ try {
     $env:MLSR_TEST_DELIVERY_ID = 'supertonic3-qnn-superfast-v1'
     $env:MLSR_TEST_DELIVERY_PLATFORM = 'windows-arm64'
     Remove-Item Env:MLSR_TEST_NATIVE_OUTPUT -ErrorAction SilentlyContinue
+    if ($NativeOutput) { $env:MLSR_TEST_NATIVE_OUTPUT = '1' }
     $env:PYTHONPATH = Join-Path $projectRoot 'bindings/python/src'
     $report.native_sha256 = (Get-FileHash $env:MLSR_LIBRARY_PATH).Hash.ToLower()
     $report.versions = [ordered]@{
@@ -95,7 +98,7 @@ try {
         environment = @{ sdk = '>=3.11.0 <4.0.0' }
         dependencies = @{ mlsr = @{ path = (Join-Path $projectRoot 'bindings/dart') } }
         dev_dependencies = @{ test = '^1.33.0'; crypto = '^3.0.7'; yaml = '^3.1.4' }
-        hooks = @{ user_defines = @{ mlsr = @{ qnn = $true } } }
+        hooks = @{ user_defines = @{ mlsr = @{ qnn = $true; 'windows-output' = $NativeOutput.IsPresent } } }
     } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $dartRoot 'pubspec.yaml') -Encoding utf8
     $env:MLSR_TEST_OUTPUT = Join-Path $outputPath 'dart-pcm'
     $env:MLSR_SDK_OUTPUT = Join-Path $outputPath 'dart-sdk'
@@ -116,7 +119,7 @@ try {
     Invoke-Check 'sdk-pcm' $Python @('tools/check_qnn_sdk_pcm.py', $outputPath)
     $report.developer_sdk = Get-Content -LiteralPath (Join-Path $outputPath 'sdk-pcm.json') -Raw | ConvertFrom-Json
     $report.headless_sdk_passed = $true
-    $report.native_windows_playback = 'unsupported_capability'
+    $report.native_windows_playback = if ($NativeOutput) { 'muted_wasapi_passed' } else { 'unsupported_capability' }
     $report.passed = $true
 } catch {
     $report.failure = $_.Exception.Message

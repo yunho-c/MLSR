@@ -11,6 +11,11 @@ publish = false
 [features]
 default = []
 apple = ["dep:objc2", "dep:block2", "dep:objc2-avf-audio", "dep:objc2-foundation"]
+wasapi = ["dep:windows", "dep:windows-core"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "=0.62.2", optional = true, features = ["Win32_Media_Audio", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant"] }
+windows-core = { version = "=0.62.2", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "=0.6.4", optional = true }
