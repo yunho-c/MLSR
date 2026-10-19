@@ -17,6 +17,8 @@ const FP16: &str = include_str!("../../../../../model-manifests/supertonic3-core
 const RECOMMENDED: &str =
     include_str!("../../../../../model-manifests/supertonic3-coreml-fp16-voices.yaml");
 const QNN: &str = include_str!("../../../../../model-manifests/supertonic3-qnn-superfast.yaml");
+const QNN_CONTEXT: &str =
+    include_str!("../../../../../model-manifests/supertonic3-qnn-superfast-t384.yaml");
 /// Filename at the root of a self-contained model bundle.
 pub const BUNDLE_MANIFEST_NAME: &str = "mlsr-bundle.yaml";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
@@ -215,6 +217,8 @@ pub struct Bundle {
     manifest_sha256: String,
     catalog: crate::voice::VoiceCatalog,
     text_capacity: usize,
+    latent_buckets: Vec<usize>,
+    noise_capacity: Option<usize>,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -334,6 +338,15 @@ impl Bundle {
             text_capacity: manifest.contract["text_tokens"]
                 .as_u64()
                 .expect("validated capacity") as usize,
+            latent_buckets: manifest.contract["latent_buckets"]
+                .as_array()
+                .expect("validated buckets")
+                .iter()
+                .map(|v| v.as_u64().expect("validated bucket") as usize)
+                .collect(),
+            noise_capacity: manifest.contract["noise_capacity"]
+                .as_u64()
+                .map(|n| n as usize),
         })
     }
     /// Bundle identifier recorded by the manifest.
@@ -343,6 +356,20 @@ impl Bundle {
     /// Fixed normalized-token capacity declared by all text-conditioned graphs.
     pub fn text_capacity(&self) -> usize {
         self.text_capacity
+    }
+    pub(super) fn latent_buckets(&self) -> &[usize] {
+        &self.latent_buckets
+    }
+    pub(super) fn noise_capacity(&self) -> Option<usize> {
+        self.noise_capacity
+    }
+    pub(super) fn vocoder_name(&self, bucket: usize) -> String {
+        let fixed = format!("vocoder_{bucket}");
+        if self.models.contains_key(&fixed) {
+            fixed
+        } else {
+            "vocoder".into()
+        }
     }
     /// Runtime required by the pinned graph and tensor contracts.
     pub fn backend(&self) -> BackendKind {
@@ -425,6 +452,7 @@ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
         (Some("coreml"), Some(128)) => BASELINE,
         (Some("coreml"), Some(384)) => FP16,
         (Some("qnn"), Some(128)) => QNN,
+        (Some("qnn"), Some(384)) => QNN_CONTEXT,
         _ => {
             return Err(Error::Manifest(
                 "unsupported runtime and normalized-text capacity".into(),

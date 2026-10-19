@@ -5,11 +5,17 @@ use std::{
     time::Duration,
 };
 
+#[derive(Default)]
 struct Fake {
     calls: Arc<AtomicUsize>,
     entered: Option<SyncSender<()>>,
     release: Option<Receiver<()>>,
     panic: bool,
+    duration_calls: Arc<AtomicUsize>,
+    reused: Arc<AtomicUsize>,
+    planning_gate: Option<(u32, SyncSender<()>, Receiver<()>)>,
+    trim_frames: usize,
+    duration_seconds: Option<f32>,
 }
 impl Backend for Fake {
     fn voice_catalog(&self) -> VoiceCatalog {
@@ -28,11 +34,21 @@ impl Backend for Fake {
         &mut self,
         request: &Request,
         segment: &TextSegment,
+        planned: Option<&SynthesisPlan>,
         observer: &mut dyn SynthesisObserver,
     ) -> Result<Audio> {
         observer.checkpoint()?;
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let plan = SynthesisPlan::from_duration(1., request.options)?;
+        let plan = match planned {
+            Some(plan) => {
+                self.reused.fetch_add(1, Ordering::SeqCst);
+                plan.clone()
+            }
+            None => {
+                self.duration_calls.fetch_add(1, Ordering::SeqCst);
+                SynthesisPlan::from_duration(self.duration_seconds.unwrap_or(1.), request.options)?
+            }
+        };
         observer.planned(&plan)?;
         if let Some(entered) = self.entered.take() {
             entered.send(()).unwrap();
@@ -46,7 +62,33 @@ impl Backend for Fake {
         }
         observer.checkpoint()?;
         assert!(!self.panic, "injected inference panic");
-        Audio::mono(vec![segment.id as f32; plan.requested_frames()], 44100)
+        Audio::mono(
+            vec![segment.id as f32; plan.requested_frames() - self.trim_frames],
+            44100,
+        )
+    }
+    fn plan_duration(
+        &mut self,
+        request: &Request,
+        segment: &TextSegment,
+        observer: &mut dyn SynthesisObserver,
+    ) -> Result<SynthesisPlan> {
+        observer.checkpoint()?;
+        self.duration_calls.fetch_add(1, Ordering::SeqCst);
+        if self
+            .planning_gate
+            .as_ref()
+            .is_some_and(|(id, _, _)| *id == segment.id)
+        {
+            let (_, entered, release) = self.planning_gate.take().unwrap();
+            entered.send(()).unwrap();
+            let _ = release.recv_timeout(Duration::from_secs(3));
+        }
+        observer.checkpoint()?;
+        let plan =
+            SynthesisPlan::from_duration(self.duration_seconds.unwrap_or(1.), request.options)?;
+        observer.planned(&plan)?;
+        Ok(plan)
     }
     fn stats(&self) -> Result<SessionStats> {
         Ok(SessionStats {
@@ -128,12 +170,17 @@ fn optimized_engines_cancel_recover_and_retain_a_bounded_model_set() {
     }
 }
 pub(crate) fn fake() -> (Engine, Arc<AtomicUsize>) {
+    fake_with_duration(1.)
+}
+pub(crate) fn fake_with_duration(duration_seconds: f32) -> (Engine, Arc<AtomicUsize>) {
     let calls = Arc::new(AtomicUsize::new(0));
     let engine = Engine::with_backend(Box::new(Fake {
         calls: calls.clone(),
         entered: None,
         release: None,
         panic: false,
+        duration_seconds: Some(duration_seconds),
+        ..Fake::default()
     }))
     .unwrap();
     (engine, calls)
@@ -146,9 +193,42 @@ pub(crate) fn gated_fake() -> (Engine, Receiver<()>, SyncSender<()>) {
         entered: Some(entered_tx),
         release: Some(release_rx),
         panic: false,
+        ..Fake::default()
     }))
     .unwrap();
     (engine, entered_rx, release_tx)
+}
+pub(crate) struct DurationTest {
+    pub engine: Engine,
+    pub predictions: Arc<AtomicUsize>,
+    pub reused: Arc<AtomicUsize>,
+    pub calls: Arc<AtomicUsize>,
+    pub entered: Receiver<()>,
+    pub release: SyncSender<()>,
+}
+pub(crate) fn duration_fake(gated_segment: Option<u32>, trim_frames: usize) -> DurationTest {
+    let (entered_tx, entered) = mpsc::sync_channel(1);
+    let (release, release_rx) = mpsc::sync_channel(1);
+    let predictions = Arc::new(AtomicUsize::new(0));
+    let reused = Arc::new(AtomicUsize::new(0));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let engine = Engine::with_backend(Box::new(Fake {
+        duration_calls: predictions.clone(),
+        reused: reused.clone(),
+        calls: calls.clone(),
+        planning_gate: gated_segment.map(|id| (id, entered_tx, release_rx)),
+        trim_frames,
+        ..Fake::default()
+    }))
+    .unwrap();
+    DurationTest {
+        engine,
+        predictions,
+        reused,
+        calls,
+        entered,
+        release,
+    }
 }
 fn terminal(job: &Job) -> JobReport {
     loop {
@@ -162,6 +242,256 @@ fn terminal(job: &Job) -> JobReport {
             other => panic!("missing terminal event: {other:?}"),
         }
     }
+}
+#[test]
+fn prepared_speech_generates_only_requested_segments_without_repredicting() {
+    let fixture = duration_fake(None, 1000);
+    let plan = Arc::new(
+        fixture
+            .engine
+            .plan_text(
+                "First sentence.\nSecond sentence.\nThird sentence.\nLast sentence.",
+                "en",
+                "M1",
+            )
+            .unwrap(),
+    );
+    let count = plan.segments().len();
+    assert_eq!(count, 4);
+    let limits = JobOptions::new(1024, 1024, 100000).unwrap();
+    let preparation = fixture
+        .engine
+        .prepare_speech(plan.clone(), "M1", SynthesisOptions::default(), limits)
+        .unwrap();
+    assert!(preparation.wait(Duration::from_secs(2)));
+    let report = terminal(&preparation);
+    assert!(matches!(report.outcome, Outcome::Completed));
+    assert_eq!((report.frames, report.segments), (0, 0));
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
+    let prepared = preparation.prepared_speech().unwrap();
+    assert_eq!(fixture.predictions.load(Ordering::SeqCst), count);
+    assert_eq!(prepared.estimated_frames(), 168000);
+    assert_eq!(prepared.locate(42001), Some((1, 1)));
+    assert_eq!(prepared.locate(168000), Some((3, 42000)));
+    assert_eq!(prepared.locate(168001), None);
+    assert_eq!(prepared.text_plan().original(), plan.original());
+    for (call, index) in [2, 0, 3, 2].into_iter().enumerate() {
+        let job = fixture
+            .engine
+            .start_prepared_segment(prepared.clone(), index, limits)
+            .unwrap();
+        let mut frames = 0;
+        loop {
+            match job.poll(Duration::from_secs(2)) {
+                Poll::Event(event) => match event.event {
+                    Event::Audio(chunk) => {
+                        assert_eq!(chunk.start_frame, frames);
+                        assert_eq!(chunk.segment.id, index as u32);
+                        assert_eq!(chunk.segment.text_span, plan.segments()[index].utf8_span());
+                        assert!(
+                            chunk
+                                .audio
+                                .samples()
+                                .iter()
+                                .all(|&sample| sample == index as f32)
+                        );
+                        frames += chunk.audio.frames() as u64;
+                    }
+                    Event::Predicted(info) => assert_eq!(info.id, index as u32),
+                    Event::Terminal(report) => {
+                        assert!(matches!(report.outcome, Outcome::Completed));
+                        assert_eq!((report.frames, report.segments), (41000, 1));
+                        break;
+                    }
+                },
+                other => panic!("missing prepared segment: {other:?}"),
+            }
+        }
+        assert_eq!(frames, 41000);
+        assert_eq!(fixture.calls.load(Ordering::SeqCst), call + 1);
+        assert_eq!(fixture.reused.load(Ordering::SeqCst), call + 1);
+        assert_eq!(fixture.predictions.load(Ordering::SeqCst), count);
+    }
+    assert!(
+        fixture
+            .engine
+            .start_prepared_segment(prepared.clone(), count, limits)
+            .is_err()
+    );
+    assert!(
+        fixture
+            .engine
+            .start_prepared_segment(prepared, 0, JobOptions::new(1024, 1024, 41000).unwrap(),)
+            .is_err()
+    );
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 4);
+}
+
+#[test]
+fn cancelled_preparation_never_exposes_a_partial_duration_index() {
+    let fixture = duration_fake(Some(1), 0);
+    let plan = Arc::new(
+        fixture
+            .engine
+            .plan_text(
+                "First sentence.\nSecond sentence.\nThird sentence.",
+                "en",
+                "M1",
+            )
+            .unwrap(),
+    );
+    let job = fixture
+        .engine
+        .prepare_speech(
+            plan,
+            "M1",
+            SynthesisOptions::default(),
+            JobOptions::default(),
+        )
+        .unwrap();
+    fixture
+        .entered
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap();
+    assert!(job.prepared_speech().is_none());
+    assert!(job.estimated_frames().is_none());
+    job.cancel();
+    fixture.release.send(()).unwrap();
+    assert!(job.wait(Duration::from_secs(2)));
+    assert!(matches!(terminal(&job).outcome, Outcome::Cancelled));
+    assert!(job.prepared_speech().is_none());
+    assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(fixture.predictions.load(Ordering::SeqCst), 2);
+    fixture.engine.runtime_stats().unwrap();
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE and real Core ML execution"]
+fn real_prepared_segments_match_linear_synthesis() {
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let manifest =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../model-manifests/supertonic3-coreml.yaml");
+    let engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
+    let plan = Arc::new(engine.plan_text(
+        "This is the beginning.\nWe can jump directly to the middle.\nThis is the final sentence.",
+        "en", "M1",
+    ).unwrap());
+    assert_prepared_segments_match_linear_synthesis(&engine, plan, "M1");
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE pointing to the T384 FP16 bundle and real Core ML execution"]
+fn real_t384_prepared_sentences_match_linear_synthesis() {
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../model-manifests/supertonic3-coreml-fp16.yaml");
+    let engine = Engine::load(manifest, root, EngineOptions::default()).unwrap();
+    for (language, voice, text) in [
+        (
+            "en",
+            "M1",
+            concat!(
+                "A thoughtful reader can follow a complete sentence at a comfortable pace, keeping all its words together while the speaker explains the next idea.\n",
+                "We can jump directly to the middle without reading the passages before it, while the reader keeps the original sentence boundaries and source offsets.\n",
+                "This is the final sentence in the same document."
+            ),
+        ),
+        (
+            "ko",
+            "F1",
+            concat!(
+                "문장을 중간에서 끊지 않고 끝까지 읽으면 앞뒤 내용이 자연스럽게 이어지고, 듣는 사람도 이야기의 흐름을 편안하게 따라갈 수 있습니다.\n",
+                "이제 가운데 문장으로 바로 이동해도 처음에 계획한 목소리와 속도는 그대로 유지됩니다.\n",
+                "마지막 문장도 같은 문서에 남아 있습니다."
+            ),
+        ),
+    ] {
+        let plan = Arc::new(engine.plan_text(text, language, voice).unwrap());
+        assert_eq!(plan.sentences().len(), 3);
+        assert!(plan.segments()[0].normalized().chars().count() > 128);
+        assert!(
+            plan.segments()
+                .iter()
+                .all(|s| s.normalized().chars().count() <= 384)
+        );
+        assert_eq!(
+            plan.segments()
+                .iter()
+                .map(|s| &text[s.utf8_span()])
+                .collect::<String>(),
+            text,
+        );
+        assert_prepared_segments_match_linear_synthesis(&engine, plan, voice);
+    }
+}
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+fn assert_prepared_segments_match_linear_synthesis(
+    engine: &Engine,
+    plan: Arc<TextPlan>,
+    voice: &str,
+) {
+    assert_eq!(plan.segments().len(), 3);
+    let options = SynthesisOptions::new(8, 1.05, 1729).unwrap();
+    let mut linear = vec![Vec::new(); 3];
+    let job = engine
+        .start_plan(plan.clone(), 0, voice, options, JobOptions::default())
+        .unwrap();
+    loop {
+        match job.poll(Duration::from_secs(30)) {
+            Poll::Event(event) => match event.event {
+                Event::Audio(chunk) => linear[chunk.segment.id as usize]
+                    .extend(chunk.audio.samples().iter().map(|v| v.to_bits())),
+                Event::Predicted(_) => {}
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    break;
+                }
+            },
+            other => panic!("missing reference audio: {other:?}"),
+        }
+    }
+    let baseline = engine.runtime_stats().unwrap();
+    let preparation = engine
+        .prepare_speech(plan, voice, options, JobOptions::default())
+        .unwrap();
+    assert!(preparation.wait(Duration::from_secs(30)));
+    assert!(matches!(terminal(&preparation).outcome, Outcome::Completed));
+    let prepared = preparation.prepared_speech().unwrap();
+    let planned = engine.runtime_stats().unwrap();
+    assert_eq!(planned.predictions - baseline.predictions, 3);
+    assert_eq!(planned.live_tensors, baseline.live_tensors);
+    for index in [2, 0, 1, 2] {
+        let job = engine
+            .start_prepared_segment(prepared.clone(), index, JobOptions::default())
+            .unwrap();
+        let mut actual = Vec::new();
+        loop {
+            match job.poll(Duration::from_secs(30)) {
+                Poll::Event(event) => match event.event {
+                    Event::Audio(chunk) => {
+                        assert_eq!(chunk.segment.id, index as u32);
+                        actual.extend(chunk.audio.samples().iter().map(|v| v.to_bits()));
+                    }
+                    Event::Predicted(_) => {}
+                    Event::Terminal(report) => {
+                        assert!(matches!(report.outcome, Outcome::Completed));
+                        break;
+                    }
+                },
+                other => panic!("missing random-access audio: {other:?}"),
+            }
+        }
+        assert_eq!(actual, linear[index]);
+    }
+    let generated = engine.runtime_stats().unwrap();
+    assert_eq!(generated.predictions - planned.predictions, 40);
+    assert_eq!(generated.live_tensors, baseline.live_tensors);
+    eprintln!(
+        "Prepared three segments with 3 duration calls; generated [2,0,1,2] with 40 model calls; every PCM bit matches linear synthesis."
+    );
 }
 #[test]
 fn stream_orders_metadata_spans_and_frames_with_exactly_one_terminal() {
@@ -361,6 +691,102 @@ fn real_frozen_suffix_preserves_seeded_pcm() {
     assert!(!actual.is_empty());
     assert_eq!(actual, expected);
 }
+
+#[cfg(all(feature = "coreml", target_os = "macos"))]
+#[test]
+#[ignore = "requires MLSR_TEST_BUNDLE and real Core ML execution"]
+fn real_duration_planning_reuses_predictions_and_preserves_pcm() {
+    fn collect(job: &Job, planned: bool) -> (Vec<u32>, JobReport) {
+        let mut pcm = Vec::new();
+        let mut estimate = None;
+        loop {
+            let Poll::Event(event) = job.poll(Duration::from_secs(30)) else {
+                panic!("missing duration-planning event")
+            };
+            if planned {
+                let total = job.estimated_frames().expect("total precedes first PCM");
+                assert_eq!(*estimate.get_or_insert(total), total);
+            } else {
+                assert_eq!(job.estimated_frames(), None);
+            }
+            match event.event {
+                Event::Predicted(_) => {}
+                Event::Audio(chunk) => {
+                    pcm.extend(chunk.audio.samples().iter().map(|v| v.to_bits()))
+                }
+                Event::Terminal(report) => {
+                    assert!(matches!(report.outcome, Outcome::Completed));
+                    if planned {
+                        assert_eq!(estimate, Some(report.frames));
+                    }
+                    return (pcm, report);
+                }
+            }
+        }
+    }
+    let root = std::env::var_os("MLSR_TEST_BUNDLE").expect("MLSR_TEST_BUNDLE");
+    let engine =
+        Engine::from_bundle(Bundle::open(root).unwrap(), EngineOptions::default()).unwrap();
+    let cases = [
+        (
+            "Hello from MLSR.\nThis is another sentence.\nThe final sentence follows.",
+            "en",
+            "M1",
+        ),
+        (
+            "안녕하세요.\n오늘도 좋은 하루 보내세요.\n이것은 마지막 문장입니다.",
+            "ko",
+            "F1",
+        ),
+    ];
+    for (text, language, voice) in cases {
+        let plan = Arc::new(engine.plan_text(text, language, voice).unwrap());
+        for speed in [0.84, 1.05, 1.26] {
+            let options = SynthesisOptions::new(8, speed, 1729).unwrap();
+            let legacy = engine
+                .start(
+                    SynthesisRequest {
+                        text,
+                        language,
+                        voice,
+                        options,
+                    },
+                    JobOptions::default(),
+                )
+                .unwrap();
+            let (expected, _) = collect(&legacy, false);
+            let before = engine.runtime_stats().unwrap();
+            let job = engine
+                .start_plan(
+                    plan.clone(),
+                    0,
+                    voice,
+                    options,
+                    JobOptions::new(4096, 4096, 512 * 3072).unwrap(),
+                )
+                .unwrap();
+            let (actual, report) = collect(&job, true);
+            let after = engine.runtime_stats().unwrap();
+            assert_eq!(actual, expected, "{language}/{voice} at raw speed {speed}");
+            assert_eq!(
+                after.predictions - before.predictions,
+                11 * plan.segments().len() as u64,
+                "one DP, one TE, eight VE, one vocoder per segment; no repeated DP"
+            );
+            assert_eq!(
+                after.live_tensors, before.live_tensors,
+                "duration pass releases native inputs"
+            );
+            assert!(job.queue_stats().peak_frames <= 4096);
+            eprintln!(
+                "exact duration-planned PCM: {language}/{voice}, speed={speed}, segments={}, frames={}, predictions={}",
+                plan.segments().len(),
+                report.frames,
+                after.predictions - before.predictions
+            );
+        }
+    }
+}
 #[test]
 fn cancellation_bypasses_inflight_call_and_engine_is_busy_until_quiescent() {
     let (entered_tx, entered_rx) = mpsc::sync_channel(1);
@@ -370,6 +796,7 @@ fn cancellation_bypasses_inflight_call_and_engine_is_busy_until_quiescent() {
         entered: Some(entered_tx),
         release: Some(release_rx),
         panic: false,
+        ..Fake::default()
     }))
     .unwrap();
     let job = engine
@@ -453,6 +880,7 @@ fn duration_limit_fails_before_audio_and_panic_retires_backend() {
         entered: None,
         release: None,
         panic: true,
+        ..Fake::default()
     }))
     .unwrap();
     let job = panicking

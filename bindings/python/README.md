@@ -30,12 +30,21 @@ with mlsr.Tts("model-manifests/supertonic3-coreml-fp16-voices.yaml", "/path/to/b
 within `tts.controller`; use `mode="enqueue"` or `tts.create_controller()` for a
 separate scope. Speech supports pause/resume, volume, playback rate, retained-frame
 seek, previous/next sentence and explicit original-sentence navigation. A
-navigation result contains a new `speech` when inference must restart. Completed
-recordings use `speech.replay_from(frame)` to create a new identity; the original
+navigation result contains a new `speech` for ungenerated text in default
+full-recording mode. Completed speech uses `speech.replay_from(frame)` to create a new identity; the original
 completion remains immutable. Discarding a Speech object preserves fire-and-forget
 playback. Explicit `close()` cancels/joins and releases its retained recording.
 `speech.request` / `job.request` expose the copied accepted input, resolved voice,
 effective model speed/steps/seed and original navigation start segment.
+
+Use `SpeechOptions(on_demand_seeking=True)` to seek anywhere after duration
+planning. Uncached destinations generate directly without reading skipped passages,
+preserving active identity and pause/rate/volume. `seeking` / `seek_target_frame`
+expose preparation, `seekable_ranges` covers the planned document, and
+`buffered_ranges` identifies actual, possibly disjoint cached audio. The bounded
+cache evicts old segments and regenerates them on return. Export after completed
+playback requires `recording_complete`. Full retention remains the default; see
+[reader policies and limits](../../docs/reader-api.md).
 
 Read `speech.snapshot` or use `with speech.states() as states: ...` to observe
 coalesced state without draining PCM. State includes source-frame position,

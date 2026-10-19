@@ -15,7 +15,7 @@ struct Playback {
     ended_input: bool,
     applied: Desired,
     system_paused: bool,
-    seek_notification_pending: bool,
+    seek_notification_pending: Option<u64>,
 }
 struct Pending {
     start: u64,
@@ -34,8 +34,8 @@ pub(super) fn run(shared: Arc<Shared>, factory: Arc<dyn OutputFactory>, policy: 
             controls
         };
         for control in controls {
-            control.job.cancel();
-            while control.job.wait(TICK).is_none() {}
+            control.cancel_jobs(CancelReason::Requested);
+            control.join_jobs();
             control.finish(
                 Outcome::Failed {
                     error: Failure::new(
@@ -75,7 +75,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
         match result {
             Ok(()) => {}
             Err(error) => {
-                control.job.cancel();
+                control.cancel_jobs(CancelReason::Requested);
                 let cancelled = lock(&control.state).snapshot.cancellation;
                 // Cancellation can race with claiming the synthesis consumer.
                 // It does not imply a broken native graph. Flush that graph and
@@ -95,7 +95,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
                 {
                     let _ = old.flush(next);
                 }
-                while control.job.wait(TICK).is_none() {}
+                control.join_jobs();
                 let cancelled = lock(&control.state).snapshot.cancellation;
                 if let Some(reason) = cancelled {
                     control.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
@@ -117,7 +117,7 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
     }
     // Native graph and buffers are released on this same output thread.
 }
-fn advance(epoch: &mut u64) -> Result<u64> {
+pub(super) fn advance(epoch: &mut u64) -> Result<u64> {
     *epoch = epoch
         .checked_add(1)
         .ok_or_else(|| Error::Output("playback epochs exhausted".into()))?;
@@ -131,6 +131,9 @@ fn play(
     output: &mut Option<Box<dyn AudioOutput>>,
     epoch: &mut u64,
 ) -> Result<()> {
+    if control.reader.is_some() {
+        return super::reader::play(shared, control, factory, policy, output, epoch);
+    }
     let cancelled = lock(&control.state).snapshot.cancellation;
     if let Some(reason) = cancelled {
         control.finish(Outcome::Cancelled { reason }, PlaybackPhase::Stopped);
@@ -164,7 +167,7 @@ fn play(
         ended_input: false,
         applied: desired,
         system_paused: false,
-        seek_notification_pending: false,
+        seek_notification_pending: None,
     };
     loop {
         let cancelled = lock(&control.state).snapshot.cancellation;
@@ -184,6 +187,7 @@ fn play(
         apply_controls(control, &mut playback, output.as_mut(), current_epoch)?;
         let seek = lock(&control.state).seek_to.take();
         if let Some(frame) = seek {
+            let frame = frame.frame;
             current_epoch = advance(epoch)?;
             output.flush(current_epoch)?;
             output.begin(
@@ -197,12 +201,24 @@ fn play(
             playback.pending = None;
             playback.cursor = frame;
             playback.ended_input = false;
-            playback.seek_notification_pending = true;
+            playback.seek_notification_pending = seek.map(|s| s.serial);
             // publish() updates position and its text range together from the
             // rebased output snapshot; direct snapshot readers must not see a
             // new position paired with the previous sentence.
         }
-        pump(control, &mut playback, output.as_mut(), current_epoch)?;
+        // Apply generation pacing at the new cursor, but keep the previous
+        // published position until publish() can detect and notify the change.
+        // Otherwise a paused seek within one text segment has no new revision.
+        let position = seek
+            .map(|s| s.frame)
+            .unwrap_or_else(|| lock(&control.state).snapshot.position_frame);
+        pump(
+            control,
+            &mut playback,
+            output.as_mut(),
+            current_epoch,
+            position,
+        )?;
         if lock(&control.state).snapshot.cancellation.is_some() {
             // Do not poll/drain an epoch after consuming its cancellation. The
             // loop's independent cancellation path flushes before joining work.
@@ -237,7 +253,7 @@ fn play(
                 &snapshot,
                 playback.seek_notification_pending,
             );
-            playback.seek_notification_pending = false;
+            playback.seek_notification_pending = None;
             if playback.ended_input && snapshot.drained {
                 let mut state = lock(&control.state);
                 if let Some(frames) = state.snapshot.duration_frames {
@@ -285,7 +301,47 @@ fn pump(
     playback: &mut Playback,
     output: &mut dyn AudioOutput,
     epoch: u64,
+    position: u64,
 ) -> Result<()> {
+    if let Some(store) = playback.retained.clone()
+        && !playback.ended_generation
+    {
+        control
+            .job
+            .pace_generation(position.saturating_add(control.lookahead_frames as u64));
+        // Retain generated PCM independently of output capacity and playback
+        // position. Bound each burst so controls keep making progress. Segment
+        // admission upstream bounds future inference; the shared byte quota
+        // bounds storage. A full/paused output must not hide completed audio.
+        for _ in 0..32 {
+            if lock(&control.state).snapshot.cancellation.is_some() {
+                return Ok(());
+            }
+            match playback
+                .stream
+                .as_mut()
+                .expect("generation consumer")
+                .poll(Duration::ZERO)
+            {
+                AudioPoll::Audio(chunk) => {
+                    store
+                        .append(chunk.start_frame, &chunk.audio)
+                        .map_err(|e| retention_error(control, e))?;
+                    note_segment(control, chunk.start_frame, chunk.segment.id);
+                }
+                AudioPoll::Finished(done) => {
+                    generation_outcome(control, playback, done.outcome)?;
+                    break;
+                }
+                AudioPoll::Timeout => break,
+                AudioPoll::End => {
+                    return Err(Error::Output(
+                        "audio stream ended without completion".into(),
+                    ));
+                }
+            }
+        }
+    }
     for _ in 0..8 {
         if !playback.ended_generation
             && let Some(done) = control.job.completion()
@@ -296,35 +352,6 @@ fn pump(
             return Ok(());
         }
         if let Some(store) = playback.retained.clone() {
-            let ahead = store
-                .frames()
-                .saturating_sub(lock(&control.state).snapshot.position_frame);
-            if !playback.ended_generation
-                && ahead + control.job.chunk_frames() as u64 <= control.lookahead_frames as u64
-            {
-                match playback
-                    .stream
-                    .as_mut()
-                    .expect("generation consumer")
-                    .poll(Duration::ZERO)
-                {
-                    AudioPoll::Audio(chunk) => {
-                        store
-                            .append(chunk.start_frame, &chunk.audio)
-                            .map_err(|e| retention_error(control, e))?;
-                        note_segment(control, chunk.start_frame, chunk.segment.id);
-                    }
-                    AudioPoll::Finished(done) => {
-                        generation_outcome(control, playback, done.outcome)?
-                    }
-                    AudioPoll::Timeout => {}
-                    AudioPoll::End => {
-                        return Err(Error::Output(
-                            "audio stream ended without completion".into(),
-                        ));
-                    }
-                }
-            }
             if playback.pending.is_none() {
                 playback.pending = store
                     .read(playback.cursor, control.job.chunk_frames())
@@ -402,7 +429,12 @@ fn apply_controls(
     playback.applied = desired;
     Ok(())
 }
-fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot, seek_applied: bool) {
+fn publish(
+    control: &Control,
+    playback: &Playback,
+    output: &OutputSnapshot,
+    seek_applied: Option<u64>,
+) {
     let synthesis = control.job.snapshot();
     let mut state = lock(&control.state);
     let previous = state.snapshot.clone();
@@ -414,6 +446,10 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot, seek
     } else {
         std::iter::once(0..end).collect()
     };
+    state.snapshot.buffered_ranges = state.snapshot.seekable_ranges.clone();
+    state.snapshot.recording_complete = synthesis
+        .duration_frames
+        .is_some_and(|frames| end == frames && end > 0);
     if playback.retained.is_some() {
         state.snapshot.buffered_until_frame = end;
     }
@@ -452,7 +488,13 @@ fn publish(control: &Control, playback: &Playback, output: &OutputSnapshot, seek
                 utf16: segment.utf16_span(),
             })
         });
-    if seek_applied || state.snapshot != previous {
+    if let Some(serial) = seek_applied
+        && state.seek_serial == serial
+    {
+        state.snapshot.seeking = false;
+        state.snapshot.seek_target_frame = None;
+    }
+    if seek_applied.is_some() || state.snapshot != previous {
         control.publish(&mut state);
     }
 }

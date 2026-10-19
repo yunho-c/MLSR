@@ -2,6 +2,39 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn qnn_context_manifest_pins_every_bucket_and_rejects_mixed_profiles() {
+    let manifest = parse_manifest(QNN_CONTEXT.as_bytes()).unwrap();
+    assert_eq!(manifest.artifacts.len(), 22);
+    assert_eq!(manifest.contract["latent_buckets"], json!([128, 256, 512]));
+    assert_eq!(manifest.contract["noise_capacity"], 512);
+    for (pointer, value) in [
+        ("/contract/noise_capacity", json!(128)),
+        ("/contract/latent_buckets", json!([128, 512])),
+        ("/contract/text_tokens", json!(128)),
+        (
+            "/artifacts/ve_512/inputs/text_emb/shape",
+            json!([1, 256, 128]),
+        ),
+        (
+            "/artifacts/vocoder_256/inputs/latent/shape",
+            json!([1, 144, 128]),
+        ),
+        (
+            "/artifacts/vocoder_512/files/0/sha256",
+            json!("0".repeat(64)),
+        ),
+        ("/artifacts/ve_128/precision/compute", json!("float32")),
+    ] {
+        let mut value_map: Value = serde_yaml_ng::from_str(QNN_CONTEXT).unwrap();
+        *value_map.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            parse_manifest(serde_yaml_ng::to_string(&value_map).unwrap().as_bytes()).is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+#[test]
 fn qnn_manifest_pins_program_semantics_and_target() {
     let manifest = parse_manifest(QNN.as_bytes()).unwrap();
     assert_eq!(manifest.artifacts.len(), 14);

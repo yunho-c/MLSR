@@ -37,8 +37,18 @@ The default `speak` mode replaces that controller's active and queued speech.
 separate scope sharing the inference lane and budgets. The controller exposes
 native capabilities. Speech supports pause/resume, volume, pitch-preserving rate,
 retained-frame `seek`, previous/next sentence and original-sentence navigation.
-Navigation returns a new `Speech` when inference restarts. `replayFrom` creates a
-new identity sharing a completed recording; the original `done` is immutable.
+Default full-recording navigation returns a new `Speech` for ungenerated text.
+`replayFrom` creates a new identity after completed playback; the original `done`
+is immutable.
+
+Use `SpeechOptions(onDemandSeeking: true)` for a reader that can seek anywhere
+after duration planning. Uncached destinations generate directly without reading
+skipped passages; seeks preserve the active document/ID and pause/rate/volume.
+`seeking` / `seekTargetFrame` expose preparation, `seekableRanges` covers the planned
+document, and `bufferedRanges` identifies actual, possibly disjoint cached audio.
+The bounded cache evicts old segments and regenerates them on return. Completed
+playback is exportable only when `recordingComplete` is true. Full recording
+retention remains the default. See [reader policies and limits](../../docs/reader-api.md).
 
 `speech.snapshot()` is an independent state read. Each `speech.states` access
 creates a new single-subscription coalesced stream. Pausing a subscription stops
@@ -196,7 +206,8 @@ and streams a new WAV file. From the repository root,
 qualifies a relocated package/native asset with real inference and this example.
 
 `test/sdk_test.dart` covers catalog/verified readiness and owned WAV without model
-execution. Set `MLSR_TEST_MANIFEST` and `MLSR_TEST_BUNDLE` for real shared-facade
+execution. Test suites run serially because leak checks inspect the native
+process-wide handle registry. Set `MLSR_TEST_MANIFEST` and `MLSR_TEST_BUNDLE` for real shared-facade
 tests; additionally opt into muted native playback with `MLSR_TEST_NATIVE_OUTPUT=1`.
 The [installed SDK qualification](../../docs/internal/developer-api-qualification.md)
 passes the old/new APIs, Korean/emoji/combining-text UTF-16 mapping, exact PCM/WAV,

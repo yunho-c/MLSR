@@ -64,6 +64,21 @@ and `seed.wrapping_add(original_segment_id)` retain their original identities.
 The shared [reader controls](reader-api.md) reuse these frozen plans and original
 indices for sentence navigation.
 
+For demand-driven playback, `Engine::prepare_speech(plan, voice, options, limits)`
+returns a cancellable planning job. It predicts all segment durations without
+generating PCM and completes without an audio consumer. After successful
+completion, `Job::prepared_speech()` returns an immutable `PreparedSpeech` with
+per-segment starts/lengths and a timestamp-to-segment lookup. This object holds no
+native tensors. Its voice, model identity, synthesis speed and seed remain fixed.
+
+`Engine::start_prepared_segment(prepared, index, limits)` generates just that
+original segment, reusing its duration decision. Segments may be requested in any
+order; skipped segments require no waveform work. Each job has local PCM offsets
+starting at zero, while source spans, original IDs and seeds remain unchanged.
+The ordinary queue and segment frame limits still apply. Planned lengths are
+estimates; callers must account for actual emitted lengths. This primitive does
+not itself provide a playback session or a cache.
+
 `Utf16Map` rejects interior UTF-8 bytes, interior surrogate pairs, reversed spans
 and out-of-range offsets. Source slicing never uses normalized-text offsets.
 The existing 64 KiB raw input and bounded, grapheme-safe segmentation limits apply.

@@ -20,6 +20,15 @@ denoising. Completed reports give final frames and segment count. Cancelled or
 failed reports count frames already published, including any subsequently
 discarded queue contents. Synthesis completion does not mean playback completion.
 
+`Engine::start_plan` and the developer `Tts` facade additionally run a cancellable
+duration-only pass over the remaining frozen segments before PCM generation.
+`Job::estimated_frames()` becomes available after the complete pass, independently
+of event queue capacity. Only small duration/shape decisions are retained and
+reused; synthesis does not repeat the predictor calls. Segment events still use
+actual emitted start offsets. The legacy `Engine::start` path keeps incremental
+prediction and returns no whole-request estimate. Final report frames remain
+authoritative on both paths.
+
 ## Text policy
 
 The complete request is limited to 64 KiB of UTF-8. Text is split at newlines,

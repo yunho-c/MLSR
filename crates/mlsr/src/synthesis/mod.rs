@@ -17,6 +17,16 @@ use std::{
 mod queue;
 pub(crate) use queue::Queue;
 
+#[derive(Clone)]
+enum Work {
+    Stream,
+    Prepare,
+    Segment {
+        prepared: Arc<crate::engine::PreparedSpeech>,
+        index: usize,
+    },
+}
+
 /// Finite request and PCM budgets. In addition to the consumer queue, the engine
 /// has its separately bounded native event queue and one bounded model segment.
 #[derive(Clone, Copy, Debug)]
@@ -59,7 +69,7 @@ pub enum SynthesisPhase {
     Created,
     /// In the shared FIFO, waiting for the inference lane.
     Queued,
-    /// Validating voice and freezing original text.
+    /// Validating voice, freezing original text and predicting the total duration.
     Preparing,
     /// Generating and delivering bounded PCM.
     Synthesizing,
@@ -91,7 +101,8 @@ pub struct SynthesisSnapshot {
     pub peak_queued_frames: usize,
     /// PCM format, independent of playback rate.
     pub format: AudioFormat,
-    /// Whole-request estimate only; unknown until all necessary predictions exist.
+    /// Whole-request estimate from the duration-only pass, before PCM delivery.
+    /// Unknown until all remaining segments have been predicted; never a partial sum.
     pub estimated_frames: Option<u64>,
     /// Authoritative final frames once native synthesis completes successfully.
     pub duration_frames: Option<u64>,
@@ -104,24 +115,26 @@ struct State {
     consumer_claimed: bool,
     cancel_reason: Option<CancelReason>,
     plan: Option<Arc<TextPlan>>,
-    predicted: usize,
-    expected_segments: usize,
     native: Option<Arc<job::Job>>,
     native_finished: bool,
+    generation_limit: Option<u64>,
+    prepared: Option<Arc<crate::engine::PreparedSpeech>>,
 }
 pub(crate) struct Control {
     id: u64,
     request: Request,
     limits: JobOptions,
+    work: Work,
     state: Mutex<State>,
     changed: Condvar,
 }
 impl Control {
-    fn new(id: u64, request: Request, limits: JobOptions) -> Arc<Self> {
+    fn new(id: u64, request: Request, limits: JobOptions, work: Work) -> Arc<Self> {
         Arc::new(Self {
             id,
             request,
             limits,
+            work,
             changed: Condvar::new(),
             state: Mutex::new(State {
                 snapshot: SynthesisSnapshot {
@@ -143,10 +156,10 @@ impl Control {
                 consumer_claimed: false,
                 cancel_reason: None,
                 plan: None,
-                predicted: 0,
-                expected_segments: 0,
                 native: None,
                 native_finished: false,
+                generation_limit: None,
+                prepared: None,
             }),
         })
     }
@@ -244,7 +257,9 @@ impl Control {
         }
         match report.outcome {
             job::Outcome::Completed => {
-                state.snapshot.duration_frames = Some(report.frames);
+                if !matches!(self.work, Work::Prepare) {
+                    state.snapshot.duration_frames = Some(report.frames);
+                }
                 state.snapshot.phase = SynthesisPhase::Generated;
                 if state.audio.is_empty() {
                     self.complete(&mut state, Outcome::Completed);
@@ -265,12 +280,17 @@ impl Control {
             job::Outcome::Failed(error) => {
                 state.audio.clear();
                 state.snapshot.queued_frames = 0;
+                let stage = if state.snapshot.phase == SynthesisPhase::Preparing {
+                    FailureStage::Planning
+                } else {
+                    FailureStage::Synthesis
+                };
                 self.complete(
                     &mut state,
                     Outcome::Failed {
                         error: Failure::new(
                             self.id,
-                            FailureStage::Synthesis,
+                            stage,
                             &error,
                             self.request.voice().voice().backend(),
                         ),
@@ -349,6 +369,31 @@ impl SynthesisJob {
     }
     pub(crate) fn chunk_frames(&self) -> usize {
         self.lease.control.limits.chunk_frames()
+    }
+    pub(crate) fn prepared_speech(&self) -> Option<Arc<crate::engine::PreparedSpeech>> {
+        lock(&self.lease.control.state).prepared.clone()
+    }
+    pub(crate) fn segment_job(
+        &self,
+        prepared: Arc<crate::engine::PreparedSpeech>,
+        index: usize,
+    ) -> Result<Self> {
+        self.lease
+            .queue
+            .upgrade()
+            .ok_or(Error::Closed)?
+            .create_work(self.request().clone(), Work::Segment { prepared, index })
+    }
+    /// Playback owns this moving source horizon. It gates starting segments,
+    /// never consumption of their already-generated PCM.
+    pub(crate) fn pace_generation(&self, end: u64) {
+        let mut state = lock(&self.lease.control.state);
+        if state.generation_limit != Some(end) {
+            state.generation_limit = Some(end);
+            if let Some(native) = &state.native {
+                native.set_generation_limit(Some(end));
+            }
+        }
     }
     /// Cancel without waiting for native inference. Completion waits for quiescence.
     pub fn cancel(&self) {

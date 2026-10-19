@@ -6,6 +6,11 @@ The first QNN target is Windows ARM64 on Snapdragon X2 Elite X2E84100
 and qualification. The `superfast` programs are experimental; numerical
 screening and ASR diagnostics do not establish perceptual quality.
 
+For the larger bundle supporting duration planning, see
+[T384 Superfast](qnn-context.md): 384 text tokens and matched L128/L256/L512
+flow/vocoder programs. This page retains the original T128/L96 profile's
+reproduction details.
+
 ## Local assets
 
 [The YAML manifest](../model-manifests/supertonic3-qnn-superfast.yaml) pins the

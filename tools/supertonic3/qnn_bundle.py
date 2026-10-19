@@ -21,25 +21,25 @@ def verify_file(path: Path, record: dict) -> None:
         raise ReferenceError(f"SHA-256 mismatch: {path}")
 
 
-def verify(directory: Path) -> None:
-    manifest = load_yaml(MANIFEST)
+def verify(directory: Path, manifest_path: Path = MANIFEST) -> None:
+    manifest = load_yaml(manifest_path)
     for artifact in manifest["artifacts"].values():
         for record in artifact["files"]:
             verify_file(directory / record["path"], record)
 
 
-def verify_runtime(sdk: Path, bridge: Path) -> None:
+def verify_runtime(sdk: Path, bridge: Path, manifest_path: Path = MANIFEST) -> None:
     """Verify externally installed SDK/delegate bytes without copying them."""
-    dependencies = load_yaml(MANIFEST)["runtime"]["external_dependencies"]
+    dependencies = load_yaml(manifest_path)["runtime"]["external_dependencies"]
     for record in dependencies["sdk_files"]:
         verify_file(sdk / record["path"], record)
     record = dependencies["executorch_backend"]
     verify_file(bridge / record["path"], record)
 
 
-def prepare(source: Path, output: Path) -> None:
+def prepare(source: Path, output: Path, manifest_path: Path = MANIFEST) -> None:
     """Verify every source before creating a new, independent bundle directory."""
-    manifest = load_yaml(MANIFEST)
+    manifest = load_yaml(manifest_path)
     source, output = source.resolve(), output.resolve()
     if output.exists():
         raise ReferenceError(
@@ -57,8 +57,8 @@ def prepare(source: Path, output: Path) -> None:
     for src, dst in copies:
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dst)
-    shutil.copyfile(MANIFEST, output / "mlsr-bundle.yaml")
-    verify(output)
+    shutil.copyfile(manifest_path, output / "mlsr-bundle.yaml")
+    verify(output, manifest_path)
 
 
 def main() -> None:
@@ -74,15 +74,17 @@ def main() -> None:
     command = sub.add_parser("verify-runtime")
     command.add_argument("--sdk", type=Path, required=True)
     command.add_argument("--bridge", type=Path, required=True)
+    for command in sub.choices.values():
+        command.add_argument("--manifest", type=Path, default=MANIFEST)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.source, args.output)
+        prepare(args.source, args.output, args.manifest)
         print(f"Verified local QNN bundle: {args.output.resolve()}")
     elif args.command == "verify":
-        verify(args.bundle)
+        verify(args.bundle, args.manifest)
         print(f"Verified local QNN bundle: {args.bundle.resolve()}")
     else:
-        verify_runtime(args.sdk, args.bridge)
+        verify_runtime(args.sdk, args.bridge, args.manifest)
         print("Verified pinned external SDK and ExecuTorch backend files")
 
 

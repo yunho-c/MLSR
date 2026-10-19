@@ -71,6 +71,16 @@ impl Queue {
         self.engine.voice_catalog()
     }
     pub(crate) fn create(self: &Arc<Self>, request: Request) -> Result<SynthesisJob> {
+        self.create_work(request, Work::Stream)
+    }
+    pub(crate) fn prepare(self: &Arc<Self>, request: Request) -> Result<SynthesisJob> {
+        self.create_work(request, Work::Prepare)
+    }
+    pub(super) fn create_work(
+        self: &Arc<Self>,
+        request: Request,
+        work: Work,
+    ) -> Result<SynthesisJob> {
         // Reject model/backend mismatches before reserving a job or replacing speech.
         request.validate_for(&self.voices()?)?;
         let mut gate = lock(&self.shared.gate);
@@ -101,7 +111,7 @@ impl Queue {
         gate.next_id = id
             .checked_add(1)
             .ok_or_else(|| Error::WorkerFailed("request IDs exhausted".into()))?;
-        let control = Control::new(id, request, self.options.job);
+        let control = Control::new(id, request, self.options.job, work);
         gate.all.push(Arc::downgrade(&control));
         Ok(SynthesisJob {
             lease: Arc::new(Lease {
@@ -200,10 +210,12 @@ fn worker(shared: Arc<Shared>, engine: Arc<Engine>) {
     }
 }
 fn process(engine: &Engine, control: &Control) -> Result<()> {
-    let (plan, start) = control.request.prepare(engine)?;
+    let (plan, start) = match &control.work {
+        Work::Segment { prepared, index } => (prepared.text_plan().clone(), *index),
+        _ => control.request.prepare(engine)?,
+    };
     {
         let mut state = lock(&control.state);
-        state.expected_segments = plan.segments().len() - start;
         state.plan = Some(plan.clone());
         state.snapshot.plan_ready = true;
         control.publish(&mut state);
@@ -216,24 +228,50 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
         });
         return Ok(());
     }
-    let native = Arc::new(engine.start_plan(
-        plan,
-        start,
-        control.request.voice().voice().model_voice_id(),
-        control.request.options().effective_synthesis_options()?,
-        control.limits,
-    )?);
+    // Paced jobs start closed until native ownership is published below. A
+    // concurrent seek cannot be overwritten by a stale initial horizon.
+    let generation_limit = lock(&control.state).generation_limit.map(|_| 0);
+    let native = Arc::new(match &control.work {
+        Work::Prepare => engine.prepare_speech(
+            plan,
+            control.request.voice().voice().model_voice_id(),
+            control.request.options().effective_synthesis_options()?,
+            control.limits,
+        )?,
+        Work::Segment { prepared, index } => {
+            engine.start_prepared_segment(prepared.clone(), *index, control.limits)?
+        }
+        Work::Stream => engine.start_plan_paced(
+            plan,
+            start,
+            control.request.voice().voice().model_voice_id(),
+            control.request.options().effective_synthesis_options()?,
+            control.limits,
+            generation_limit,
+        )?,
+    });
     {
         let mut state = lock(&control.state);
         state.native = Some(native.clone());
-        state.snapshot.phase = SynthesisPhase::Synthesizing;
+        native.set_generation_limit(state.generation_limit);
         control.publish(&mut state);
     }
     loop {
         if control.cancelled() {
             native.cancel();
         }
-        match native.poll(Duration::from_millis(20)) {
+        let event = native.poll(Duration::from_millis(20));
+        // Planning metadata must be observable even with paused/full PCM
+        // queues, and must precede delivery of the first generated audio.
+        if let Some(frames) = native.estimated_frames() {
+            let mut state = lock(&control.state);
+            if state.cancel_reason.is_none() && state.snapshot.estimated_frames.is_none() {
+                state.snapshot.estimated_frames = Some(frames);
+                state.snapshot.phase = SynthesisPhase::Synthesizing;
+                control.publish(&mut state);
+            }
+        }
+        match event {
             job::Poll::Timeout => {}
             job::Poll::End => {
                 return Err(Error::Synthesis(
@@ -241,17 +279,12 @@ fn process(engine: &Engine, control: &Control) -> Result<()> {
                 ));
             }
             job::Poll::Event(event) => match event.event {
-                job::Event::Predicted(info) => {
-                    let mut state = lock(&control.state);
-                    state.predicted += 1;
-                    if state.predicted == state.expected_segments {
-                        state.snapshot.estimated_frames =
-                            Some(info.start_frame + info.predicted_frames);
-                    }
-                    control.publish(&mut state);
-                }
+                job::Event::Predicted(_) => {}
                 job::Event::Audio(chunk) => control.push(chunk),
                 job::Event::Terminal(report) => {
+                    if matches!(control.work, Work::Prepare) {
+                        lock(&control.state).prepared = native.prepared_speech();
+                    }
                     control.finish_native(report);
                     return Ok(());
                 }

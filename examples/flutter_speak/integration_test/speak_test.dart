@@ -194,6 +194,28 @@ void main() {
       expect(speech.error, isNull);
       report['first_retained_pcm_observed_ms'] =
           onset.elapsedMicroseconds / 1000;
+      // A long request has a whole-document scale before playback has advanced,
+      // while segment admission and retained bytes obey their separate budgets.
+      final earlyTimeline = speech.state!;
+      expect(earlyTimeline.estimatedFrames, isNotNull);
+      expect(earlyTimeline.durationFrames, isNull);
+      expect(
+        earlyTimeline.estimatedFrames!,
+        greaterThan(earlyTimeline.bufferedUntilFrame),
+      );
+      final seek = tester.widget<Slider>(find.byKey(const Key('seek')));
+      expect(seek.max, earlyTimeline.estimatedFrames!.toDouble());
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.byKey(const Key('playback-progress')),
+      );
+      expect(
+        progress.value,
+        earlyTimeline.positionFrame / earlyTimeline.estimatedFrames!,
+      );
+      report['early_duration_estimate_frames'] = earlyTimeline.estimatedFrames;
+      report['position_at_early_estimate_frames'] = earlyTimeline.positionFrame;
+      report['buffer_at_early_estimate_frames'] =
+          earlyTimeline.bufferedUntilFrame;
       await until(() => speech.playedFrames > 0 || speech.error != null);
       report['first_position_observed_ms'] = onset.elapsedMicroseconds / 1000;
       final retained = (await speech.engineState()).retention;
@@ -208,6 +230,102 @@ void main() {
       expect(speech.state!.completion!.reason, CancelReason.requested);
       expect(speech.canExport, isFalse);
       expect(speech.error, isNull);
+
+      // An admitted segment drains to retention even while the native output
+      // is paused. Seeking past the old two-second boundary must work.
+      speech.speak(
+        'This sentence has enough words to take well over two seconds to read.\n'
+            'The second sentence follows later.',
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(
+        () =>
+            (speech.generatedFrames > 88200 && speech.paused) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      await tester.pump(const Duration(milliseconds: 300));
+      final retainedSegment = speech.generatedFrames;
+      expect(speech.playedFrames, 0);
+      expect(retainedSegment, lessThan(speech.state!.estimatedFrames!));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(speech.generatedFrames, retainedSegment);
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const Key('seek')))
+            .secondaryTrackValue,
+        retainedSegment.toDouble(),
+      );
+      const beyondLookahead = 88200 + 4096;
+      speech.seek(beyondLookahead);
+      await until(
+        () => speech.playedFrames == beyondLookahead || speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.paused, isTrue);
+      report['paused_retained_segment_frames'] = retainedSegment;
+      report['segment_start_lookahead_frames'] = 88200;
+      report['seek_beyond_lookahead_frame'] = speech.playedFrames;
+      await screenshot('paused-retention');
+      speech.stop();
+      await until(() => !speech.speaking);
+
+      // A real scrubber jump into ungenerated text keeps the document identity,
+      // full scale, pause state and previously cached regions.
+      speech.speak(
+        List.filled(12, english).join('\n'),
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(() => speech.generatedFrames > 88200 || speech.error != null);
+      expect(speech.error, isNull);
+      final documentId = speech.speech!.id;
+      final plannedFrames = speech.state!.estimatedFrames!;
+      final firstReadyEnd = speech.state!.bufferedRanges.first.end;
+      final distantTarget = (plannedFrames * .72).round();
+      expect(distantTarget, greaterThan(firstReadyEnd));
+      expect(speech.timeline.canSeek(distantTarget), isTrue);
+      expect(speech.timeline.isBuffered(distantTarget), isFalse);
+      final distantSeek = Stopwatch()..start();
+      var scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeStart!(scrubber.value);
+      scrubber.onChanged!(distantTarget.toDouble());
+      await tester.pump();
+      scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeEnd!(distantTarget.toDouble());
+      await until(
+        () =>
+            (!speech.state!.seeking &&
+                speech.playedFrames == distantTarget &&
+                speech.timeline.isBuffered(distantTarget)) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.speech!.id, documentId);
+      expect(speech.state!.estimatedFrames, plannedFrames);
+      expect(speech.paused, isTrue);
+      expect(speech.state!.bufferedRanges.length, greaterThanOrEqualTo(2));
+      expect(speech.timeline.isBuffered(firstReadyEnd + 4096), isFalse);
+      report['unbuffered_seek_observed_ms'] =
+          distantSeek.elapsedMicroseconds / 1000;
+      report['unbuffered_seek_target_frame'] = distantTarget;
+      report['unbuffered_seek_preserved_request'] =
+          speech.speech!.id == documentId;
+      report['disjoint_buffered_ranges'] = speech.state!.bufferedRanges
+          .map((range) => [range.start, range.end])
+          .toList();
+      await screenshot('unbuffered-seek');
+      speech.seek(4096);
+      await until(() => !speech.state!.seeking && speech.playedFrames == 4096);
+      expect(speech.speech!.id, documentId);
+      expect(speech.paused, isTrue);
+      report['return_to_cached_frame'] = speech.playedFrames;
+      await screenshot('cached-return');
+      speech.stop();
+      await until(() => !speech.speaking);
 
       // Native admission and replace behavior with rapid calls from the UI layer.
       final replaced = speech.speak(

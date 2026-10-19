@@ -563,8 +563,9 @@ class _SpeakPageState extends State<SpeakPage> {
                                   const SizedBox(height: 6),
                                   Text(
                                     speech.speaking
-                                        ? '${speech.generating ? 'Generating' : 'Generated'} · ${speech.paused ? 'Paused' : 'Played'} ${seconds(speech.playedFrames)} / ${seconds(speech.generatedFrames)}'
+                                        ? '${speech.paused ? 'Paused' : 'Played'} ${speech.timeline.positionLabel} / ${speech.timeline.totalLabel}'
                                         : 'Supertonic 3  ·  44.1 kHz',
+                                    key: const Key('timeline-position'),
                                     style: TextStyle(
                                       color: paper.withValues(alpha: .55),
                                       fontSize: 10,
@@ -578,25 +579,42 @@ class _SpeakPageState extends State<SpeakPage> {
                               child: SizedBox(
                                 height: 42,
                                 child: Center(
-                                  child: LinearProgressIndicator(
-                                    value: speech.generatedFrames == 0
-                                        ? 0
-                                        : (speech.playedFrames /
-                                                  speech.generatedFrames)
-                                              .clamp(0, 1),
-                                    color: accent,
-                                    backgroundColor: paper.withValues(
-                                      alpha: .15,
-                                    ),
-                                    semanticsLabel:
-                                        'Played fraction of generated audio',
+                                  child: Stack(
+                                    children: [
+                                      if (speech.timeline.hasTotal)
+                                        LinearProgressIndicator(
+                                          key: const Key('buffered-progress'),
+                                          value:
+                                              speech.timeline.bufferedProgress,
+                                          color: accent.withValues(alpha: .3),
+                                          backgroundColor: paper.withValues(
+                                            alpha: .15,
+                                          ),
+                                          semanticsLabel: 'Available audio',
+                                        ),
+                                      LinearProgressIndicator(
+                                        key: const Key('playback-progress'),
+                                        value:
+                                            speech.timeline.progress ??
+                                            (speech.speaking ? null : 0.0),
+                                        color: accent,
+                                        backgroundColor:
+                                            speech.timeline.hasTotal
+                                            ? Colors.transparent
+                                            : paper.withValues(alpha: .15),
+                                        semanticsLabel: speech.timeline.hasTotal
+                                            ? 'Played fraction of ${speech.timeline.estimated ? 'estimated ' : ''}total duration'
+                                            : 'Estimating total duration',
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ),
                             const SizedBox(width: 22),
                             Text(
-                              seconds(speech.generatedFrames),
+                              speech.timeline.totalLabel,
+                              key: const Key('timeline-total'),
                               style: const TextStyle(
                                 color: accent,
                                 fontSize: 22,
@@ -661,7 +679,3 @@ Widget label(String text) => Text(
     color: softInk,
   ),
 );
-String seconds(int frames) {
-  final time = frames ~/ 44100;
-  return '${time ~/ 60}:${(time % 60).toString().padLeft(2, '0')}';
-}

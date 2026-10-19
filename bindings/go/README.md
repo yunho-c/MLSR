@@ -43,8 +43,19 @@ child handles remain inspectable until their own `Close`.
 
 Speech supports pause/resume, volume, pitch-preserving rate, source-frame seek,
 previous/next sentence and explicit original-sentence navigation. Navigation
-returns `Navigation.Speech` when it starts a new request. Completed recordings use
-`ReplayFrom` for a new identity sharing retained PCM; the old outcome is immutable.
+returns `Navigation.Speech` when it starts a new request. Completed speech uses
+`ReplayFrom` for a new identity sharing its recording or reader cache; the old
+outcome is immutable.
+
+Set `options.OnDemandSeeking = true` on `DefaultSpeechOptions()` to seek anywhere
+after duration planning. Uncached destinations generate directly without reading
+skipped passages, preserving active identity and pause/rate/volume. `Seeking` /
+`SeekTargetFrame` expose preparation, `SeekableRanges` covers the planned document,
+and `BufferedRanges` identifies actual, possibly disjoint cached audio. The bounded
+cache evicts old segments and regenerates them on return. Export after completed
+playback requires `RecordingComplete`. Full retention remains the default; see
+[reader policies and limits](../../docs/reader-api.md).
+
 Discarding a Speech preserves fire-and-forget playback. A cancellable context
 continues to control it after Go finalization; its small completion watcher never
 consumes audio and retires the native handle at terminal completion. Keep explicit

@@ -134,7 +134,7 @@ unsafe fn request(catalog: VoiceCatalog, settings: *const MlsrRequest) -> ApiRes
     }
 }
 fn speech_options(settings: MlsrSpeechOptions) -> ApiResult<(SpeechOptions, SpeakMode)> {
-    if settings.reserved != 0 || settings.paused > 1 || settings.retain_audio > 1 {
+    if settings.reserved != 0 || settings.paused > 1 || settings.retain_audio > 2 {
         return Err(ApiError::invalid("unsupported speech settings"));
     }
     let mode = match settings.mode {
@@ -149,6 +149,7 @@ fn speech_options(settings: MlsrSpeechOptions) -> ApiResult<(SpeechOptions, Spea
             settings.paused != 0,
         )?
         .with_retention(settings.retain_audio != 0)
+        .with_on_demand_seeking(settings.retain_audio == 2)
         .with_lookahead(settings.lookahead_frames as usize)?,
         mode,
     ))

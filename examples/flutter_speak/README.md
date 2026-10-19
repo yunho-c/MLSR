@@ -3,7 +3,7 @@
 A local Flutter player and reader for the macOS Apple Silicon developer SDK. Write text,
 choose among ten named voices and 31 languages, then speak, stop, or export completed
 speech as a mono Float32 WAV. Replace or enqueue a new script while reading;
-pause, change volume/rate, seek retained audio, and navigate sentences.
+pause, change volume/rate, seek across the planned document, and navigate sentences.
 Command-Enter speaks; Escape stops all queued speech.
 
 ## Run
@@ -67,10 +67,29 @@ native channel opens the macOS save panel.
 The reader uses original UTF-16 segment spans from `SpeechState`; alignment is
 segment-level, not word-level. Edits affect the next request, while the reader
 shows the immutable accepted text. Seek commits once at the end of a slider drag.
-Seeking a completed recording creates a new paused replay with a new request ID.
+Seeking after completed playback creates a new paused replay with a new request ID.
 The UI retains only active/queued handles and the latest displayed recording.
 
-Export calls `Tts.writeSpeech` for a completed recording, using the shared
+Both progress and seek controls use the SDK's final duration or whole-request
+estimate for their full scale. Estimates are labeled `~`; while duration planning
+is pending, progress is indeterminate and seeking is disabled. The app enables
+`SpeechOptions(onDemandSeeking: true)`: a drag anywhere on the planned timeline
+selects that passage without synthesizing skipped text. Uncached destinations
+show a preparation state, preserving the selected thumb position and pause state.
+Rapid seeks replace obsolete work; cached returns reuse PCM. The seek track shows
+disjoint cached regions separately from the whole navigable timeline.
+
+The native duration pass is cancellable and its predictions are reused during
+synthesis. Two-second lookahead still limits automatic segment prefetch, while an
+explicit seek chooses a new position anywhere in the document. The cache evicts
+old segments under the shared default 128 MiB/128-store budget; each segment uses
+one store. The selected segment is protected and evicted audio can be regenerated.
+Input remains capped at 64 KiB of UTF-8 per request. See the
+[reader API](../../docs/reader-api.md) for limits and quota-failure conditions.
+
+Export is enabled only after completed playback with every segment still cached.
+Reaching the end after a skip or cache eviction does not promise a recording.
+Export calls `Tts.writeSpeech`, using the shared
 incremental WAV writer. It does not synthesize again or collect a full PCM array
 in Dart. Existing destinations are preserved; partial cancelled speech is not
 exportable. Closing the app joins native work and releases owned retention.
@@ -79,14 +98,15 @@ exportable. Closing the app joins native work and releases owned retention.
 
 ```sh
 flutter analyze --no-pub
-flutter test test/audio_clip_test.dart --no-pub
+flutter test test --no-pub
 flutter test integration_test/speak_test.dart -d macos --no-pub \
   --dart-define=MLSR_TEST_OUTPUT=/absolute/path/to/new-evidence-directory
 ```
 
 The integration test uses real synthesis and muted native playback. It checks
 UI heartbeats while loading/speaking, bounded retention, replacement/enqueue/stop,
-pause/rate/volume/seek/replay, original Unicode spans and sentence navigation,
+pause/rate/volume/seek/replay, unbuffered far seeks with disjoint cache regions,
+cached returns, original Unicode spans and sentence navigation,
 English/Korean WAV export, and native handle cleanup. UI observations of first
 retained PCM, first presented position and cancellation completion are reported
 separately; they do not measure acoustic onset or native flush latency. Those
