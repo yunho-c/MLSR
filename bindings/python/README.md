@@ -18,7 +18,7 @@ with mlsr.Tts("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as t
     print(tts.voices)  # Stable IDs and loaded-engine readiness.
     with tts.speak("Hello from MLSR.") as speech:
         speech.set_playback_rate(1.25)  # Pitch-preserving, independent of synthesis.
-        speech.wait()                 # Actual playback completion, not just PCM EOF.
+        speech.wait()  # Actual playback completion, not just PCM EOF.
         tts.write_speech(speech, "spoken.wav")  # Retained audio; no new inference.
 
     clip = tts.render(mlsr.Request("Export me.", voice="supertonic3:F1"))
@@ -62,7 +62,7 @@ off-loop variants. No Python audio queue grows behind a slow consumer:
 async with await mlsr.Tts.open_async(manifest, bundle) as tts:
     async with tts.synthesize(mlsr.Request(text)) as job:
         assert job.snapshot.phase == "created"  # Observing does not start it.
-        async with job.audio() as audio:        # Claims the only PCM consumer.
+        async with job.audio() as audio:  # Claims the only PCM consumer.
             async for chunk in audio:
                 await consume(chunk.audio.samples, chunk.audio.format)
         await job.wait_async()
@@ -94,7 +94,9 @@ raw speed and event meanings:
 ```python
 import mlsr
 
-with mlsr.Engine("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as engine:
+with mlsr.Engine(
+    "model-manifests/supertonic3-coreml.yaml", "/path/to/bundle"
+) as engine:
     with engine.start("Hello from MLSR.", language="en", voice="M1") as job:
         for event in job:
             if event.kind == "audio":
@@ -123,6 +125,24 @@ MLSR_LIBRARY_PATH="$PWD/target/release/libmlsr_ffi.dylib" \
 
 `--cancel-first` demonstrates cancellation and reuse before exporting speech.
 The output must be a new path; model weights are never downloaded implicitly.
+
+For Windows ARM64, follow [QNN setup](../../docs/qnn-runtime.md), build
+`mlsr-ffi --features qnn`, and run ARM64 Python with the prepared DLLs:
+
+```powershell
+. ./tools/qnn_env.ps1
+$env:MLSR_LIBRARY_PATH = "$PWD/target/release/mlsr_ffi.dll"
+$env:PYTHONPATH = "$PWD/bindings/python/src"
+```
+
+Select `compute_policy="qnn_htp"` when constructing `Tts` or `Engine` with
+`model-manifests/supertonic3-qnn-superfast.yaml` and its verified bundle. The
+helper sets `MLSR_DLL_DIRECTORIES`; the binding registers those semicolon-separated
+directories with Python's Windows DLL loader and keeps them alive with the library.
+Use `TtsOptions(output_mode="headless")` for SDK jobs/rendering and the same
+policy with `Tts.from_model`. The public developer example accepts
+`--policy qnn_htp`. Native Windows speech output is unavailable; eight steps are
+required. The preset has [open model-quality failures](../../docs/qnn-qualification.md).
 
 From a repository checkout, run `python3 tools/dev.py test-python` at the root.
 `python3 tools/dev.py package-python` builds a wheel and tests an installed copy

@@ -15,15 +15,19 @@ func run(ctx context.Context) error {
 	bundle := flag.String("bundle", "", "verified local model directory")
 	output := flag.String("output", "", "new WAV path (never overwritten)")
 	speak := flag.Bool("speak", false, "play through native output before export")
+	policy := flag.String("policy", "cpu_and_neural_engine", "cpu_only, cpu_and_neural_engine or qnn_htp")
 	flag.Parse()
 	if *manifest == "" || *bundle == "" || *output == "" {
 		return fmt.Errorf("--manifest, --bundle and --output are required")
 	}
 	options := mlsr.DefaultTTSOptions()
+	if *policy != "cpu_only" && *policy != "cpu_and_neural_engine" && *policy != "qnn_htp" {
+		return fmt.Errorf("unknown compute policy %q", *policy)
+	}
 	if !*speak {
 		options.Output = mlsr.HeadlessOutput
 	}
-	tts, err := mlsr.OpenTTS(ctx, *manifest, *bundle, mlsr.EngineOptions{}, options)
+	tts, err := mlsr.OpenTTS(ctx, *manifest, *bundle, mlsr.EngineOptions{CPUOnly: *policy == "cpu_only", QNNHTP: *policy == "qnn_htp"}, options)
 	if err != nil {
 		return err
 	}

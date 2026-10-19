@@ -38,7 +38,10 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BackendUnavailable => {
-                write!(f, "Core ML requires the coreml feature on macOS/iOS")
+                write!(
+                    f,
+                    "requested runtime is not built for this target (coreml: macOS/iOS; qnn: Windows ARM64)"
+                )
             }
             Self::SessionClosed => write!(f, "runtime session is closed"),
             Self::ForeignHandle => write!(f, "resource belongs to a different runtime session"),

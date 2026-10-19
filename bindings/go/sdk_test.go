@@ -63,6 +63,18 @@ func TestSDKCatalogAndOwnedWAV(t *testing.T) {
 	}
 }
 
+func sdkTestEngine() EngineOptions {
+	return EngineOptions{QNNHTP: os.Getenv("MLSR_TEST_POLICY") == "qnn_htp", CPUOnly: os.Getenv("MLSR_TEST_POLICY") == "cpu_only"}
+}
+
+func TestSDKConflictingComputePolicies(t *testing.T) {
+	_, err := OpenTTS(context.Background(), "/missing", "/missing", EngineOptions{CPUOnly: true, QNNHTP: true}, DefaultTTSOptions())
+	var failure *SDKError
+	if !errors.As(err, &failure) || failure.Code != "invalid_argument" {
+		t.Fatalf("conflicting policies: %v", err)
+	}
+}
+
 func openSDK(t *testing.T, output bool) *TTS {
 	t.Helper()
 	if os.Getenv("MLSR_TEST_BUNDLE") == "" {
@@ -72,7 +84,7 @@ func openSDK(t *testing.T, output bool) *TTS {
 	if !output {
 		options.Output = HeadlessOutput
 	}
-	owner, err := OpenTTS(context.Background(), os.Getenv("MLSR_TEST_MANIFEST"), os.Getenv("MLSR_TEST_BUNDLE"), EngineOptions{}, options)
+	owner, err := OpenTTS(context.Background(), os.Getenv("MLSR_TEST_MANIFEST"), os.Getenv("MLSR_TEST_BUNDLE"), sdkTestEngine(), options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +428,14 @@ func TestSDKVerifiedModelReadiness(t *testing.T) {
 	if directory == "" {
 		directory = os.Getenv("MLSR_TEST_BUNDLE")
 	}
-	model, err := OpenModel(context.Background(), directory, ModelDescriptor{CatalogYAML: string(catalog), ID: "supertonic3-coreml-int4-v1", Platform: "macos-arm64"})
+	id, platform := os.Getenv("MLSR_TEST_DELIVERY_ID"), os.Getenv("MLSR_TEST_DELIVERY_PLATFORM")
+	if id == "" {
+		id = "supertonic3-coreml-int4-v1"
+	}
+	if platform == "" {
+		platform = "macos-arm64"
+	}
+	model, err := OpenModel(context.Background(), directory, ModelDescriptor{CatalogYAML: string(catalog), ID: id, Platform: platform})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +450,7 @@ func TestSDKVerifiedModelReadiness(t *testing.T) {
 	}
 	options := DefaultTTSOptions()
 	options.Output = HeadlessOutput
-	tts, err := TTSFromModel(context.Background(), model, EngineOptions{}, options)
+	tts, err := TTSFromModel(context.Background(), model, sdkTestEngine(), options)
 	if err != nil {
 		t.Fatal(err)
 	}

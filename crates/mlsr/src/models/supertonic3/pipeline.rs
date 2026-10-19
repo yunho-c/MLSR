@@ -4,8 +4,8 @@ use crate::{
     config::{ExecutionRoute, ExecutionVariant, SynthesisOptions},
     error::{Error, Result},
     runtime::{
-        ComputePolicy, DType, HostTensor, Model, OutputBuffer, Session, SessionStats, Tensor,
-        TensorData,
+        BackendKind, ComputePolicy, DType, HostTensor, Model, OutputBuffer, Session, SessionStats,
+        Tensor, TensorData,
     },
 };
 use std::collections::BTreeMap;
@@ -136,17 +136,32 @@ impl Pipeline {
         reuse_output_buffers: bool,
         variant: ExecutionVariant,
     ) -> Result<Self> {
+        let qnn = bundle.backend() == BackendKind::QnnHtp;
+        if qnn != (policy == ComputePolicy::QnnHtp) {
+            return Err(Error::InvalidOptions(
+                "compute policy does not match the model bundle backend".into(),
+            ));
+        }
         let additional = bundle.variant_models(variant)?;
-        let session = Session::coreml(policy)?;
+        let session = if qnn {
+            Session::qnn()?
+        } else {
+            Session::coreml(policy)?
+        };
         let mut models = BTreeMap::new();
-        for name in [
-            "duration_predictor",
-            "text_encoder",
-            "ve_128",
-            "ve_256",
-            "ve_512",
-            "vocoder",
-        ] {
+        let names: &[&str] = if qnn {
+            &["duration_predictor", "text_encoder", "ve_96", "vocoder"]
+        } else {
+            &[
+                "duration_predictor",
+                "text_encoder",
+                "ve_128",
+                "ve_256",
+                "ve_512",
+                "vocoder",
+            ]
+        };
+        for &name in names {
             models.insert(name.into(), session.load(bundle.model_path(name)?)?);
         }
         for (name, path) in additional {
@@ -165,7 +180,8 @@ impl Pipeline {
         }
         let mut backings = BTreeMap::new();
         if reuse_output_buffers {
-            for bucket in [128, 256, 512] {
+            let buckets: &[usize] = if qnn { &[96] } else { &[128, 256, 512] };
+            for &bucket in buckets {
                 backings.insert(
                     bucket,
                     [
@@ -189,8 +205,8 @@ impl Pipeline {
         })
     }
     /// Synthesize original text using request-local seeded noise. Native TE/VE
-    /// outputs are forwarded without intermediate host readbacks. The final VE
-    /// state is copied/cropped to its true length for the flexible vocoder.
+    /// outputs are forwarded without client readbacks. Core ML crops the final
+    /// state for its flexible vocoder; QNN retains the full masked fixed input.
     pub fn synthesize(
         &mut self,
         text: &str,
@@ -266,6 +282,7 @@ impl Pipeline {
         output: &str,
         shape: &[usize],
     ) -> Result<Tensor> {
+        let output = self.output_name(output);
         let value = self
             .session
             .predict(&self.models[name], inputs, &[output])?
@@ -273,6 +290,13 @@ impl Pipeline {
             .ok_or_else(|| Error::Synthesis(format!("{name} did not return {output}")))?;
         tensor_shape(&value, shape, name)?;
         Ok(value)
+    }
+    fn output_name<'a>(&self, coreml: &'a str) -> &'a str {
+        if self.bundle.backend() == BackendKind::QnnHtp {
+            "output"
+        } else {
+            coreml
+        }
     }
     fn snapshot(
         &self,
@@ -300,6 +324,12 @@ impl Pipeline {
         observer: &mut dyn SynthesisObserver,
     ) -> Result<(SynthesisOutput, Diagnostics)> {
         observer.checkpoint()?;
+        let qnn = self.bundle.backend() == BackendKind::QnnHtp;
+        if qnn && options.steps() != 8 {
+            return Err(Error::InvalidOptions(
+                "QNN Superfast requires exactly eight steps".into(),
+            ));
+        }
         let encoded = self.bundle.encode_text(text, language)?;
         let host_voice = self.bundle.voice(voice)?;
         let native_voice = &self.voices[voice];
@@ -308,7 +338,21 @@ impl Pipeline {
         trace.record(diagnostic, "text_mask", encoded.mask());
         trace.record(diagnostic, "style_ttl", host_voice.style_ttl());
         trace.record(diagnostic, "style_dp", host_voice.style_dp());
-        let ids = self.session.upload(encoded.ids().clone())?;
+        let ids = if qnn {
+            let TensorData::I32(values) = encoded.ids().data() else {
+                return Err(Error::Synthesis("tokenizer must return Int32 IDs".into()));
+            };
+            HostTensor::new(
+                encoded.ids().shape().to_vec(),
+                TensorData::I64(values.iter().map(|&v| i64::from(v)).collect()),
+            )?
+        } else {
+            encoded.ids().clone()
+        };
+        if qnn {
+            trace.record(diagnostic, "runtime_text_ids", &ids);
+        }
+        let ids = self.session.upload(ids)?;
         let text_mask = self.session.upload(encoded.mask().clone())?;
         observer.checkpoint()?;
         let duration = self.predict(
@@ -323,7 +367,11 @@ impl Pipeline {
         )?;
         observer.checkpoint()?;
         let raw = self.session.read(&duration)?;
-        let plan = SynthesisPlan::from_duration(floats(&raw, "duration")?[0], options)?;
+        let plan = SynthesisPlan::for_backend(
+            floats(&raw, "duration")?[0],
+            options,
+            self.bundle.backend(),
+        )?;
         observer.planned(&plan)?;
         observer.checkpoint()?;
         trace.record(diagnostic, "duration_raw", &raw);
@@ -364,9 +412,12 @@ impl Pipeline {
             );
         }
         let bucket = plan.latent_bucket();
-        let route = self
+        let mut route = self
             .variant
             .route(options.steps(), bucket, plan.latent_length());
+        if qnn {
+            route.fixed_vocoder = Some(96);
+        }
         let model = &self.models[&format!("ve_{bucket}")];
         if route.fused_ve {
             observer.checkpoint()?;
@@ -403,11 +454,15 @@ impl Pipeline {
                     self.session.predict_with_backings(
                         model,
                         &inputs,
-                        &["denoised_latent"],
-                        &[("denoised_latent", &buffers[step as usize % 2])],
+                        &[self.output_name("denoised_latent")],
+                        &[(
+                            self.output_name("denoised_latent"),
+                            &buffers[step as usize % 2],
+                        )],
                     )?
                 } else {
-                    self.session.predict(model, &inputs, &["denoised_latent"])?
+                    self.session
+                        .predict(model, &inputs, &[self.output_name("denoised_latent")])?
                 };
                 observer.checkpoint()?;
                 // This export returns the updated state, including integration.
@@ -427,25 +482,34 @@ impl Pipeline {
                 )?;
             }
         }
-        let last = self.session.read(&latent)?;
-        let values = floats(&last, "final latent")?;
         let length = plan.latent_length();
-        let cropped = values
-            .chunks_exact(bucket)
-            .flat_map(|row| row[..length].iter().copied())
-            .collect();
-        let vocoder_host = HostTensor::new(vec![1, 144, length], TensorData::F32(cropped))?;
-        trace.record(diagnostic, "vocoder_input", &vocoder_host);
-        let vocoder_input = self.session.upload(vocoder_host)?;
+        let (vocoder_input, vocoder_length) = if qnn {
+            self.snapshot(diagnostic, &mut trace, "vocoder_input", &latent)?;
+            (latent, bucket)
+        } else {
+            let last = self.session.read(&latent)?;
+            let values = floats(&last, "final latent")?;
+            let cropped = values
+                .chunks_exact(bucket)
+                .flat_map(|row| row[..length].iter().copied())
+                .collect();
+            let host = HostTensor::new(vec![1, 144, length], TensorData::F32(cropped))?;
+            trace.record(diagnostic, "vocoder_input", &host);
+            (self.session.upload(host)?, length)
+        };
         observer.checkpoint()?;
-        let vocoder = route
-            .fixed_vocoder
-            .map_or_else(|| "vocoder".into(), |length| format!("vocoder_{length}"));
+        let vocoder = if qnn {
+            "vocoder".into()
+        } else {
+            route
+                .fixed_vocoder
+                .map_or_else(|| "vocoder".into(), |length| format!("vocoder_{length}"))
+        };
         let wav = self.predict(
             &vocoder,
             &[("latent", &vocoder_input)],
             "wav",
-            &[1, length * 3072],
+            &[1, vocoder_length * 3072],
         )?;
         observer.checkpoint()?;
         let wav = self.session.read(&wav)?;

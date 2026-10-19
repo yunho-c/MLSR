@@ -220,7 +220,9 @@ toolchains, never download weights and never clear developer caches.
 ## Scope left for later milestones
 
 This qualifies the essential developer API on this macOS host, not a published
-distribution or universal backend support. QNN/Android, physical iOS, other
+distribution or universal backend support. Separate [QNN qualification](../qnn-qualification.md)
+covers the experimental Windows ARM64 headless SDK. Native Windows output,
+Android, physical iOS, other
 devices/minimum OS versions, real device-route changes, mobile audio-session
 interruptions, notarization and remote CI remain separate work. Native macOS
 interruption support is explicitly advertised as unavailable; controller policy

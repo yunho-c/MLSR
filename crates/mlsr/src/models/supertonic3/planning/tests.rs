@@ -1,4 +1,51 @@
 use super::*;
+
+#[test]
+fn qnn_bounds_schedule_and_channel_crop() {
+    let options = SynthesisOptions::new(8, 1.0, 7).unwrap();
+    let plan = SynthesisPlan::for_backend(5.0, options, BackendKind::QnnHtp).unwrap();
+    assert_eq!(plan.bucket, 96);
+    assert_eq!(plan.length, 72);
+    let noise = HostTensor::new(
+        vec![1, 144, 128],
+        TensorData::F32((0..144 * 128).map(|v| v as f32).collect()),
+    )
+    .unwrap();
+    let prepared = plan.prepare_saved_noise(noise).unwrap();
+    let TensorData::F32(values) = prepared.padded_noise().data() else {
+        panic!("float32")
+    };
+    assert_eq!(&values[96..100], &[128., 129., 130., 131.]);
+    assert!(values[72..96].iter().all(|&v| v == 0.));
+    assert!(SynthesisPlan::for_backend(7.0, options, BackendKind::QnnHtp).is_err());
+    assert!(SynthesisPlan::for_backend(0.05, options, BackendKind::QnnHtp).is_err());
+    assert!(
+        SynthesisPlan::for_backend(
+            5.0,
+            SynthesisOptions::new(5, 1., 0).unwrap(),
+            BackendKind::QnnHtp
+        )
+        .is_err()
+    );
+    // Adjacent representable durations around the last supported PCM frame.
+    let boundary = (96 * 3072) as f32 / 44100.0;
+    assert!(
+        SynthesisPlan::for_backend(
+            f32::from_bits(boundary.to_bits() - 1),
+            options,
+            BackendKind::QnnHtp
+        )
+        .is_ok()
+    );
+    assert!(
+        SynthesisPlan::for_backend(
+            f32::from_bits(boundary.to_bits() + 1),
+            options,
+            BackendKind::QnnHtp
+        )
+        .is_err()
+    );
+}
 use serde::Deserialize;
 
 #[test]

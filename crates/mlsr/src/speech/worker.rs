@@ -41,6 +41,7 @@ pub(super) fn run(shared: Arc<Shared>, factory: Arc<dyn OutputFactory>, policy: 
                         control.id(),
                         FailureStage::Playback,
                         &Error::WorkerFailed("panic in speech output worker".into()),
+                        control.job.request().voice().voice().backend(),
                     ),
                 },
                 PlaybackPhase::Failed,
@@ -100,7 +101,12 @@ fn run_inner(shared: &Shared, factory: &Arc<dyn OutputFactory>, policy: AudioPol
                 } else {
                     let error = match error {
                         Error::OperationFailed(error) => error,
-                        other => Failure::new(control.id(), FailureStage::Playback, &other),
+                        other => Failure::new(
+                            control.id(),
+                            FailureStage::Playback,
+                            &other,
+                            control.job.request().voice().voice().backend(),
+                        ),
                     };
                     control.finish(Outcome::Failed { error }, PlaybackPhase::Failed);
                 }
@@ -189,7 +195,9 @@ fn play(
             playback.pending = None;
             playback.cursor = frame;
             playback.ended_input = false;
-            lock(&control.state).snapshot.position_frame = frame;
+            // publish() updates position and its text range together from the
+            // rebased output snapshot; direct snapshot readers must not see a
+            // new position paired with the previous sentence.
         }
         pump(control, &mut playback, output.as_mut(), current_epoch)?;
         if lock(&control.state).snapshot.cancellation.is_some() {
@@ -240,7 +248,12 @@ fn play(
     }
 }
 fn retention_error(control: &Control, error: Error) -> Error {
-    Error::OperationFailed(Failure::new(control.id(), FailureStage::Retention, &error))
+    Error::OperationFailed(Failure::new(
+        control.id(),
+        FailureStage::Retention,
+        &error,
+        control.job.request().voice().voice().backend(),
+    ))
 }
 fn note_segment(control: &Control, start: u64, id: u32) {
     let mut markers = lock(&control.markers);

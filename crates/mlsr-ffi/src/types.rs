@@ -16,6 +16,19 @@ pub const MLSR_END: MlsrStatus = 2;
 /// Failure; optional error output owns its diagnostic.
 pub const MLSR_ERROR: MlsrStatus = -1;
 
+/// Synthesis job API is available.
+pub const MLSR_FEATURE_JOBS: u32 = 1;
+/// Core ML backend is built for this target.
+pub const MLSR_FEATURE_COREML: u32 = 2;
+/// Model ownership and transactional store API is available.
+pub const MLSR_FEATURE_MODEL_STORE: u32 = 4;
+/// Experimental QNN HTP backend is built for this target.
+pub const MLSR_FEATURE_QNN_HTP: u32 = 32;
+/// Developer SDK with metadata schema v1 is available.
+pub const MLSR_FEATURE_DEVELOPER_SDK: u32 = 8;
+/// Apple native audio output is built for this target.
+pub const MLSR_FEATURE_APPLE_OUTPUT: u32 = 16;
+
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
 /// before asynchronous use. Output views live until their owning handle release.
 #[repr(C)]
@@ -65,7 +78,7 @@ pub struct MlsrModelSpec {
 pub struct MlsrEngineOptions {
     /// Must equal sizeof(MlsrEngineOptions).
     pub struct_size: u32,
-    /// 0: CPU only, 1: CPU and Neural Engine permitted.
+    /// 0: Core ML CPU, 1: Core ML CPU/Neural Engine, 2: Qualcomm QNN HTP.
     pub compute_policy: u32,
     /// 0: ordinary outputs, 1: offer reusable native output buffers.
     pub reuse_output_buffers: u32,

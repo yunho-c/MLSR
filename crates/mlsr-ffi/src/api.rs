@@ -90,24 +90,31 @@ fn release(handle: MlsrHandle, kind: Kind) -> MlsrStatus {
     }
 }
 
-/// Feature bits: 1 = synthesis job API, 2 = Core ML backend built for this target,
-/// 4 = model ownership and transactional store API, 8 = developer SDK metadata
-/// schema v1, 16 = Apple native output built for this target. ABI 1's old structs
-/// and meanings are unchanged; bindings must check feature bits before new calls.
+/// Bitmask of MLSR_FEATURE_* capabilities built for this target.
 #[unsafe(no_mangle)]
 pub extern "C" fn mlsr_features() -> u32 {
-    1 | 4
-        | 8
+    MLSR_FEATURE_JOBS
+        | MLSR_FEATURE_MODEL_STORE
+        | MLSR_FEATURE_DEVELOPER_SDK
         | if cfg!(all(
             feature = "coreml",
             any(target_os = "macos", target_os = "ios")
         )) {
-            2
+            MLSR_FEATURE_COREML
+        } else {
+            0
+        }
+        | if cfg!(all(
+            feature = "qnn",
+            target_os = "windows",
+            target_arch = "aarch64"
+        )) {
+            MLSR_FEATURE_QNN_HTP
         } else {
             0
         }
         | if cfg!(all(feature = "apple-output", target_os = "macos")) {
-            16
+            MLSR_FEATURE_APPLE_OUTPUT
         } else {
             0
         }
@@ -172,6 +179,7 @@ fn engine_options(settings: MlsrEngineOptions) -> ApiResult<EngineOptions> {
     let compute_policy = match settings.compute_policy {
         0 => ComputePolicy::CpuOnly,
         1 => ComputePolicy::CpuAndNeuralEngine,
+        2 => ComputePolicy::QnnHtp,
         _ => return Err(ApiError::invalid("unknown compute policy")),
     };
     if settings.reuse_output_buffers > 1 {

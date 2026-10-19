@@ -1,0 +1,427 @@
+# Pinned experimental Superfast programs. Prepare only from verified local files.
+schema_version: 1
+id: supertonic3-qnn-superfast-v1
+model: supertonic-3
+model_version: 1.7.3
+source:
+  repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+  revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+provenance:
+  upstream_model:
+    repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+    revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+    license: OpenRAIL-M
+    license_url: https://huggingface.co/supertone-oss-archive/supertonic-3/blob/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE
+  upstream_preprocessing:
+    repository: https://github.com/yunho-c/supertonic
+    revision: 1e9799e964ea4c0dad7cde993b65c3c813a7b373
+    path: py/helper.py
+    license: MIT
+  conversion:
+    project: supertonic-npu
+    revision: 2a2445c6f29fa1dcdafc047ee826fa14f344c508
+    assembly_command: python scripts/build_superfast.py --output <fresh-directory>
+    component_sources:
+      frontend:
+        revision: 2522dda3924745480d40ecb05a28d0072238f078
+        command: python scripts/export_frontend.py --mode pack8-norm-tail --component
+          <duration_predictor|text_encoder> --input-reference <campaign/real-input/component.npz>
+          --output <fresh-directory>
+      flow:
+        revision: 3f92c1f4e869ca75f292be6a32a63695990b0b7f
+        command: python scripts/export_final_four.py --mode full28-mlp-only --output
+          <fresh-directory>
+      vocoder:
+        revision: 1e3be4a2d2f67fc28fa8b4788df65cd1271e710d
+        command: python scripts/export_vocoder.py --mode combined --output <fresh-directory>
+    rebuild_note: Component exporters use recorded research-worktree inputs; graph
+      metadata pins source hashes and transformations. Rebuilding is an explicit development
+      operation. Changed bytes require a new manifest and qualification.
+  status: Experimental integration candidate; numerical screening does not establish
+    perceptual quality.
+  local_sources:
+    duration_predictor: artifacts/research/worktree-frontend-layout-oct16/artifacts/frontend-layout-oct16/campaign/bundles/pack8-norm-tail/base/duration_predictor.pte
+    duration_predictor_metadata: artifacts/research/worktree-frontend-layout-oct16/artifacts/frontend-layout-oct16/campaign/bundles/pack8-norm-tail/base/duration_predictor.json
+    text_encoder: artifacts/research/worktree-frontend-layout-oct16/artifacts/frontend-layout-oct16/campaign/bundles/pack8-norm-tail/base/text_encoder.pte
+    text_encoder_metadata: artifacts/research/worktree-frontend-layout-oct16/artifacts/frontend-layout-oct16/campaign/bundles/pack8-norm-tail/base/text_encoder.json
+    ve_96: artifacts/research/worktree-final-four-oct16/artifacts/final-four-oct16/campaign/programs/full28-mlp-only/vector_estimator.pte
+    ve_96_metadata: artifacts/research/worktree-final-four-oct16/artifacts/final-four-oct16/campaign/programs/full28-mlp-only/vector_estimator.json
+    vocoder: artifacts/research/worktree-vocoder-oct16/artifacts/vocoder-head-oct16/programs/combined/vocoder.pte
+    vocoder_metadata: artifacts/research/worktree-vocoder-oct16/artifacts/vocoder-head-oct16/programs/combined/vocoder.json
+    tts_config: assets/onnx/tts.json
+    unicode_indexer: assets/onnx/unicode_indexer.json
+    voice_M1: assets/voice_styles/M1.json
+    voice_F1: assets/voice_styles/F1.json
+    model_license: assets/LICENSE
+    executorch_license: licenses/executorch.txt
+runtime:
+  kind: qnn
+  format: executorch-pte
+  executorch_version: 1.5.0
+  executorch_revision: f7140a46ff38e919c557d45b102d3ff26097c8c9
+  qnn_sdk: 2.50.40.260831
+  compiler: QAIRT QNN HTP offline compiler 2.50.40.260831
+  target_os: windows
+  target_arch: aarch64
+  target_soc: 88
+  htp_arch: 81
+  device: Snapdragon X2 Elite X2E84100
+  compute_policy: qnn_htp
+  compatibility: Only the recorded Windows ARM64 SoC 88 / HTP V81 target is supported;
+    other targets require separate artifacts and qualification
+  quantization: null
+  external_dependencies:
+    sdk_license: Use the installed QAIRT SDK under its LICENSE.pdf; runtime redistribution
+      is separate from local bundle preparation.
+    sdk_files:
+    - path: lib/aarch64-windows-msvc/QnnHtp.dll
+      sha256: 2a4406653fd6cf2cbe83d544aa3066776a5d1b99b4cf2d73a446ce841c427e12
+      size_bytes: 3427536
+    - path: lib/aarch64-windows-msvc/QnnHtpV81Stub.dll
+      sha256: 970ab0c026183610964dc376f5eee981338942667c76bff0e5472ac3396b010b
+      size_bytes: 573648
+    - path: lib/aarch64-windows-msvc/QnnSystem.dll
+      sha256: 0b6daf4691a1ae8cd171911fa2466f3bbac220145bcfc7321b54a6a44fa29aba
+      size_bytes: 3570896
+    - path: lib/hexagon-v81/unsigned/libQnnHtpV81Skel.so
+      sha256: 0df1a63f7fcf60b2f6ca419228c36bb97dc225ba69b24ea3a150a533e9bf3f5f
+      size_bytes: 13542412
+    executorch_backend:
+      path: qnn_executorch_backend.dll
+      sha256: 95eb9131d4825ac0fca0a7104442ff6937bff78b5fb2e04047dc5d26580d9395
+      size_bytes: 221184
+    fastrpc: System-installed ARM64 libcdsprpc.dll from qcnspmcdm8480 driver; not
+      copied into bundle
+contract:
+  sample_rate: 44100
+  channels: 1
+  pcm_dtype: float32
+  batch_size: 1
+  text_tokens: 128
+  text_normalization: NFKD + upstream symbol/whitespace handling + language tags
+  text_offset_unit: Unicode scalar index in normalized text; original text is retained
+    separately
+  oversized_text: reject; never truncate
+  unknown_character: reject; never wrap to uint16 or submit a negative token
+  latent_channels: 144
+  samples_per_latent: 3072
+  latent_buckets:
+  - 96
+  vocoder_latent_range:
+  - 4
+  - 96
+  default_steps: 8
+  default_speed: 1.05
+  duration_policy: Float32 max(0.05, raw_duration / max(speed, 0.05)); reject nonfinite/nonpositive
+    requested speed
+  frame_count_policy: truncate Float32(duration * 44100) toward zero; trim waveform
+    to min(requested_frames, available_frames)
+  latent_length_policy: ceil(requested_frames / 3072); reject outside 4..96; pass
+    the full masked L96 state to the fixed vocoder and trim PCM
+  ve_output_semantics: Updated latent including classifier-free guidance and Euler
+    integration in HTP FP16; do not integrate again
+  qualification_languages:
+  - en
+  - ko
+  voices:
+  - M1
+  - F1
+  supported_steps:
+  - 8
+  text_ids_dtype: int64
+  noise_capacity: 128
+  noise_policy: ChaCha8 as in MLSR, generate [1,144,128], crop each channel to true
+    length and zero-pad to 96; replay accepts actual saved [1,144,128] Float32 noise
+integrity:
+  algorithm: sha256
+  scope: Every listed payload including graph metadata and licenses. Keep all files
+    immutable during engine lifetime.
+artifacts:
+  duration_predictor:
+    kind: executorch_qnn
+    path: graphs/duration_predictor.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      text_ids:
+        ordinal: 0
+        dtype: int64
+        shape:
+        - 1
+        - 128
+        layout: contiguous row-major
+      style_dp:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 8
+        - 16
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+    files:
+    - path: graphs/duration_predictor.pte
+      sha256: d5431904b1487c656c68d0af9acdc21ba261f5b27254462076f7f7905e197589
+      size_bytes: 2918688
+  duration_predictor_metadata:
+    kind: conversion_metadata
+    path: graphs/duration_predictor.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/duration_predictor.json
+      sha256: 259781ccdbb9a27927b3cc80eb85e4cfdb0647f3689d564efd27e76e7500c624
+      size_bytes: 2568
+  text_encoder:
+    kind: executorch_qnn
+    path: graphs/text_encoder.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      text_ids:
+        ordinal: 0
+        dtype: int64
+        shape:
+        - 1
+        - 128
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 128
+        layout: contiguous row-major
+    files:
+    - path: graphs/text_encoder.pte
+      sha256: c42b0957105ba2c208407585b29ea6174f9e5078345ac3dbd70479f66a69b86e
+      size_bytes: 19993688
+  text_encoder_metadata:
+    kind: conversion_metadata
+    path: graphs/text_encoder.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/text_encoder.json
+      sha256: 152111093553a44b5b64337c13c79519846c87b9cfa38b86b6af375df948b8cf
+      size_bytes: 2577
+  ve_96:
+    kind: executorch_qnn
+    path: graphs/vector_estimator.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      noisy_latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 96
+        layout: contiguous row-major
+      text_emb:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 128
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      latent_mask:
+        ordinal: 3
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 96
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 4
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+        layout: contiguous row-major
+      current_step:
+        ordinal: 5
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+      total_step:
+        ordinal: 6
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 96
+        layout: contiguous row-major
+    files:
+    - path: graphs/vector_estimator.pte
+      sha256: d394651dd4f8b355e02c3b71823d134050cf43bf31ea3aa84e6d06f5931138e4
+      size_bytes: 136371456
+    latent_bucket: 96
+  ve_96_metadata:
+    kind: conversion_metadata
+    path: graphs/vector_estimator.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/vector_estimator.json
+      sha256: 00cd1fc97e936a184867d86bc752084b62878fb47919ed23a24968c9a433bfad
+      size_bytes: 9065
+  vocoder:
+    kind: executorch_qnn
+    path: graphs/vocoder.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 96
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 294912
+        layout: contiguous row-major
+    files:
+    - path: graphs/vocoder.pte
+      sha256: 5cfe8b020b3739abb26d344c9c11245d183b523da9ba2846ff4d9ece76831931
+      size_bytes: 52906736
+  vocoder_metadata:
+    kind: conversion_metadata
+    path: graphs/vocoder.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/vocoder.json
+      sha256: 45e5250a85499c41d519858382b1d024e22b74b56e0ce1bf6552d8ba2c536f88
+      size_bytes: 2379
+  tts_config:
+    kind: configuration
+    path: tts.json
+    license: OpenRAIL-M
+    files:
+    - path: tts.json
+      sha256: 42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09
+      size_bytes: 8253
+  unicode_indexer:
+    kind: tokenizer
+    path: unicode_indexer.json
+    license: OpenRAIL-M
+    files:
+    - path: unicode_indexer.json
+      sha256: 9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f
+      size_bytes: 277676
+  voice_M1:
+    kind: voice_style
+    path: voice_styles/M1.json
+    license: OpenRAIL-M
+    files:
+    - path: voice_styles/M1.json
+      sha256: e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b
+      size_bytes: 291748
+  voice_F1:
+    kind: voice_style
+    path: voice_styles/F1.json
+    license: OpenRAIL-M
+    files:
+    - path: voice_styles/F1.json
+      sha256: bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2
+      size_bytes: 292046
+  model_license:
+    kind: license
+    path: licenses/model.txt
+    license: OpenRAIL-M
+    files:
+    - path: licenses/model.txt
+      sha256: 0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f
+      size_bytes: 15007
+  executorch_license:
+    kind: license
+    path: licenses/executorch.txt
+    license: BSD-3-Clause
+    files:
+    - path: licenses/executorch.txt
+      sha256: d509ee20a86672d9f51d1dc057a9be504f86238aa139356279dda84182e74e68
+      size_bytes: 1811

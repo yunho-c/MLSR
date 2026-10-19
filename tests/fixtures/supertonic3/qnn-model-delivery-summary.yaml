@@ -1,0 +1,122 @@
+schema_version: 1
+status: model_delivery_integration_passed_model_quality_gate_failed
+recorded_utc: '2026-10-18T22:06:03.483167+00:00'
+source_commit: 929d051a6514039ba07223f09cd3fe4b4deb383f
+integrated_main_commit: 82efec621eaf551ab3ab3fe304a169486f238666
+host: Windows 11 ARM64 10.0.28000, Snapdragon X2 Elite X2E84100, SoC 88 / HTP V81
+production_qualified: false
+manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+experimental_catalog_sha256: 6e06c89083defb3cfc629a29476f3daabf017c33b70f0fe39b96ccb3c532653b
+bridge_sha256: e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad
+release_ffi_sha256: fe00b1135dd59312d179cc71ecfef9a2be74d10ac60bfd770d66a6ce21bade5a
+replay_binary_sha256: 2e16752cf9117403b35d594d34330afff0e7687c8e173689d64b6e8d83077e41
+native_feature_mask: 13
+feature_bits:
+  jobs: 1
+  coreml: 2
+  model_store: 4
+  qnn_htp: 8
+leased_model:
+  rust_device_test_passed: true
+  dart_c_abi_device_test_passed: true
+  checks:
+  - QNN identity, backend and original manifest hash verified with an explicit experimental catalog
+  - Transactional installation with graph paths rebased after publication
+  - Wrong compute policy rejected without retaining an extra lease
+  - English/Korean M1/F1 PCM matches direct-bundle synthesis
+  - Store removal blocked after caller model disposal while engine retains lease
+  - Engine drop joins native shutdown before successful model removal
+  - Owned PCM remains valid after engine drop and model removal
+  - Dart engine creation racing caller model disposal retains the native lease
+  - Dart model/store/engine handles return to the original registry count
+regression:
+  workspace_tests_passed: 42
+  workspace_tests_ignored: 8
+  ignored_qnn_runtime_tests_executed_and_passed: 5
+  clippy_all_targets_all_features: passed
+  windows_x64_all_targets_all_features_check: passed
+  generated_c_and_dart: current
+  dart_analyze: passed
+  dart_portable_tests_passed: 3
+  dart_portable_tests_skipped: 2
+  python_model_tool_tests_passed: 46
+  python_model_tool_tests_skipped: 1
+  native_bindings:
+  - rust-build
+  - c-build
+  - c-smoke
+  - python
+  - go
+  - go-vet
+  - dart-get
+  - dart
+  dart_device_tests_passed: 4
+  adapter_cases: 23
+  adapter_outcomes_passed: 92
+  successful_tensor_captures_byte_exact: 48
+  binding_pcm_unchanged_from_previous_qualification: true
+  jobs_passed: true
+  persistent_model_loads: 4
+  native_cancellations_passed: 20
+  backpressure_cancellations_passed: 5
+canonical_screen:
+  passed: false
+  cases: 12
+  failed_cases_unchanged:
+  - en_m1_basic
+  - en_normalization
+  - ko_m1_basic
+  - qnn_latent_4
+  - qnn_latent_96
+  - qnn_tokens_128
+  thresholds_unchanged: true
+  stage_relative_l2_limit: 0.05
+  final_latent_relative_l2_limit: 0.05
+  spectral_convergence_limit: 0.1
+binding_pcm:
+- byte_exact_across_bindings: true
+  case: en_M1
+  frames: 70546
+  sha256: f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0
+- byte_exact_across_bindings: true
+  case: en_F1
+  frames: 70710
+  sha256: 2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0
+- byte_exact_across_bindings: true
+  case: ko_M1
+  frames: 126328
+  sha256: 85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e
+- byte_exact_across_bindings: true
+  case: ko_F1
+  frames: 126615
+  sha256: 470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37
+limitations:
+- Experimental model remains outside the builtin qualified catalog; listening qualification remains
+  open.
+- macOS/iOS Core ML and the macOS Flutter resource adapter were not executed on this Windows host.
+- No new SDK profiling or controlled performance qualification; previous evidence remains historical.
+evidence:
+- path: ignore/qnn-merge-workspace-tests.log
+  sha256: dbe8f449d3e7a6786f8dc0387368b95c96bd60e299429a96f62f27e70af59a53
+- path: ignore/qnn-merge-device-tests.log
+  sha256: 82a9235f0f7ff66417e263e4e607a8caa5d9469ce47890b75f0d3cb98771a037
+- path: ignore/qnn-merge-clippy.log
+  sha256: 0eba3b03b8b350013e02a15e1584ef5a0f00fe50115080b791510ebd8f090fcf
+- path: ignore/qnn-merge-x64-check.log
+  sha256: d998163677db624e8c2e5090866a67cde7d17e47a6cd0935886b7deb128c4d7a
+- path: ignore/qnn-merge-model-tools.log
+  sha256: ed62f5853ca3bcaefc5f7c5afe917dcb761664f591b8543e4e8cff0632288096
+- path: ignore/qnn-merge-dart-generated.log
+  sha256: e81e31b000c4929f1b2c445b38b669fbf0daa450ad1da0f91efc40649bf5cc83
+- path: ignore/qnn-merge-dart-portable.log
+  sha256: ebf5e3052d4550ea12354b150a0721f9a4977058f5c76cebfe6dc679cb44f72a
+- path: ignore/qnn-bindings-merge-20261018/report.json
+  sha256: fa0935496eb0194f6be6a39a837fafc261d8e867206ba15ac4c45cf731011211
+- path: ignore/qnn-bindings-merge-20261018/c-smoke.log
+  sha256: cd877ed0847eec2f8235b78d008a5beddebd4415f954fa496a8fbae19bab9132
+- path: ignore/qnn-bindings-merge-20261018/dart.log
+  sha256: d9348272a6fd827927b1f8b52220e1a753c21ad9d7b1f37af4356f4cbdaad3e6
+- path: ignore/qnn-replay-merge-20261018/report.yaml
+  sha256: 97fe7045725d843dd10f99f0af9d1dc89dae75e6f0a750c8cfe294779d6ff4ee
+- path: ignore/qnn-jobs-merge-20261018.json
+  sha256: d658a0c65bb9637cdcc367605bbb43cabc75a997f63920ed02eb7bc4dd02a641

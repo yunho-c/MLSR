@@ -1,0 +1,39 @@
+schema_version: 1
+id: supertonic3-qnn-superfast-replay-v1
+shared_corpus: corpus.yaml
+shared_frontend: frontend.yaml
+acceptance:
+  adapter: byte_exact_all_tensors_and_frame_counts
+  canonical_stage_relative_l2: 0.05
+  canonical_trajectory_relative_l2: 0.05
+  canonical_spectral_convergence: 0.10
+  rationale: >-
+    Adapter and reference execute identical PTE bytes with actual saved noise;
+    any bit difference is a regression. The 5% Float32-relative L2 and 10%
+    magnitude-STFT screens retain the feasibility thresholds for FP16 conversion.
+    Waveform L2 is recorded separately because phase changes can amplify it.
+    These are engineering screens, not perceptual qualification. Failures must
+    be retained and reported without changing the thresholds.
+shared_positive_cases:
+  - en_m1_basic
+  - en_f1_basic
+  - en_normalization
+  - en_punctuation
+  - ko_m1_basic
+  - ko_f1_basic
+  - ko_normalization
+  - ko_decomposed
+boundary_cases:
+  - {id: qnn_latent_3, source: en_m1_basic, target_latent_length: 3, expected_error: 'vocoder cannot accept latent length 3'}
+  - {id: qnn_latent_4, source: en_m1_basic, target_latent_length: 4}
+  - {id: qnn_latent_95, source: ko_f1_basic, target_latent_length: 95}
+  - {id: qnn_latent_96, source: en_f1_basic, target_latent_length: 96}
+  - {id: qnn_latent_97, source: en_m1_basic, target_latent_length: 97, expected_error: 'duration exceeds the supported frame range'}
+token_boundaries:
+  # 118 or 119 ASCII a's, then '.', then nine language-tag characters.
+  - {id: qnn_tokens_128, repeats: 118, target_latent_length: 96}
+  - {id: qnn_tokens_129, repeats: 119, expected_error: text_too_long}
+option_rejections:
+  - {id: qnn_steps_7, steps: 7, expected_error: 'requires exactly eight steps'}
+  - {id: qnn_speed_0, speed: 0, expected_error: 'speed must be finite and positive'}
+  - {id: qnn_voice_unknown, voice: unknown, expected_error: 'unknown voice; expected M1 or F1'}

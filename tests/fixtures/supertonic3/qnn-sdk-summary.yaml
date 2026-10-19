@@ -1,0 +1,181 @@
+schema_version: 1
+status: headless_sdk_integration_passed_model_quality_gate_failed
+recorded_utc: '2026-10-18T23:08:46.439519+00:00'
+source_commit: c321ccb1ca7af1bfc2be3ebee2fc1a419ffc4c23
+integrated_main_commit: 09226ff2a0d0df4d509e3f852d53667542cbb9e5
+host: Windows 11 ARM64, Snapdragon X2 Elite X2E84100, SoC 88 / HTP V81
+production_qualified: false
+manifest_sha256: 85964f69b8fe0636e7584f129e67a72cfa2b7321450a658f0d987d01d79a3c01
+experimental_catalog_sha256: 6e06c89083defb3cfc629a29476f3daabf017c33b70f0fe39b96ccb3c532653b
+bridge_sha256: e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad
+release_ffi_sha256: ead97c1f6a1f36a8d86b02b4de7f53f0b6f55276a5c343eccce80a042e99599e
+replay_binary_sha256: d7746639b6d767de210087b9b3304771cb895203ed5c14b01f89af2123b5b1f7
+native_feature_mask: 45
+feature_bits:
+  jobs: 1
+  coreml: 2
+  model_store: 4
+  developer_sdk: 8
+  apple_output: 16
+  qnn_htp: 32
+headless_sdk:
+  passed: true
+  runtime_and_preset: QNN HTP / Superfast, exactly eight steps, unchanged four PTEs
+  voice_backend: qnn
+  qualified_languages: []
+  native_windows_speech: unsupported_capability
+  checks:
+  - Lazy observation does not start inference; cancellation and bounded PCM remain independent
+  - C/Python/Go/Dart SDK and legacy EN/KO M1/F1 PCM match byte for byte
+  - Rust render, WAV and legacy jobs match; owned clips survive facade closure and model removal
+  - Unsupported seven-step requests fail before queue admission
+  - Foreign model requests cannot replace active speech
+  - QNN fixed-shape failures retain request ID, category and backend; later requests recover
+  - Resumed text plans preserve original text, segment IDs and segment-specific noise seeds
+  - Rust and Dart store removal stays blocked until facade close even after caller model disposal
+  - Python and Go verified-model facades survive caller model closure
+  - Dart facade creation racing model disposal retains the native model lease
+  - Seek snapshots publish position and sentence highlight together; ten regression repetitions passed
+  developer_pcm:
+    en_M1:
+      sha256: f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0
+      frames: 70546
+      four_sdk_consumers_and_legacy_byte_exact: true
+    en_F1:
+      sha256: 2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0
+      frames: 70710
+      four_sdk_consumers_and_legacy_byte_exact: true
+    ko_M1:
+      sha256: 85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e
+      frames: 126328
+      four_sdk_consumers_and_legacy_byte_exact: true
+    ko_F1:
+      sha256: 470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37
+      frames: 126615
+      four_sdk_consumers_and_legacy_byte_exact: true
+  public_examples:
+    python:
+      frames: 70546
+      wav_sha256: 7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c
+      pcm_byte_exact: true
+    go:
+      frames: 70546
+      wav_sha256: 7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c
+      pcm_byte_exact: true
+    dart:
+      frames: 70546
+      wav_sha256: 7e614cb14ac045bc681caad6576e11009e10c51823e2311faae9ed5170ae112c
+      pcm_byte_exact: true
+regression:
+  workspace_tests_passed: 85
+  workspace_tests_ignored: 9
+  ignored_qnn_runtime_tests_executed_and_passed: 5
+  ignored_qnn_sdk_tests_executed_and_passed: 1
+  clippy_all_targets_all_features: passed
+  windows_x64_all_targets_all_features_check: passed
+  generated_c_and_dart: current
+  dart_analyze_and_format: passed
+  python_model_tool_tests_passed: 46
+  python_model_tool_tests_skipped: 1
+  bindings:
+    checks:
+    - rust-build
+    - c-build
+    - c-smoke
+    - c-sdk-build
+    - c-sdk
+    - python
+    - python-sdk-example
+    - go
+    - go-vet
+    - go-sdk-example
+    - dart-get
+    - dart
+    - dart-sdk-example
+    - sdk-pcm
+    python_tests_passed: 12
+    python_tests_skipped: 1
+    go_tests_passed: 9
+    go_tests_skipped: 1
+    dart_tests_passed: 9
+    dart_tests_skipped: 1
+    skipped_device_test: native Apple speech output on Windows
+    consumer_context: C shared ABI, source Python/Go packages, fresh consuming Dart project with native
+      build hook
+  adapter_cases: 23
+  adapter_outcomes_passed: 92
+  retained_tensor_captures_revalidated_byte_exact: 48
+  binding_pcm_unchanged_from_previous_qualification: true
+  jobs_passed: true
+  persistent_model_loads: 4
+  native_cancellations_passed: 20
+  backpressure_cancellations_passed: 5
+canonical_screen:
+  passed: false
+  cases: 12
+  failed_cases:
+  - en_m1_basic
+  - en_normalization
+  - ko_m1_basic
+  - qnn_latent_4
+  - qnn_latent_96
+  - qnn_tokens_128
+  thresholds_unchanged: true
+  stage_relative_l2_limit: 0.05
+  final_latent_relative_l2_limit: 0.05
+  spectral_convergence_limit: 0.1
+toolchains:
+  python: 3.14.7 (tags/v3.14.7:823f032, Aug  5 2026, 11:30:42) [MSC v.1944 64 bit (ARM64)] ARM64
+  go: go version go1.27.2 windows/arm64
+  dart: 'Dart SDK version: 3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on "windows_arm64"'
+  cc: "clang version 23.1.3 (https://github.com/llvm/llvm-project.git 0d261d1ca552c95a8f007e061c787ac7132fbcbc)\r\
+    \nTarget: aarch64-w64-windows-gnu\r\nThread model: posix\r\nInstalledDir: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin\r\
+    \nConfiguration file: C:/Users/hocbu/.cache/mlsr/qnn-tools/mingw-arm64/llvm-mingw-20261006-ucrt-aarch64/bin/aarch64-w64-windows-gnu.cfg"
+limitations:
+- QNN model remains experimental and outside the builtin qualified catalog; listening qualification remains
+  open
+- Native Windows playback is not implemented; portable fake-output tests do not qualify a Windows output
+  device
+- macOS/iOS Core ML and macOS Flutter were not executed on this Windows host
+- No new QAIRT profiling, controlled performance qualification, or published native package distribution
+evidence:
+- path: ignore/qnn-sdk-portable-tests.log
+  sha256: ce8b3ba1054f0d6b77e8232349ec42c735c392fcf84aedec6a70e1d7079be74a
+- path: ignore/qnn-sdk-native-runtime.log
+  sha256: b51e862d1950d9bff9f161d3dcd20e2ba5c39321853740aa29cddca8533affc5
+- path: ignore/qnn-sdk-device-final.log
+  sha256: 7ef00de2687d57fc5849810717bf7ccebfe16062ce16506cd06accd5a658b8b4
+- path: ignore/qnn-sdk-seek-regression.log
+  sha256: 68deb28ef41f43ce71a6ada65d6300e95305d123ebfd94c6b5d0b88e451fa672
+- path: ignore/qnn-sdk-clippy.log
+  sha256: 78dbad398dc78a8f4ae6715b8a390e3d2a3d2f9029ff10466b6bc5b89fababd7
+- path: ignore/qnn-sdk-x64-check.log
+  sha256: eca817e53a70edb37c46669e9c000f990e23fca06c3b061a3225a4067699e834
+- path: ignore/qnn-sdk-model-tools.log
+  sha256: fc424e99ad7bfbec57338c14ae75aaa7a84fc085db3d5b69b6dbd7e9f8d323a2
+- path: ignore/qnn-sdk-dart-analyze.log
+  sha256: 32622a16e8dc7c3efcefa2b1604bcbe563bf4c11369d0e1bc105aa40e50856f1
+- path: ignore/qnn-sdk-replay-20261018/report.yaml
+  sha256: d1cd8205497808a8f5eab263fcc11b1e5463752b724a7d9eb141ee6e78dda692
+- path: ignore/qnn-sdk-jobs-20261018.json
+  sha256: 96d15077b39f4c6ded2f3c157d0e1485b6d05e6bed1de4afe926280794ac54ef
+- path: ignore/qnn-sdk-bindings-20261018-final/report.json
+  sha256: d8b5d84d8d45f2020d66fec30dce2116462330db5a55c821fbd2df6009fa06b2
+- path: ignore/qnn-sdk-bindings-20261018-final/sdk-pcm.json
+  sha256: 5eb2864fd01c853a1b7d37932b42949cb008c3a428c9acd1398f34407e5393c4
+- path: ignore/qnn-sdk-bindings-20261018-final/c-smoke.log
+  sha256: 3a328ea20a10d8e649e84a5aa77e4d9a7122b131af06974362cc3640e69414c4
+- path: ignore/qnn-sdk-bindings-20261018-final/c-sdk.log
+  sha256: d8753c4558564a7efe2c8e9ba181b04b1a1c5744b8322d7261ee5d65155979b0
+- path: ignore/qnn-sdk-bindings-20261018-final/python.log
+  sha256: b1c4e919207c1d952769e5f0b782339e7a87319dfa501fabac080b71bcee3d30
+- path: ignore/qnn-sdk-bindings-20261018-final/go.log
+  sha256: 3caf1cdeaf279c8ab0819f420019c684ee01b58f1d89dbe2c58cb499a842c087
+- path: ignore/qnn-sdk-bindings-20261018-final/dart.log
+  sha256: a81f2f528d7656e1464b48f371b4790ebecfb5a9ecac123e19bd626d78909859
+- path: ignore/qnn-sdk-bindings-20261018-final/python-sdk-example.log
+  sha256: 390f667e8232ce688929cd1c8b770bf30a3f88b409e62fac59e1cef10c57d4ba
+- path: ignore/qnn-sdk-bindings-20261018-final/go-sdk-example.log
+  sha256: bc598d7150bb4a4a47f33413e1d18096acf7c48bf19a18ff99049aab279e4f67
+- path: ignore/qnn-sdk-bindings-20261018-final/dart-sdk-example.log
+  sha256: 04a161cd88000fcbc2dab20393220da0e9971fec9907cba41609947e92268895

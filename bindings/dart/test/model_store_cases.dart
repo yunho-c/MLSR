@@ -83,9 +83,16 @@ void modelStoreTests() {
       final root = await Directory.systemTemp.createTemp('mlsr-real-store-');
       final store = ModelStore(root.path);
       final descriptor = ModelDescriptor(
-        catalogYaml: await File('test/fixtures/catalog.yaml').readAsString(),
-        id: 'supertonic3-coreml-int4-v1',
-        platform: 'macos-arm64',
+        catalogYaml: await File(
+          Platform.environment['MLSR_TEST_DELIVERY_CATALOG'] ??
+              'test/fixtures/catalog.yaml',
+        ).readAsString(),
+        id:
+            Platform.environment['MLSR_TEST_DELIVERY_ID'] ??
+            'supertonic3-coreml-int4-v1',
+        platform:
+            Platform.environment['MLSR_TEST_DELIVERY_PLATFORM'] ??
+            'macos-arm64',
       );
       final transaction = await store.begin(descriptor);
       Engine? engine;
@@ -104,7 +111,12 @@ void modelStoreTests() {
         final model = await transaction.commit();
         // Queue creation and disposal together: disposal must wait until Rust has
         // retained its own lease, even before the adapter isolate starts the call.
-        final opening = Engine.fromModel(model);
+        final opening = Engine.fromModel(
+          model,
+          computePolicy: Platform.environment['MLSR_TEST_POLICY'] == 'qnn_htp'
+              ? ComputePolicy.qnnHtp
+              : ComputePolicy.cpuAndNeuralEngine,
+        );
         final disposing = model.dispose();
         engine = await opening;
         await disposing;

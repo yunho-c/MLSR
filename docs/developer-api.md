@@ -7,8 +7,10 @@ completion of that earlier slice does not imply completion of this SDK.
 
 The v0 target is the full essential API on macOS Apple Silicon, with shared Rust
 behavior and C/Dart/Go/Python interfaces. Device/backend availability is a separate
-capability. QNN/Android, physical iOS qualification, optional word alignment,
-persistent synthesis caching and background media controls follow this milestone.
+capability. The experimental Windows ARM64 QNN backend now supports the
+[headless SDK](qnn-runtime.md); Windows speech output, Android, physical iOS
+qualification, optional word alignment, persistent synthesis caching and
+background media controls remain separate milestones.
 
 ## Ownership
 

@@ -561,6 +561,36 @@ fn rejected_replace_does_not_cancel_current_or_queued_speech() {
     assert!(queued.snapshot().cancellation.is_none());
     assert!(current.snapshot().cancellation.is_none());
 }
+
+#[test]
+fn request_from_another_backend_cannot_replace_current_speech() {
+    let tts = owner(Factory::new(false, false));
+    let current = tts
+        .speak(
+            request(&tts, "Current."),
+            SpeechOptions::default(),
+            SpeakMode::Replace,
+        )
+        .unwrap();
+    wait(&current, |s| s.buffered_until_frame > 0);
+    let qnn = crate::models::supertonic3::BundleManifest::parse(include_bytes!(
+        "../../../../model-manifests/supertonic3-qnn-superfast.yaml"
+    ))
+    .unwrap()
+    .voice_catalog();
+    let foreign = Request::new(
+        "Wrong model.",
+        qnn.resolve("en", None, VoiceFallback::Strict).unwrap(),
+        RequestOptions::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        tts.speak(foreign, SpeechOptions::default(), SpeakMode::Replace),
+        Err(Error::VoiceUnavailable(_))
+    ));
+    assert!(current.completion().is_none());
+    assert!(!current.control.job.snapshot().cancellation_requested);
+}
 #[test]
 fn cancel_flushes_before_inflight_synthesis_quiesces() {
     let factory = Factory::new(false, false);

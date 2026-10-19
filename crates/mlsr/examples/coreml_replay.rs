@@ -109,14 +109,18 @@ impl Runner {
             let data = match field(desc, "dtype")? {
                 "float32" => TensorData::F32(
                     bytes
-                        .chunks_exact(4)
-                        .map(|c| f32::from_le_bytes(c.try_into().expect("four-byte chunk")))
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|c| f32::from_le_bytes(*c))
                         .collect(),
                 ),
                 "int32" => TensorData::I32(
                     bytes
-                        .chunks_exact(4)
-                        .map(|c| i32::from_le_bytes(c.try_into().expect("four-byte chunk")))
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|c| i32::from_le_bytes(*c))
                         .collect(),
                 ),
                 _ => return Err("unsupported fixture dtype".into()),

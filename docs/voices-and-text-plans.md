@@ -1,11 +1,12 @@
 # Voice discovery and frozen text plans
 
 Voice IDs use model identity (`supertonic3:M1`, `supertonic3:F1`), independent of
-the Core ML backend and of a bundle revision. The old engine accepts raw M1/F1
+the execution backend and of a bundle revision. The old engine accepts raw M1/F1
 identifiers unchanged. A catalog reports exact bundle/revision/manifest identity,
 31 frontend-supported languages and capabilities. Only the pinned, qualified
 baseline advertises English/Korean as qualified languages. Language-wide tags do
-not imply a particular accent.
+not imply a particular accent. QNN entries report `backend: qnn` with empty
+qualified languages; the experimental model's quality gate remains open.
 
 `BundleManifest::voice_catalog()` requires no assets or runtime and reports
 `CatalogOnly`; `Bundle::voice_catalog()` reports `AssetsVerified`;

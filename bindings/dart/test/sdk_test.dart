@@ -7,7 +7,83 @@ import 'package:mlsr/src/bindings.g.dart' as native;
 import 'package:test/test.dart';
 import 'model_fixture.dart';
 
+ComputePolicy get _testPolicy =>
+    Platform.environment['MLSR_TEST_POLICY'] == 'qnn_htp'
+    ? ComputePolicy.qnnHtp
+    : ComputePolicy.cpuAndNeuralEngine;
+
 void main() {
+  test(
+    'real headless SDK retains store lease during model disposal',
+    () async {
+      final before = native.mlsr_live_handles();
+      final root = await Directory.systemTemp.createTemp('mlsr-sdk-store-');
+      final store = ModelStore(root.path);
+      final descriptor = ModelDescriptor(
+        catalogYaml: await File(
+          Platform.environment['MLSR_TEST_DELIVERY_CATALOG']!,
+        ).readAsString(),
+        id:
+            Platform.environment['MLSR_TEST_DELIVERY_ID'] ??
+            'supertonic3-coreml-int4-v1',
+        platform:
+            Platform.environment['MLSR_TEST_DELIVERY_PLATFORM'] ??
+            'macos-arm64',
+      );
+      final transaction = await store.begin(descriptor);
+      Tts? tts;
+      try {
+        final source = Directory(
+          Platform.environment['MLSR_TEST_DELIVERY_BUNDLE']!,
+        );
+        await for (final entry in source.list(recursive: true)) {
+          if (entry is File) {
+            final relative = entry.path.substring(source.path.length + 1);
+            final target = File('${transaction.directory}/$relative');
+            await target.parent.create(recursive: true);
+            await entry.copy(target.path);
+          }
+        }
+        final model = await transaction.commit();
+        final opening = Tts.fromModel(
+          model,
+          computePolicy: _testPolicy,
+          options: const TtsOptions(output: OutputMode.headless),
+        );
+        final disposing = model.dispose();
+        tts = await opening;
+        await disposing;
+        final voices = await tts.getVoices();
+        expect(voices.first.readiness, VoiceReadiness.engineReady);
+        if (_testPolicy == ComputePolicy.qnnHtp) {
+          expect(voices.first.backend, 'qnn');
+          expect(voices.first.qualifiedLanguages, isEmpty);
+        }
+        await expectLater(
+          store.remove(descriptor),
+          throwsA(
+            isA<SynthesisException>().having(
+              (e) => e.code,
+              'code',
+              'model_in_use',
+            ),
+          ),
+        );
+        final clip = await tts.render('Hello from MLSR.');
+        expect(clip.frames, greaterThan(44100));
+        await tts.dispose();
+        await store.remove(descriptor);
+        expect(clip.frames, greaterThan(44100));
+      } finally {
+        await tts?.dispose();
+        await transaction.dispose();
+        await root.delete(recursive: true);
+      }
+      expect(native.mlsr_live_handles(), before);
+    },
+    skip: Platform.environment['MLSR_TEST_DELIVERY_CATALOG'] == null,
+    timeout: const Timeout(Duration(minutes: 3)),
+  );
   test(
     'catalog, verified readiness, explicit resolution and owned WAV',
     () async {
@@ -81,6 +157,7 @@ void main() {
       final tts = await Tts.open(
         manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
         bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        computePolicy: _testPolicy,
         options: const TtsOptions(output: OutputMode.headless),
       );
       const text = 'Hello from MLSR.\nA second sentence.';
@@ -182,6 +259,7 @@ void main() {
       final tts = await Tts.open(
         manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
         bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        computePolicy: _testPolicy,
         options: const TtsOptions(output: OutputMode.headless),
       );
       try {
@@ -242,6 +320,7 @@ void main() {
       final tts = await Tts.open(
         manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
         bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        computePolicy: _testPolicy,
       );
       const paused = SpeechOptions(paused: true, volume: 0);
       try {
@@ -324,6 +403,7 @@ void main() {
       final tts = await Tts.open(
         manifest: Platform.environment['MLSR_TEST_MANIFEST']!,
         bundle: Platform.environment['MLSR_TEST_BUNDLE']!,
+        computePolicy: _testPolicy,
         options: const TtsOptions(output: OutputMode.headless),
       );
       try {

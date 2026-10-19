@@ -89,6 +89,7 @@ class RealDeveloperAPI(unittest.TestCase):
         self.tts = Tts(
             os.environ["MLSR_TEST_MANIFEST"],
             os.environ["MLSR_TEST_BUNDLE"],
+            compute_policy=os.environ.get("MLSR_TEST_POLICY", "cpu_and_neural_engine"),
             options=TtsOptions(output_mode="headless"),
         )
         self.request = Request(
@@ -102,6 +103,15 @@ class RealDeveloperAPI(unittest.TestCase):
 
     def test_lazy_single_consumer_states_pcm_and_file_parity(self):
         self.assertEqual(self.tts.voices[0].readiness, "engine_ready")
+        backend = "qnn" if os.environ.get("MLSR_TEST_POLICY") == "qnn_htp" else "coreml"
+        self.assertEqual(self.tts.voices[0].backend, backend)
+        if backend == "qnn":
+            self.assertFalse(self.tts.voices[0].qualified_languages)
+            with self.assertRaises(TtsError) as invalid:
+                self.tts.synthesize(
+                    Request("Hello.", backend=SupertonicOptions(steps=7))
+                )
+            self.assertEqual(invalid.exception.code, "invalid_options")
         self.assertIsNone(self.tts.output_capabilities)
         with self.tts.synthesize(self.request) as job:
             self.assertEqual(job.snapshot.phase, "created")
@@ -142,6 +152,7 @@ class RealDeveloperAPI(unittest.TestCase):
         with self.assertRaises(TtsError) as failure:
             self.tts.render(self.request, max_bytes=4)
         self.assertEqual(failure.exception.stage, "rendering")
+        self.assertEqual(failure.exception.backend, backend)
         self.assertIsNotNone(failure.exception.request_id)
         with self.assertRaises(TtsError):
             self.tts.speak("headless output is unavailable")
@@ -274,8 +285,8 @@ class VerifiedModelReadiness(unittest.TestCase):
         before = ffi.library().mlsr_live_handles()
         descriptor = ModelDescriptor(
             Path(os.environ["MLSR_TEST_CATALOG"]).read_text(),
-            "supertonic3-coreml-int4-v1",
-            "macos-arm64",
+            os.environ.get("MLSR_TEST_DELIVERY_ID", "supertonic3-coreml-int4-v1"),
+            os.environ.get("MLSR_TEST_DELIVERY_PLATFORM", "macos-arm64"),
         )
         model = ModelHandle(
             os.environ.get("MLSR_TEST_VERIFIED_BUNDLE", os.environ["MLSR_TEST_BUNDLE"]),
@@ -285,7 +296,13 @@ class VerifiedModelReadiness(unittest.TestCase):
         try:
             self.assertEqual(model.voices[0].readiness, "assets_verified")
             self.assertEqual(model.resolve_voice().voice.readiness, "assets_verified")
-            tts = Tts.from_model(model, options=TtsOptions(output_mode="headless"))
+            tts = Tts.from_model(
+                model,
+                compute_policy=os.environ.get(
+                    "MLSR_TEST_POLICY", "cpu_and_neural_engine"
+                ),
+                options=TtsOptions(output_mode="headless"),
+            )
             model.close()
             self.assertEqual(tts.voices[0].readiness, "engine_ready")
             with self.assertRaises(TtsError):
