@@ -16,3 +16,6 @@ pub mod apple;
 
 #[cfg(all(feature = "wasapi", target_os = "windows"))]
 pub mod wasapi;
+
+#[cfg(any(test, all(feature = "wasapi", target_os = "windows")))]
+mod wasapi_epoch;

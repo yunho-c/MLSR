@@ -59,7 +59,12 @@ and discards its native/source buffers before replacement or seeking.
 
 Default-render-endpoint changes pause output, reopen the current default and
 reschedule retained unplayed PCM from the last observed position. The application
-resumes explicitly. Notification storage is bounded and overflow is an error.
+resumes explicitly. At a flush boundary (replacement, seeking, or a new speech),
+pending notifications are consumed before touching the old endpoint and the
+current default is reopened. Old idle notifications therefore cannot pause the
+new speech; its initial pause state comes from `begin`. A failed native reset
+also attempts a fresh endpoint open. Notifications arriving during that open
+remain pending and retain the normal pause policy. Notification storage is bounded and overflow is an error.
 Device/service failures that prevent recovery finish the current speech with a
 playback failure; a later request opens a fresh stream. System interruption
 events are not advertised. Clock positions describe stream presentation, not a
@@ -93,3 +98,20 @@ cargo test --locked -p mlsr --features qnn,windows-output --test windows_output 
 
 Superfast artifacts are unchanged. Numerical differences remain diagnostics;
 subjective listening qualification of the preset is pending.
+
+## Idle-route regression coverage
+
+Device-free tests in `mlsr-playback/src/wasapi_epoch.rs` exercise the same epoch
+preparation helper used by `Player::flush`: queued idle notifications with a live
+or removed endpoint, reset failure without a notification, reopen failure,
+notification overflow, and a new notification arriving during reopen. These mocks
+verify ordering and notification consumption; they do not emulate the Windows
+audio engine or measure playback. Run with `cargo test --locked -p mlsr-playback`.
+
+The ignored `real_wasapi_pause_starvation_route_rebuild_drain_and_reuse` test also
+injects a notification after the first speech drains and before flushing for the
+next speech. It checks that the next unpaused speech drains without explicit
+resume and without reporting the stale route change. This extension requires a
+Windows rendering endpoint and must be rerun; the earlier qualification snapshot
+does not establish that this new scenario passed. Physical unplug and Bluetooth
+remain separate hardware qualification tasks.

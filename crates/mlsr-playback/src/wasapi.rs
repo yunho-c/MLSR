@@ -482,7 +482,7 @@ impl Player {
         if epoch <= self.epoch {
             return Err(Error::Invalid("flush must advance the WASAPI epoch"));
         }
-        self.stream.stop_reset()?;
+        super::wasapi_epoch::prepare(self)?;
         self.pending.reset(0);
         self.epoch = epoch;
         self.begun = false;
@@ -589,6 +589,32 @@ impl Player {
         })
     }
 }
+impl super::wasapi_epoch::Endpoint for Player {
+    type Error = Error;
+
+    fn take_route_change(&mut self) -> Result<bool> {
+        let notices = self.notices.swap(0, Ordering::AcqRel);
+        if notices > 32 {
+            return Err(Error::Invalid("WASAPI route notification overflow"));
+        }
+        Ok(notices != 0)
+    }
+
+    fn reset_endpoint(&mut self) -> Result<()> {
+        self.stream.stop_reset()
+    }
+
+    fn reopen_endpoint(&mut self) -> Result<()> {
+        let stream = Stream::open(&self.enumerator, self.options.sample_rate)?;
+        // SAFETY: Newly opened one-channel stream; stored volume is validated.
+        unsafe {
+            stream.volume.SetChannelVolume(0, self.volume)?;
+        }
+        self.stream = stream;
+        Ok(())
+    }
+}
+
 impl Drop for Player {
     fn drop(&mut self) {
         // SAFETY: Listener and enumerator remain alive during unregister. A
@@ -721,10 +747,15 @@ mod tests {
         let done = until(&mut player, |s| s.drained);
         assert_eq!(done.position_frame, 13230);
         assert_eq!(done.queued_frames, 0);
+        // Idle between speeches: no snapshot/update consumes this old notice.
+        player.notices.store(1, Ordering::Release);
         player.flush(2).unwrap();
+        assert_eq!(player.notices.load(Ordering::Acquire), 0);
         assert!(player.enqueue(1, 13230, &[0.]).is_err());
         player.begin(2, 500, 1., 0., false).unwrap();
         player.enqueue(2, 500, &[0.; 4410]).unwrap();
+        assert!(!player.paused);
+        assert!(!player.snapshot().unwrap().route_changed);
         player.finish_input(2).unwrap();
         assert_eq!(until(&mut player, |s| s.drained).position_frame, 4910);
         println!(
