@@ -44,11 +44,7 @@ mod tests {
 
         fn reset_endpoint(&mut self) -> Result<(), Self::Error> {
             self.calls.push("reset");
-            if self.removed {
-                Err("removed")
-            } else {
-                Ok(())
-            }
+            if self.removed { Err("removed") } else { Ok(()) }
         }
 
         fn reopen_endpoint(&mut self) -> Result<(), Self::Error> {
