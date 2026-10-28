@@ -6,6 +6,10 @@ fn fixture() -> (Fixture, ModelDescriptor) {
     let bundle = fixture.load().unwrap();
     let mut value: serde_json::Value =
         serde_yaml_ng::from_str(&ModelCatalog::builtin().to_yaml().unwrap()).unwrap();
+    value["models"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|m| m["id"] == bundle.id());
     value["models"][0]["manifest_sha256"] = bundle.manifest_sha256().into();
     let catalog =
         ModelCatalog::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).unwrap();

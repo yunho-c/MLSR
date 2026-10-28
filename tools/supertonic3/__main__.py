@@ -119,7 +119,10 @@ def main():
             verify_bundle(manifest, args.bundle)
             result = {
                 "cases": check_frontend(
-                    corpus, read_indexer(manifest, args.bundle), args.expected
+                    corpus,
+                    read_indexer(manifest, args.bundle),
+                    args.expected,
+                    capacity=manifest["contract"]["text_tokens"],
                 )
             }
         elif args.command == "capture":

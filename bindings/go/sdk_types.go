@@ -201,9 +201,13 @@ func DefaultTTSOptions() TTSOptions {
 }
 
 type SpeechOptions struct {
+	// OnDemandSeeking enables full-timeline seeking with a bounded, evicting cache.
+	// Requires RetainAudio; complete recording export depends on cache coverage.
+	OnDemandSeeking      bool
 	PlaybackRate, Volume float32
 	Paused, RetainAudio  bool
-	LookaheadFrames      uint32
+	// Retained speech segment-start horizon; admitted segments are retained in full.
+	LookaheadFrames uint32
 }
 
 func DefaultSpeechOptions() SpeechOptions {
@@ -254,6 +258,10 @@ type SpeechState struct {
 	PositionFrame        uint64      `json:"position_frame"`
 	BufferedUntilFrame   uint64      `json:"buffered_until_frame"`
 	SeekableRanges       []Span      `json:"seekable_ranges"`
+	BufferedRanges       []Span      `json:"buffered_ranges"`
+	Seeking              bool        `json:"seeking"`
+	SeekTargetFrame      *uint64     `json:"seek_target_frame"`
+	RecordingComplete    bool        `json:"recording_complete"`
 	EstimatedFrames      *uint64     `json:"estimated_frames"`
 	DurationFrames       *uint64     `json:"duration_frames"`
 	PlaybackRate         float32     `json:"playback_rate"`

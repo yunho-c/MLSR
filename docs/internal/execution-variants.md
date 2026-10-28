@@ -1,5 +1,9 @@
 # Supertonic Core ML execution variants
 
+These variants target the legacy T=128 INT4 bundle. The recommended
+[T=384 FP16 release](supertonic3-fp16-promotion.md) uses its own six graphs and
+requires separate quantization/fusion qualification.
+
 The baseline remains the default. Fused VE is opt-in and retains exact numerical
 agreement on the qualified corpus. Fixed vocoders are explicitly experimental:
 their outputs differ from the flexible baseline even at their exact input sizes.

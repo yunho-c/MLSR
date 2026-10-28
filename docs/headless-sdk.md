@@ -29,8 +29,13 @@ Generation can reach `Generated` while queued PCM awaits consumption. Successful
 job completion follows consumption of all PCM and native quiescence. Cancellation
 is immediate as a request, but its terminal outcome waits for an in-flight native
 call. The first cancellation reason is retained. Structured failures retain stage,
-category, request identity, backend and diagnostic. A partial segment-duration
-sum is never presented as a whole-request estimate.
+category, request identity, backend and diagnostic. During `Preparing`, a
+cancellable duration-only pass plans every remaining frozen segment. It
+publishes a whole-request estimate before PCM delivery, independently of a
+stalled consumer, and synthesis reuses those decisions. A partial sum is never
+presented as a total. Planning failures are reported at the planning stage;
+final duration still comes from emitted frames. This moves duration prediction
+ahead of first audio without increasing PCM budgets or duplicating model calls.
 
 `tts.render` collects an `AudioClip` under a configured byte cap (default 32 MiB).
 `AudioClip::write_wav`, `tts.render_to_file` and `tts.write_job` use the same Rust

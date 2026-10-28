@@ -1,12 +1,46 @@
 # Voice discovery and frozen text plans
 
 Voice IDs use model identity (`supertonic3:M1`, `supertonic3:F1`), independent of
-the execution backend and of a bundle revision. The old engine accepts raw M1/F1
-identifiers unchanged. A catalog reports exact bundle/revision/manifest identity,
-31 frontend-supported languages and capabilities. Only the pinned, qualified
-baseline advertises English/Korean as qualified languages. Language-wide tags do
-not imply a particular accent. QNN entries report `backend: qnn` with empty
-qualified languages; the experimental model's quality gate remains open.
+the execution backend and of a bundle revision. The low-level engine accepts raw
+model IDs unchanged. The recommended `supertonic3-coreml-fp16-t384-voices-v1`
+bundle provides all ten presets from the official demo:
+
+| Model ID | Display name | Model ID | Display name |
+| --- | --- | --- | --- |
+| M1 | Alex | F1 | Sarah |
+| M2 | James | F2 | Lily |
+| M3 | Robert | F3 | Jessica |
+| M4 | Sam | F4 | Olivia |
+| M5 | Daniel | F5 | Emily |
+
+The catalog follows the ordered `contract.voices` declarations. Optional
+`voice_names` must name exactly those voices; legacy manifests retain their old
+labels and two-voice inventory. Every declared voice must have one locked
+`voice_<id>` artifact with Float32 `[1,50,256]` text/latent conditioning and
+`[1,8,16]` duration conditioning. Extra/missing artifacts, duplicate/unsafe IDs,
+invalid display names, incompatible tensors and nonfinite values are rejected.
+All other graph/runtime contracts remain strict. QNN's pinned artifact set is
+unchanged.
+
+A catalog reports exact bundle/revision/manifest identity, 31 frontend-supported
+languages and capabilities. Only M1/F1 in the exact accepted Core ML releases
+advertise English/Korean as qualified languages. The expanded release preserves
+their original graph and voice bytes; the eight added presets have empty
+`qualified_languages`. All 310 preset/language combinations have short real
+synthesis smoke checks, which do not establish intelligibility, speaker similarity
+or listening quality. See [voice coverage evidence](internal/voice-coverage.md).
+Language-wide tags do not imply a particular accent. QNN entries report
+`backend: qnn` with empty qualified languages; its quality gate remains open.
+
+Flutter reads the loaded `Tts.getVoices()` catalog, including display names and
+languages. Unloaded `getVoices()` describes the recommended release only; it
+does not promise those assets are installed. The example provides all 31 language
+choices, local sample texts, Arabic direction, and generation controls. Choosing
+a language preserves existing text; **Try an example** explicitly replaces it.
+Its 0.8–1.3× speech-speed slider matches the official demo's `raw_speed = speed +
+0.05`; the SDK's normalized `speakingRate` is therefore `(speed + 0.05) / 1.05`.
+Quality selects 2–16 generation steps. Both affect the next request; retained
+audio's playback-rate control remains independent.
 
 `BundleManifest::voice_catalog()` requires no assets or runtime and reports
 `CatalogOnly`; `Bundle::voice_catalog()` reports `AssetsVerified`;
@@ -30,9 +64,29 @@ and `seed.wrapping_add(original_segment_id)` retain their original identities.
 The shared [reader controls](reader-api.md) reuse these frozen plans and original
 indices for sentence navigation.
 
+For demand-driven playback, `Engine::prepare_speech(plan, voice, options, limits)`
+returns a cancellable planning job. It predicts all segment durations without
+generating PCM and completes without an audio consumer. After successful
+completion, `Job::prepared_speech()` returns an immutable `PreparedSpeech` with
+per-segment starts/lengths and a timestamp-to-segment lookup. This object holds no
+native tensors. Its voice, model identity, synthesis speed and seed remain fixed.
+
+`Engine::start_prepared_segment(prepared, index, limits)` generates just that
+original segment, reusing its duration decision. Segments may be requested in any
+order; skipped segments require no waveform work. Each job has local PCM offsets
+starting at zero, while source spans, original IDs and seeds remain unchanged.
+The ordinary queue and segment frame limits still apply. Planned lengths are
+estimates; callers must account for actual emitted lengths. This primitive does
+not itself provide a playback session or a cache.
+
 `Utf16Map` rejects interior UTF-8 bytes, interior surrogate pairs, reversed spans
 and out-of-range offsets. Source slicing never uses normalized-text offsets.
 The existing 64 KiB raw input and bounded, grapheme-safe segmentation limits apply.
+Supertonic3's [text policy](jobs.md#text-policy) keeps complete sentences in the
+recommended T=384 window and uses clause-aware fallbacks, while T=128 bundles
+retain conservative character targets. Every model's token limit is enforced.
+Chunk boundaries may change with library versions; sentence navigation
+and seeded suffixes remain consistent within each frozen plan.
 
 Validation for this change:
 

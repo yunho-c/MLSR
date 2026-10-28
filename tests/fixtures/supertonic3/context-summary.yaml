@@ -1,0 +1,297 @@
+schema_version: 1
+status: experimental_measured
+shipping_qualified: false
+listening_qualified: false
+scope: One English passage; M1 and F4; 3 official chunks per voice; 8 steps; raw speed
+  1.05; saved PCG64 noise; fixed reference durations; no added gaps.
+official_space_revision: 4402acca094e2ff2b3dff446e0bf915f3fccc462
+mobius_revision: 26f5fa8059d5ab3d34449adce6ff6ed86734e522
+mlsr_base_revision: '2299689'
+external_root: ~/.cache/mlsr/experiments/supertonic3-t384-20261018
+onnx_sha256:
+  duration_predictor.onnx: c3eb91414d5ff8a7a239b7fe9e34e7e2bf8a8140d8375ffb14718b1c639325db
+  text_encoder.onnx: c7befd5ea8c3119769e8a6c1486c4edc6a3bc8365c67621c881bbb774b9902ff
+  vector_estimator.onnx: 883ac868ea0275ef0e991524dc64f16b3c0376efd7c320af6b53f5b780d7c61c
+  vocoder.onnx: 085de76dd8e8d5836d6ca66826601f615939218f90e519f70ee8a36ed2a4c4ba
+text_capacity: 384
+text_lengths:
+- 173
+- 294
+- 295
+latent_buckets:
+- 256
+- 512
+valid_latent_lengths:
+  M1:
+  - 154
+  - 252
+  - 257
+  F4:
+  - 132
+  - 218
+  - 222
+reference_chunk_counts:
+  official: 3
+  mlsr: 14
+metrics:
+  text-padding:
+    raw_duration:
+      max_abs:
+        minimum: 0.15924644470214844
+        maximum: 0.2507972717285156
+      nrmse:
+        minimum: 0.01187675487715407
+        maximum: 0.016559977182453497
+    text_emb:
+      max_abs:
+        minimum: 0.2892603874206543
+        maximum: 0.3993840217590332
+      nrmse:
+        minimum: 0.03059745248078393
+        maximum: 0.05054226198253288
+    ve_step_07:
+      max_abs:
+        minimum: 0.4797680005431175
+        maximum: 2.1430410966277122
+      nrmse:
+        minimum: 0.10217371136181981
+        maximum: 0.49522491357027104
+    pcm:
+      max_abs:
+        minimum: 0.4700838178396225
+        maximum: 0.6407901346683502
+      nrmse:
+        minimum: 0.7107951196624176
+        maximum: 1.0590868485360334
+  bucket-padding:
+    raw_duration:
+      max_abs:
+        minimum: 0.0
+        maximum: 0.0
+      nrmse:
+        minimum: 0.0
+        maximum: 0.0
+    text_emb:
+      max_abs:
+        minimum: 0.0
+        maximum: 0.0
+      nrmse:
+        minimum: 0.0
+        maximum: 0.0
+    ve_step_07:
+      max_abs:
+        minimum: 1.1770262718200684
+        maximum: 3.5912672877311707
+      nrmse:
+        minimum: 0.3151507317412512
+        maximum: 0.838738100935333
+    pcm:
+      max_abs:
+        minimum: 0.46247368305921555
+        maximum: 0.660323977470398
+      nrmse:
+        minimum: 0.5137185067838417
+        maximum: 1.1101213881407188
+  torch-port:
+    raw_duration:
+      max_abs:
+        minimum: 1.9073486328125e-06
+        maximum: 1.52587890625e-05
+      nrmse:
+        minimum: 1.0306816402721123e-07
+        maximum: 9.71495000868881e-07
+    text_emb:
+      max_abs:
+        minimum: 5.245208740234375e-06
+        maximum: 3.0517578125e-05
+      nrmse:
+        minimum: 6.51158746061705e-07
+        maximum: 7.993480895568115e-07
+    ve_step_07:
+      max_abs:
+        minimum: 2.434849739074707e-05
+        maximum: 0.00024659931659698486
+      nrmse:
+        minimum: 4.698479791643684e-06
+        maximum: 3.0765337137451976e-05
+    pcm:
+      max_abs:
+        minimum: 0.0002528950572013855
+        maximum: 0.00641275942325592
+      nrmse:
+        minimum: 9.429376419059921e-05
+        maximum: 0.0013761188936511643
+  boundary_port_vs_dynamic:
+    raw_duration:
+      max_abs:
+        minimum: 3.814697265625e-06
+        maximum: 1.33514404296875e-05
+      nrmse:
+        minimum: 2.3539553158078221e-07
+        maximum: 1.0196299151260058e-06
+    text_emb:
+      max_abs:
+        minimum: 5.245208740234375e-06
+        maximum: 3.1948089599609375e-05
+      nrmse:
+        minimum: 6.538348293925761e-07
+        maximum: 7.90341106219919e-07
+    ve_step_07:
+      max_abs:
+        minimum: 2.2798776626586914e-05
+        maximum: 0.0004349350929260254
+      nrmse:
+        minimum: 5.001168127818068e-06
+        maximum: 4.5556528207574666e-05
+    pcm:
+      max_abs:
+        minimum: 0.0001288875937461853
+        maximum: 0.0024659931659698486
+      nrmse:
+        minimum: 7.135851493945547e-05
+        maximum: 0.0007807319856926525
+  fp16_ane_vs_dynamic:
+    raw_duration:
+      max_abs:
+        minimum: 0.01569843292236328
+        maximum: 0.1275806427001953
+      nrmse:
+        minimum: 0.0009869303229350411
+        maximum: 0.006926467443614823
+    text_emb:
+      max_abs:
+        minimum: 0.023088932037353516
+        maximum: 0.0882868766784668
+      nrmse:
+        minimum: 0.0026967555858188577
+        maximum: 0.003147030191857324
+    ve_step_07:
+      max_abs:
+        minimum: 0.15430781245231628
+        maximum: 0.8982389569282532
+      nrmse:
+        minimum: 0.05470547813357245
+        maximum: 0.2498983611993191
+    pcm:
+      max_abs:
+        minimum: 0.3786120116710663
+        maximum: 0.6932286024093628
+      nrmse:
+        minimum: 0.31316219413157714
+        maximum: 0.8100943344097558
+  fp16_cpu_vs_dynamic:
+    raw_duration:
+      max_abs:
+        minimum: 0.018205642700195312
+        maximum: 0.09610366821289062
+      nrmse:
+        minimum: 0.0009884006600383245
+        maximum: 0.008104018565421495
+    text_emb:
+      max_abs:
+        minimum: 0.029955387115478516
+        maximum: 0.06073713302612305
+      nrmse:
+        minimum: 0.003597763671242271
+        maximum: 0.004199701936581276
+    ve_step_07:
+      max_abs:
+        minimum: 0.24701741337776184
+        maximum: 0.8311495184898376
+      nrmse:
+        minimum: 0.04937167022495749
+        maximum: 0.2744270231638161
+    pcm:
+      max_abs:
+        minimum: 0.3839831054210663
+        maximum: 0.6249793171882629
+      nrmse:
+        minimum: 0.3206459049666159
+        maximum: 0.7018815854674808
+  fp32_cpu_vs_dynamic:
+    raw_duration:
+      max_abs:
+        minimum: 0.0
+        maximum: 1.33514404296875e-05
+      nrmse:
+        minimum: 0.0
+        maximum: 7.24861667917053e-07
+    text_emb:
+      max_abs:
+        minimum: 6.198883056640625e-06
+        maximum: 1.9073486328125e-05
+      nrmse:
+        minimum: 7.164511951870657e-07
+        maximum: 7.968825579285217e-07
+    ve_step_07:
+      max_abs:
+        minimum: 8.392333984375e-05
+        maximum: 0.000860750675201416
+      nrmse:
+        minimum: 1.4374124125309074e-05
+        maximum: 0.00012404892422915746
+    pcm:
+      max_abs:
+        minimum: 0.0008339732885360718
+        maximum: 0.010433893650770187
+      nrmse:
+        minimum: 0.0003611621025756859
+        maximum: 0.0023606712814749167
+placement:
+  duration_predictor:
+    op_counts:
+      cpu: 105
+      ane: 118
+    estimated_cost_percent:
+      cpu_percent: 83.11
+      gpu_percent: 0.0
+      ane_percent: 16.89
+  text_encoder:
+    op_counts:
+      cpu: 54
+      ane: 282
+    estimated_cost_percent:
+      cpu_percent: 44.76
+      gpu_percent: 0.0
+      ane_percent: 55.24
+  vector_estimator_L256:
+    op_counts:
+      ane: 800
+    estimated_cost_percent:
+      cpu_percent: 0.0
+      gpu_percent: 0.0
+      ane_percent: 100.0
+  vector_estimator_L512:
+    op_counts:
+      ane: 800
+    estimated_cost_percent:
+      cpu_percent: 0.0
+      gpu_percent: 0.0
+      ane_percent: 100.0
+  vocoder:
+    op_counts:
+      ane: 107
+    estimated_cost_percent:
+      cpu_percent: 0.0
+      gpu_percent: 0.0
+      ane_percent: 100.0
+placement_limit: MLComputePlan assignments/cost estimates, not measured ANE residency
+  or utilization.
+evidence:
+  onnx-controls/report.yaml: 696639412ba2908741bc65473734cd5efb6c578cbe483f1bc73ee690345d87e3
+  padding-port-v3/report.yaml: 89782894e8b368f7234e2ddda5c2bb3ecd9135b076daf413eae13944f2c3fe9a
+  boundary-port-final/report.yaml: b14c238a6a71419e60db7b78e3c201a61a1ef8b28a7dfadbd5f27dd1b029aa91
+  coreml-boundary-fp16/manifest.yaml: c21cfa3939116bd08308652372133d27114483ce0f89acb31c80f5ad34a14106
+  coreml-boundary-fp32/manifest.yaml: 2f1c9b0a39bc054ee8eacc91d4ad7a90e8082e2ea14c6a130cae60f24e60fb5c
+  coreml-boundary-ane-replay/report.yaml: ebab59b490112b9f22f276145e3b55755526205b490a0eca91daf2e4920757c5
+  coreml-boundary-cpu-replay/report.yaml: d8b4b18dffbd44c57e509a39f55086ba4e2915a9b20895b174725acdcf059d35
+  coreml-boundary-fp32-replay/report.yaml: b9b9b4c99930cd6a56e21dd83dbc79c866b922901f70037047ca1e3c0bbbf961
+  coreml-boundary-placement.yaml: 4266db18e403881faac91f4f97aa2f40e97e1ce06754acdc6b6387d6006ef7e4
+portable_validation:
+  model_tool_tests: 54
+  passed: true
+  ruff: passed
+  black: formatted
+  git_diff_check: passed
+  log: portable-checks.log
+  log_sha256: 7097b7270717c973b0db2dd0b5f8f3d2c0ab94799cd26fae06a3f999ca5ffa55

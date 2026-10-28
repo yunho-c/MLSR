@@ -2,6 +2,7 @@ package mlsr
 
 import (
 	"context"
+	"errors"
 	"io"
 	"runtime"
 	"sync"
@@ -195,6 +196,9 @@ func (t *TTS) Say(ctx context.Context, text string) (*Speech, error) {
 	return t.Speak(ctx, DefaultSpeechRequest(text), DefaultSpeechOptions(), Replace)
 }
 func speak(ctx context.Context, resource *sdkOwned, owner any, request SpeechRequest, options SpeechOptions, mode SpeakMode) (*Speech, error) {
+	if options.OnDemandSeeking && !options.RetainAudio {
+		return nil, errors.New("on-demand seeking requires RetainAudio")
+	}
 	if err := validContext(ctx); err != nil {
 		return nil, err
 	}
@@ -486,8 +490,12 @@ func (s *Speech) Seek(frame uint64) error {
 	return sdkSeek(h, frame)
 }
 
-// ReplayFrom gives a completed recording a new request identity, sharing PCM.
+// ReplayFrom gives completed speech a new identity, sharing its recording or
+// reader cache. On-demand readers regenerate missing destinations as needed.
 func (s *Speech) ReplayFrom(ctx context.Context, frame uint64, options SpeechOptions, mode SpeakMode) (*Speech, error) {
+	if options.OnDemandSeeking && !options.RetainAudio {
+		return nil, errors.New("on-demand seeking requires RetainAudio")
+	}
 	defer runtime.KeepAlive(s)
 	if err := validContext(ctx); err != nil {
 		return nil, err

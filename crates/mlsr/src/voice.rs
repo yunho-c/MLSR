@@ -4,7 +4,6 @@ use crate::{
     models::supertonic3::SUPPORTED_LANGUAGES,
 };
 use serde::Serialize;
-use std::sync::OnceLock;
 
 /// What has actually been established when this metadata snapshot was taken.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -135,7 +134,13 @@ impl ResolvedVoice {
         self.used_fallback
     }
 }
-/// Ordered immutable voice metadata. Selection order is deterministic (M1, F1).
+pub(crate) struct VoiceDeclaration {
+    pub id: String,
+    pub display_name: String,
+    pub qualified_languages: Vec<String>,
+}
+
+/// Ordered immutable voice metadata. Selection follows manifest declaration order.
 #[derive(Clone, Debug, Serialize)]
 pub struct VoiceCatalog {
     voices: Vec<VoiceDescriptor>,
@@ -147,32 +152,22 @@ impl VoiceCatalog {
         manifest: &str,
         backend: crate::runtime::BackendKind,
         readiness: VoiceReadiness,
+        declarations: impl IntoIterator<Item = VoiceDeclaration>,
     ) -> Self {
-        static QUALIFIED_MANIFEST: OnceLock<String> = OnceLock::new();
-        let qualified_languages = if manifest
-            == QUALIFIED_MANIFEST.get_or_init(|| {
-                crate::models::supertonic3::BundleManifest::baseline()
-                    .sha256()
-                    .into()
-            }) {
-            vec!["en".into(), "ko".into()]
-        } else {
-            Vec::new()
-        };
         Self {
-            voices: ["M1", "F1"]
+            voices: declarations
                 .into_iter()
-                .map(|id| VoiceDescriptor {
-                    id: format!("supertonic3:{id}"),
-                    model_voice_id: id.into(),
-                    display_name: format!("Supertonic 3 {id}"),
+                .map(|declaration| VoiceDescriptor {
+                    id: format!("supertonic3:{}", declaration.id),
+                    model_voice_id: declaration.id,
+                    display_name: declaration.display_name,
                     model: "supertonic3".into(),
                     bundle_id: bundle.into(),
                     revision: revision.into(),
                     manifest_sha256: manifest.into(),
                     backend: backend.as_str().into(),
                     languages: SUPPORTED_LANGUAGES.iter().map(|s| (*s).into()).collect(),
-                    qualified_languages: qualified_languages.clone(),
+                    qualified_languages: declaration.qualified_languages,
                     requires_network: false,
                     readiness,
                     capabilities: VoiceCapabilities {
@@ -199,7 +194,7 @@ impl VoiceCatalog {
     pub fn voices(&self) -> &[VoiceDescriptor] {
         &self.voices
     }
-    /// Exact stable ID lookup. Raw M1/F1 aliases belong to the low-level engine.
+    /// Exact stable ID lookup. Raw voice aliases belong to the low-level engine.
     pub fn get(&self, id: &str) -> Result<&VoiceDescriptor> {
         self.voices
             .iter()
@@ -267,6 +262,14 @@ mod tests {
         assert_eq!(voice.readiness(), VoiceReadiness::CatalogOnly);
         assert_eq!(voice.languages().len(), 31);
         assert_eq!(voice.qualified_languages(), &["en", "ko"]);
+        assert_eq!(
+            BundleManifest::recommended()
+                .voice_catalog()
+                .get("supertonic3:M1")
+                .unwrap()
+                .qualified_languages(),
+            &["en", "ko"]
+        );
         assert!(!voice.requires_network());
         assert!(!voice.capabilities().word_alignment);
         let fixture = Fixture::new();

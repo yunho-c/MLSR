@@ -22,6 +22,7 @@ from tools.supertonic3.bundle import (
     prepare_bundle,
     relative_path,
     verify_bundle,
+    validate_voice_style,
     write_yaml,
 )
 from tools.supertonic3.frontend import (
@@ -57,6 +58,81 @@ class ManifestTests(unittest.TestCase):
             for entry in artifact["files"]:
                 url = asset_url(self.manifest, entry["path"])
                 self.assertIn("/resolve/5cd12d1c4cb524e704ce40ba1048e36c2e7ea2fa/", url)
+
+    def test_local_fp16_export_has_consistent_axes_and_cannot_fake_a_download(self):
+        manifest = load_manifest(ROOT / "model-manifests/supertonic3-coreml-fp16.yaml")
+        self.assertEqual(manifest["contract"]["text_tokens"], 384)
+        with self.assertRaisesRegex(ReferenceError, "no published download"):
+            asset_url(manifest, "tts.json")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "manifest.yaml"
+            manifest["artifacts"]["ve_128"]["inputs"]["text_emb"]["shape"][-1] = 128
+            write_yaml(path, manifest)
+            with self.assertRaisesRegex(ReferenceError, "Tensor interface"):
+                load_manifest(path)
+
+    def test_expanded_voices_preserve_graphs_and_only_download_pinned_styles(self):
+        base = load_manifest(ROOT / "model-manifests/supertonic3-coreml-fp16.yaml")
+        expanded = load_manifest(
+            ROOT / "model-manifests/supertonic3-coreml-fp16-voices.yaml"
+        )
+        self.assertEqual(len(expanded["contract"]["voices"]), 10)
+        self.assertEqual(expanded["voice_names"]["F4"], "Olivia")
+        for key, artifact in base["artifacts"].items():
+            self.assertEqual(expanded["artifacts"][key], artifact)
+        self.assertEqual(
+            asset_url(expanded, "voice_styles/F4.json"),
+            "https://huggingface.co/spaces/Supertone/supertonic-3/resolve/4402acca094e2ff2b3dff446e0bf915f3fccc462/assets/voice_styles/F4.json",
+        )
+        for path in ("tts.json", expanded["artifacts"]["ve_128"]["files"][0]["path"]):
+            with self.assertRaisesRegex(ReferenceError, "no published download"):
+                asset_url(expanded, path)
+        expanded["provenance"]["voice_styles"]["revision"] = "main"
+        with self.assertRaisesRegex(ReferenceError, "must pin"):
+            asset_url(expanded, "voice_styles/F4.json")
+
+    def test_voice_declarations_and_names_must_agree_with_artifacts(self):
+        for voices in ([], ["M1", "M1"], ["../M1"], [42], ["M1", "F4"]):
+            self.changed_manifest(lambda m: m["contract"].update(voices=voices))
+        self.changed_manifest(lambda m: m.update(voice_names={"M1": "Alex"}))
+        self.changed_manifest(lambda m: m.update(voice_names={"M1": "", "F1": "Sarah"}))
+        self.changed_manifest(
+            lambda m: m["artifacts"]["voice_F1"].update(kind="coreml_compiled")
+        )
+
+    def test_voice_style_contract_rejects_invalid_shape_and_nonfinite_values(self):
+        value = {
+            key: {"type": "float32", "dims": shape, "data": np.zeros(shape).tolist()}
+            for key, shape in (("style_ttl", [1, 50, 256]), ("style_dp", [1, 8, 16]))
+        }
+        validate_voice_style(value)
+        for mutation in (
+            lambda v: v["style_ttl"].update(dims=[1, 50, 255]),
+            lambda v: v["style_ttl"].update(dims=[True, 50, 256]),
+            lambda v: v["style_dp"].update(type="float16"),
+            lambda v: v["style_dp"]["data"][0][0].__setitem__(0, float("nan")),
+            lambda v: v["style_dp"]["data"][0][0].__setitem__(0, 1e100),
+            lambda v: v["style_dp"].update(data=[]),
+        ):
+            changed = copy.deepcopy(value)
+            mutation(changed)
+            with self.assertRaises(ReferenceError):
+                validate_voice_style(changed)
+
+    def test_expanded_frontend_matches_independent_upstream_fixture(self):
+        corpus = load_corpus(ROOT / "tests/fixtures/supertonic3/fp16-corpus.yaml")
+        path = ROOT / "tests/fixtures/supertonic3/fp16-frontend.yaml"
+        expected = load_yaml(path)
+        indexer = [-1] * 65536
+        for case in expected["cases"].values():
+            for character, token in zip(
+                case.get("normalized_text", ""), case.get("tokens", [])
+            ):
+                indexer[ord(character)] = token
+        self.assertEqual(
+            len(check_frontend(corpus, indexer, path, capacity=384)),
+            len(corpus["cases"]),
+        )
 
     def test_duplicate_yaml_keys_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

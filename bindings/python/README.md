@@ -14,7 +14,7 @@ environment variable before the first call; the loaded library is cached.
 ```python
 import mlsr
 
-with mlsr.Tts("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as tts:
+with mlsr.Tts("model-manifests/supertonic3-coreml-fp16-voices.yaml", "/path/to/bundle") as tts:
     print(tts.voices)  # Stable IDs and loaded-engine readiness.
     with tts.speak("Hello from MLSR.") as speech:
         speech.set_playback_rate(1.25)  # Pitch-preserving, independent of synthesis.
@@ -30,12 +30,21 @@ with mlsr.Tts("model-manifests/supertonic3-coreml.yaml", "/path/to/bundle") as t
 within `tts.controller`; use `mode="enqueue"` or `tts.create_controller()` for a
 separate scope. Speech supports pause/resume, volume, playback rate, retained-frame
 seek, previous/next sentence and explicit original-sentence navigation. A
-navigation result contains a new `speech` when inference must restart. Completed
-recordings use `speech.replay_from(frame)` to create a new identity; the original
+navigation result contains a new `speech` for ungenerated text in default
+full-recording mode. Completed speech uses `speech.replay_from(frame)` to create a new identity; the original
 completion remains immutable. Discarding a Speech object preserves fire-and-forget
 playback. Explicit `close()` cancels/joins and releases its retained recording.
 `speech.request` / `job.request` expose the copied accepted input, resolved voice,
 effective model speed/steps/seed and original navigation start segment.
+
+Use `SpeechOptions(on_demand_seeking=True)` to seek anywhere after duration
+planning. Uncached destinations generate directly without reading skipped passages,
+preserving active identity and pause/rate/volume. `seeking` / `seek_target_frame`
+expose preparation, `seekable_ranges` covers the planned document, and
+`buffered_ranges` identifies actual, possibly disjoint cached audio. The bounded
+cache evicts old segments and regenerates them on return. Export after completed
+playback requires `recording_complete`. Full retention remains the default; see
+[reader policies and limits](../../docs/reader-api.md).
 
 Read `speech.snapshot` or use `with speech.states() as states: ...` to observe
 coalesced state without draining PCM. State includes source-frame position,
@@ -95,7 +104,7 @@ raw speed and event meanings:
 import mlsr
 
 with mlsr.Engine(
-    "model-manifests/supertonic3-coreml.yaml", "/path/to/bundle"
+    "model-manifests/supertonic3-coreml-fp16-voices.yaml", "/path/to/bundle"
 ) as engine:
     with engine.start("Hello from MLSR.", language="en", voice="M1") as job:
         for event in job:
@@ -119,7 +128,7 @@ From the repository root, build the native library and run the WAV example:
 MACOSX_DEPLOYMENT_TARGET=15.0 cargo build --locked --release -p mlsr-ffi --features coreml
 MLSR_LIBRARY_PATH="$PWD/target/release/libmlsr_ffi.dylib" \
   PYTHONPATH=bindings/python/src python3 bindings/python/examples/synthesize.py \
-  --manifest model-manifests/supertonic3-coreml.yaml --bundle /path/to/bundle \
+  --manifest model-manifests/supertonic3-coreml-fp16-voices.yaml --bundle /path/to/bundle \
   --output hello.wav --cancel-first
 ```
 

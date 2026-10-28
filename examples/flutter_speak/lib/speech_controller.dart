@@ -3,13 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'package:mlsr_flutter/mlsr_flutter.dart';
 import 'package:mlsr_app_models/app_models.dart';
 import 'file_dialog.dart';
+import 'speech_language.dart';
+import 'speech_timeline.dart';
 
 class _Presentation {
   final Speech speech;
   final String original;
+  final String language;
   SpeechState? state;
   StreamSubscription<SpeechState>? subscription;
-  _Presentation(this.speech, this.original);
+  _Presentation(this.speech, this.original, this.language);
   Future<void> close() async {
     await subscription?.cancel();
     await speech.dispose();
@@ -22,6 +25,8 @@ class _Presentation {
 class DemoController extends ChangeNotifier {
   final bool muted;
   Tts? _tts;
+  List<Voice> voices = const [];
+  Map<String, SpeechLanguage> languages = const {};
   final Map<int, _Presentation> _presentations = {};
   final Set<Future<void>> _retiring = {};
   _Presentation? _current;
@@ -35,14 +40,18 @@ class DemoController extends ChangeNotifier {
 
   Speech? get speech => _current?.speech;
   SpeechState? get state => _current?.state;
+  SpeechTimeline get timeline => SpeechTimeline(state);
   String get original => _current?.original ?? '';
+  String get originalLanguage => _current?.language ?? 'en';
+  bool get originalIsRtl => languages[originalLanguage]?.rtl ?? false;
   bool get speaking => _current != null && state?.completion == null;
   bool get paused => state?.playback == PlaybackPhase.paused;
   bool get generating =>
       speaking &&
       state?.synthesis != SynthesisPhase.generated &&
       state?.synthesis != SynthesisPhase.terminal;
-  bool get canExport => state?.completion?.kind == OutcomeKind.completed;
+  bool get canReplay => state?.completion?.kind == OutcomeKind.completed;
+  bool get canExport => canReplay && (state?.recordingComplete ?? false);
   int get generatedFrames => state?.bufferedUntilFrame ?? 0;
   int get playedFrames => state?.positionFrame ?? 0;
   int get pendingCount => _presentations.values
@@ -54,13 +63,14 @@ class DemoController extends ChangeNotifier {
   String get status {
     if (loading || !ready) return _loadStatus;
     if (_current == null) return 'Ready when you are';
+    if (state?.seeking ?? false) return 'Preparing selected passage…';
     return switch (state?.playback) {
       null || PlaybackPhase.queued => 'Waiting to speak…',
       PlaybackPhase.buffering => 'Finding the next words…',
       PlaybackPhase.playing => 'Reading aloud',
       PlaybackPhase.draining => 'Finishing playback',
       PlaybackPhase.paused => 'Paused',
-      PlaybackPhase.ended => 'All spoken. Yours to keep.',
+      PlaybackPhase.ended => 'Finished reading',
       PlaybackPhase.stopped => 'Stopped',
       PlaybackPhase.failed => 'Speech interrupted',
     };
@@ -86,6 +96,7 @@ class DemoController extends ChangeNotifier {
     error = null;
     _update();
     try {
+      languages = await SpeechLanguage.load();
       final tts = await FlutterMlsr.openTts(
         model: AppModels.supertonic3,
         delivery: delivery,
@@ -103,12 +114,22 @@ class DemoController extends ChangeNotifier {
           _update();
         },
       );
-      if (_closed) {
+      try {
+        final catalog = await tts.getVoices();
+        if (catalog.isEmpty) {
+          throw StateError('This model has no available voices');
+        }
+        if (_closed) {
+          await tts.dispose();
+          return;
+        }
+        voices = catalog;
+        _tts = tts;
+        ready = true;
+      } catch (_) {
         await tts.dispose();
-        return;
+        rethrow;
       }
-      _tts = tts;
-      ready = true;
     } catch (failure) {
       error = failure.toString();
       _loadStatus = 'Could not load voices';
@@ -119,6 +140,7 @@ class DemoController extends ChangeNotifier {
   }
 
   SpeechOptions _options({bool paused = false}) => SpeechOptions(
+    onDemandSeeking: true,
     volume: muted ? 0 : volume,
     playbackRate: playbackRate,
     paused: paused,
@@ -132,6 +154,8 @@ class DemoController extends ChangeNotifier {
     String voice, {
     SpeakMode mode = SpeakMode.replace,
     bool paused = false,
+    double synthesisSpeed = 1,
+    int steps = 8,
   }) {
     if (!ready || loading || exporting || _closed || text.trim().isEmpty) {
       return null;
@@ -139,7 +163,16 @@ class DemoController extends ChangeNotifier {
     try {
       final next = _tts!.speak(
         text,
-        request: RequestOptions(locale: language, voice: 'supertonic3:$voice'),
+        request: RequestOptions(
+          locale: language,
+          voice: voice.isEmpty || voice.startsWith('supertonic3:')
+              ? voice
+              : 'supertonic3:$voice',
+          // The official demo maps its speed slider to raw speed + 0.05;
+          // MLSR's public normalized rate maps to raw rate * 1.05.
+          speakingRate: (synthesisSpeed + .05) / 1.05,
+          backend: SupertonicOptions(steps: steps),
+        ),
         options: _options(paused: paused),
         mode: mode,
       );
@@ -149,7 +182,12 @@ class DemoController extends ChangeNotifier {
         }
       }
       error = null;
-      _observe(next, text, select: mode == SpeakMode.replace || !speaking);
+      _observe(
+        next,
+        text,
+        language,
+        select: mode == SpeakMode.replace || !speaking,
+      );
       return next;
     } catch (failure) {
       _failure(failure);
@@ -157,8 +195,13 @@ class DemoController extends ChangeNotifier {
     }
   }
 
-  void _observe(Speech next, String original, {bool select = true}) {
-    final entry = _Presentation(next, original);
+  void _observe(
+    Speech next,
+    String original,
+    String language, {
+    bool select = true,
+  }) {
+    final entry = _Presentation(next, original, language);
     _presentations[next.id] = entry;
     if (select) _select(entry);
     entry.subscription = next.states.listen(
@@ -234,11 +277,12 @@ class DemoController extends ChangeNotifier {
   }
 
   void togglePause() => _control((current) {
-    if (canExport) {
+    if (canReplay) {
       final next = current.replayFrom(0, options: _options());
       final text = original;
+      final language = originalLanguage;
       _retire(_current!);
-      _observe(next, text);
+      _observe(next, text, language);
     } else if (paused) {
       current.resume();
     } else {
@@ -262,11 +306,12 @@ class DemoController extends ChangeNotifier {
   }
 
   void seek(int frame) => _control((current) {
-    if (canExport) {
+    if (canReplay) {
       final next = current.replayFrom(frame, options: _options(paused: true));
       final text = original;
+      final language = originalLanguage;
       _retire(_current!);
-      _observe(next, text);
+      _observe(next, text, language);
     } else {
       current.seek(frame);
     }
@@ -275,8 +320,9 @@ class DemoController extends ChangeNotifier {
     final result = next ? current.nextSentence() : current.previousSentence();
     if (result.speech case final replacement?) {
       final text = original;
+      final language = originalLanguage;
       _retire(_current!);
-      _observe(replacement, text);
+      _observe(replacement, text, language);
     }
   });
 

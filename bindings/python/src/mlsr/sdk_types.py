@@ -277,7 +277,10 @@ class SpeechOptions:
     volume: float = 1.0
     paused: bool = False
     retain_audio: bool = True
+    # Retained speech segment-start horizon; admitted segments are retained in full.
     lookahead_frames: int = 88200
+    # Requires retain_audio; enables generation on seek and bounded cache eviction.
+    on_demand_seeking: bool = False
 
 
 @dataclass(frozen=True)
@@ -350,6 +353,10 @@ class SpeechState:
     position_frame: int
     buffered_until_frame: int
     seekable_ranges: tuple[Span, ...]
+    buffered_ranges: tuple[Span, ...]
+    seeking: bool
+    seek_target_frame: int | None
+    recording_complete: bool
     estimated_frames: int | None
     duration_frames: int | None
     playback_rate: float
@@ -368,6 +375,13 @@ class SpeechState:
                 "seekable_ranges": tuple(
                     Span(**span) for span in data["seekable_ranges"]
                 ),
+                "buffered_ranges": tuple(
+                    Span(**span)
+                    for span in data.get("buffered_ranges", data["seekable_ranges"])
+                ),
+                "seeking": data.get("seeking", False),
+                "seek_target_frame": data.get("seek_target_frame"),
+                "recording_complete": data.get("recording_complete", False),
                 "active_text_range": (
                     TextRange._parse(data["active_text_range"])
                     if data["active_text_range"]

@@ -14,7 +14,7 @@ dependencies:
   mlsr_flutter:
     path: ../../bindings/flutter
   mlsr_app_models:
-    path: .mlsr/model_assets
+    path: .mlsr/model_assets_voices
 
 dev_dependencies:
   flutter_test:
@@ -26,6 +26,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/languages.json
     - assets/fonts/fraunces-OFL.txt
     - assets/fonts/manrope-OFL.txt
   fonts:

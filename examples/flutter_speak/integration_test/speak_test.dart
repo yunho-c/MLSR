@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 // Native registry counts are diagnostic test-only evidence.
@@ -30,9 +31,20 @@ int wavFrames(Uint8List bytes) {
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  // This suite drives a resumed lifecycle. Desktop automation can launch a
+  // hidden window, whose native lifecycle messages would otherwise stop pumps.
+  SystemChannels.lifecycle.setMessageHandler((_) async => null);
+  binding.platformDispatcher.initialLifecycleStateTestValue =
+      'AppLifecycleState.resumed';
+  binding.resetInternalState();
+  binding.readTestInitialLifecycleStateFromNativeWindow();
   testWidgets('public SDK speak, reader and export keep the UI responsive', (
     tester,
   ) async {
+    // Track enterText client IDs with the test keyboard; the integration binding
+    // otherwise delegates input connections to the native window's IME.
+    tester.testTextInput.register();
+    addTearDown(tester.testTextInput.unregister);
     const output = String.fromEnvironment('MLSR_TEST_OUTPUT');
     expect(output, isNotEmpty);
     final directory = Directory(output);
@@ -53,6 +65,8 @@ void main() {
     final report = <String, Object?>{
       'passed': false,
       'muted': true,
+      'controlled_flutter_lifecycle': 'resumed',
+      'keyboard': 'flutter_test',
       'timing_boundary':
           'UI observation at 20 ms pump intervals; not acoustic or native flush timing',
     };
@@ -95,18 +109,135 @@ void main() {
       await until(() => !speech.loading);
       await loading;
       expect(speech.ready, isTrue, reason: speech.error);
+      expect(speech.voices.length, 10);
+      expect(
+        speech.voices.every(
+          (voice) =>
+              voice.languages.length == 31 &&
+              voice.readiness == VoiceReadiness.engineReady,
+        ),
+        isTrue,
+      );
+      report['voices'] = speech.voices
+          .map(
+            (voice) => {
+              'id': voice.id,
+              'name': voice.displayName,
+              'languages': voice.languages,
+              'qualified_languages': voice.qualifiedLanguages,
+            },
+          )
+          .toList();
       expect(ticks, greaterThan(5));
       await screenshot('ready');
+      // Exercise the real catalog selectors and generation controls through the
+      // app, then inspect the immutable request received by the shared SDK.
+      await tap('voice');
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Olivia · F4'),
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.text('Olivia · F4').last);
+      await tester.pumpAndSettle();
+      await tap('language');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('العربية · Arabic').last);
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('script')),
-        List.filled(12, english).join('\n'),
+        speech.languages['ar']!.sample,
+      );
+      tester
+          .widget<Slider>(find.byKey(const Key('synthesis-speed')))
+          .onChanged!(1.3);
+      tester.widget<Slider>(find.byKey(const Key('quality-steps'))).onChanged!(
+        2,
+      );
+      await tester.pump();
+      await tap('speak');
+      final expandedRequest = await speech.speech!.request();
+      expect(expandedRequest.voice.voice.id, 'supertonic3:F4');
+      expect(expandedRequest.voice.language, 'ar');
+      expect(expandedRequest.backend.steps, 2);
+      expect(expandedRequest.effectiveSpeed, closeTo(1.35, .000001));
+      await until(() => !speech.speaking || speech.error != null);
+      expect(speech.error, isNull);
+      expect(speech.originalIsRtl, isTrue);
+      await speech.exportTo('$output/olivia-ar.wav');
+      await screenshot('arabic');
+      report['expanded_voice_request'] = {
+        'voice': expandedRequest.voice.voice.id,
+        'language': expandedRequest.voice.language,
+        'steps': expandedRequest.backend.steps,
+        'effective_speed': expandedRequest.effectiveSpeed,
+        'frames': speech.generatedFrames,
+      };
+      // Restore defaults for the existing lifecycle and reader regressions.
+      tester
+          .widget<DropdownButton<String>>(
+            find.descendant(
+              of: find.byKey(const Key('voice')),
+              matching: find.byType(DropdownButton<String>),
+            ),
+          )
+          .onChanged!('supertonic3:M1');
+      tester
+          .widget<DropdownButton<String>>(
+            find.descendant(
+              of: find.byKey(const Key('language')),
+              matching: find.byType(DropdownButton<String>),
+            ),
+          )
+          .onChanged!('en');
+      tester
+          .widget<Slider>(find.byKey(const Key('synthesis-speed')))
+          .onChanged!(1);
+      tester.widget<Slider>(find.byKey(const Key('quality-steps'))).onChanged!(
+        8,
+      );
+      await tester.pump();
+      final longText = List.filled(12, english).join('\n');
+      await tester.enterText(find.byKey(const Key('script')), longText);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('script')))
+            .controller!
+            .text,
+        longText,
       );
       final onset = Stopwatch()..start();
       await tap('speak');
+      report['long_request_characters'] = speech.original.length;
+      report['long_request_language'] = speech.originalLanguage;
+      expect(speech.original, longText);
       await until(() => speech.generatedFrames >= 8192 || speech.error != null);
       expect(speech.error, isNull);
       report['first_retained_pcm_observed_ms'] =
           onset.elapsedMicroseconds / 1000;
+      // A long request has a whole-document scale before playback has advanced,
+      // while segment admission and retained bytes obey their separate budgets.
+      final earlyTimeline = speech.state!;
+      expect(earlyTimeline.estimatedFrames, isNotNull);
+      expect(earlyTimeline.durationFrames, isNull);
+      expect(
+        earlyTimeline.estimatedFrames!,
+        greaterThan(earlyTimeline.bufferedUntilFrame),
+      );
+      final seek = tester.widget<Slider>(find.byKey(const Key('seek')));
+      expect(seek.max, earlyTimeline.estimatedFrames!.toDouble());
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.byKey(const Key('playback-progress')),
+      );
+      expect(
+        progress.value,
+        earlyTimeline.positionFrame / earlyTimeline.estimatedFrames!,
+      );
+      report['early_duration_estimate_frames'] = earlyTimeline.estimatedFrames;
+      report['position_at_early_estimate_frames'] = earlyTimeline.positionFrame;
+      report['buffer_at_early_estimate_frames'] =
+          earlyTimeline.bufferedUntilFrame;
       await until(() => speech.playedFrames > 0 || speech.error != null);
       report['first_position_observed_ms'] = onset.elapsedMicroseconds / 1000;
       final retained = (await speech.engineState()).retention;
@@ -121,6 +252,102 @@ void main() {
       expect(speech.state!.completion!.reason, CancelReason.requested);
       expect(speech.canExport, isFalse);
       expect(speech.error, isNull);
+
+      // An admitted segment drains to retention even while the native output
+      // is paused. Seeking past the old two-second boundary must work.
+      speech.speak(
+        'This sentence has enough words to take well over two seconds to read.\n'
+            'The second sentence follows later.',
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(
+        () =>
+            (speech.generatedFrames > 88200 && speech.paused) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      await tester.pump(const Duration(milliseconds: 300));
+      final retainedSegment = speech.generatedFrames;
+      expect(speech.playedFrames, 0);
+      expect(retainedSegment, lessThan(speech.state!.estimatedFrames!));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(speech.generatedFrames, retainedSegment);
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const Key('seek')))
+            .secondaryTrackValue,
+        retainedSegment.toDouble(),
+      );
+      const beyondLookahead = 88200 + 4096;
+      speech.seek(beyondLookahead);
+      await until(
+        () => speech.playedFrames == beyondLookahead || speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.paused, isTrue);
+      report['paused_retained_segment_frames'] = retainedSegment;
+      report['segment_start_lookahead_frames'] = 88200;
+      report['seek_beyond_lookahead_frame'] = speech.playedFrames;
+      await screenshot('paused-retention');
+      speech.stop();
+      await until(() => !speech.speaking);
+
+      // A real scrubber jump into ungenerated text keeps the document identity,
+      // full scale, pause state and previously cached regions.
+      speech.speak(
+        List.filled(12, english).join('\n'),
+        'en',
+        'M1',
+        paused: true,
+      );
+      await until(() => speech.generatedFrames > 88200 || speech.error != null);
+      expect(speech.error, isNull);
+      final documentId = speech.speech!.id;
+      final plannedFrames = speech.state!.estimatedFrames!;
+      final firstReadyEnd = speech.state!.bufferedRanges.first.end;
+      final distantTarget = (plannedFrames * .72).round();
+      expect(distantTarget, greaterThan(firstReadyEnd));
+      expect(speech.timeline.canSeek(distantTarget), isTrue);
+      expect(speech.timeline.isBuffered(distantTarget), isFalse);
+      final distantSeek = Stopwatch()..start();
+      var scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeStart!(scrubber.value);
+      scrubber.onChanged!(distantTarget.toDouble());
+      await tester.pump();
+      scrubber = tester.widget<Slider>(find.byKey(const Key('seek')));
+      scrubber.onChangeEnd!(distantTarget.toDouble());
+      await until(
+        () =>
+            (!speech.state!.seeking &&
+                speech.playedFrames == distantTarget &&
+                speech.timeline.isBuffered(distantTarget)) ||
+            speech.error != null,
+      );
+      expect(speech.error, isNull);
+      expect(speech.speech!.id, documentId);
+      expect(speech.state!.estimatedFrames, plannedFrames);
+      expect(speech.paused, isTrue);
+      expect(speech.state!.bufferedRanges.length, greaterThanOrEqualTo(2));
+      expect(speech.timeline.isBuffered(firstReadyEnd + 4096), isFalse);
+      report['unbuffered_seek_observed_ms'] =
+          distantSeek.elapsedMicroseconds / 1000;
+      report['unbuffered_seek_target_frame'] = distantTarget;
+      report['unbuffered_seek_preserved_request'] =
+          speech.speech!.id == documentId;
+      report['disjoint_buffered_ranges'] = speech.state!.bufferedRanges
+          .map((range) => [range.start, range.end])
+          .toList();
+      await screenshot('unbuffered-seek');
+      speech.seek(4096);
+      await until(() => !speech.state!.seeking && speech.playedFrames == 4096);
+      expect(speech.speech!.id, documentId);
+      expect(speech.paused, isTrue);
+      report['return_to_cached_frame'] = speech.playedFrames;
+      await screenshot('cached-return');
+      speech.stop();
+      await until(() => !speech.speaking);
 
       // Native admission and replace behavior with rapid calls from the UI layer.
       final replaced = speech.speak(

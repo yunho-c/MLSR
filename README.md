@@ -4,15 +4,19 @@ A cross-platform text-to-speech library with its main logic in Rust and a shared
 C ABI for Dart, Go, and Python.
 
 **Status:** the [developer SDK v0](docs/developer-sdk.md) is implemented on top of
-the qualified Supertonic3 Core ML baseline. Rust, C, Dart, Go and Python expose
+the recommended Supertonic3 FP16 Core ML bundle with a 384-token text window,
+ten named preset voices, and 31 supported languages.
+Rust, C, Dart, Go and Python expose
 speech controllers, lazy synthesis, bounded rendering,
 native Apple playback, retained seeking and original-text reader alignment. The
 [Flutter reader](examples/flutter_speak/) uses these shared APIs. Start with the
 [documentation](docs/README.md) for setup and API guides.
 
 Real inference/output qualification targets macOS Apple Silicon, English/Korean
-and voices M1/F1. The experimental Windows ARM64 [QNN Superfast backend](docs/qnn-runtime.md)
-supports the headless SDK with the same voices, lazy jobs and WAV export, plus
+and voices M1/F1. All ten presets across 31 languages have short synthesis smoke
+coverage; [broader listening quality is not yet qualified](docs/voices-and-text-plans.md).
+The experimental Windows ARM64 [QNN Superfast backend](docs/qnn-runtime.md)
+supports the headless SDK with M1/F1, lazy jobs and WAV export, plus
 optional [Windows speech playback](docs/windows-output.md) at normal speed;
 its [subjective listening qualification is pending](docs/qnn-qualification.md).
 Windows pitch-preserving variable playback rate, physical iOS, other devices/minimum OS versions and
@@ -38,7 +42,7 @@ bindings/flutter/    Flutter asset discovery and model installation adapter
 bindings/go/         Go module using cgo
 bindings/python/     Python package using ctypes
 examples/flutter_speak/ macOS Flutter playback and WAV export example
-model-manifests/     Model download metadata, checksums, and licenses
+model-manifests/     Model contracts, checksums, provenance and licenses
 tests/fixtures/      Small, shared test inputs
 tests/integration/   Tests of the actual C ABI
 tools/codegen/       Pinned cbindgen header generator
@@ -69,7 +73,7 @@ cargo run -p mlsr --example version
 
 # Synthesize on macOS using an already prepared local bundle (no Python needed).
 MACOSX_DEPLOYMENT_TARGET=15.0 cargo run --release -p mlsr-cli --features coreml -- \
-  synthesize --manifest model-manifests/supertonic3-coreml.yaml \
+  synthesize --manifest model-manifests/supertonic3-coreml-fp16-voices.yaml \
   --bundle /path/to/model-bundle --text "Hello from MLSR." \
   --language en --voice M1 --output hello.wav
 

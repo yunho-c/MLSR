@@ -585,8 +585,9 @@ external int mlsr_speech_navigate(
 @ffi.Native<ffi.Int32 Function(ffi.Pointer<MlsrSpeechOptions>)>()
 external int mlsr_speech_options_default(ffi.Pointer<MlsrSpeechOptions> output);
 
-/// Replay completed retained audio with a new Speech identity/outcome. Storage
-/// is shared, with no inference or second PCM disk copy. The old outcome remains.
+/// Replay completed speech with a new identity/outcome. Full recordings share
+/// retained PCM without inference; reader sessions share their document/cache
+/// and may regenerate evicted segments. The old outcome remains immutable.
 /// # Safety
 /// Settings are readable; output/error are aligned, writable and disjoint.
 @ffi.Native<
@@ -606,8 +607,10 @@ external int mlsr_speech_replay(
   ffi.Pointer<ffi.Uint64> error,
 );
 
-/// Seek an active/paused speech in exact source frames. Invalid ranges do not
-/// move output. Paused seeks stay paused; retained PCM is never synthesized again.
+/// Seek active/paused speech in source frames. Full-retention mode requires ready
+/// PCM. Reader cache mode (retain_audio=2) generates missing destinations using
+/// the document's planned timeline. State reports pending seeking/target and
+/// resolved position; paused seeks stay paused. Invalid targets do not move output.
 /// # Safety
 /// A non-null error output is aligned/writable.
 @ffi.Native<
@@ -1241,11 +1244,15 @@ final class MlsrSpeechOptions extends ffi.Struct {
   @ffi.Uint32()
   external int paused;
 
-  /// 0: no retention, 1: retain under the shared disk quota (default).
+  /// 0: no retention, 1: full recording under the shared quota (default),
+  /// 2: on-demand reader cache with full-timeline seeking and segment eviction.
   @ffi.Uint32()
   external int retain_audio;
 
-  /// New generated frames ahead of presentation; default 88,200.
+  /// Retained speech segment-start horizon ahead of presentation; default
+  /// 88,200 source frames. An admitted segment is retained in full, so buffered
+  /// audio can extend beyond this horizon. On-demand seeks choose a new position
+  /// independently of this bound. Output and byte quotas are separate.
   @ffi.Uint32()
   external int lookahead_frames;
 

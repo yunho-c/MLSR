@@ -13,7 +13,12 @@ use std::{
 };
 
 const BASELINE: &str = include_str!("../../../../../model-manifests/supertonic3-coreml.yaml");
+const FP16: &str = include_str!("../../../../../model-manifests/supertonic3-coreml-fp16.yaml");
+const RECOMMENDED: &str =
+    include_str!("../../../../../model-manifests/supertonic3-coreml-fp16-voices.yaml");
 const QNN: &str = include_str!("../../../../../model-manifests/supertonic3-qnn-superfast.yaml");
+const QNN_CONTEXT: &str =
+    include_str!("../../../../../model-manifests/supertonic3-qnn-superfast-t384.yaml");
 /// Filename at the root of a self-contained model bundle.
 pub const BUNDLE_MANIFEST_NAME: &str = "mlsr-bundle.yaml";
 const MANIFEST_LIMIT: u64 = 1024 * 1024;
@@ -40,8 +45,19 @@ struct Manifest {
     provenance: Value,
     runtime: Value,
     contract: Value,
+    #[serde(default)]
+    voice_names: BTreeMap<String, String>,
     integrity: Value,
     artifacts: BTreeMap<String, Artifact>,
+}
+impl Manifest {
+    fn voice_ids(&self) -> impl Iterator<Item = &str> {
+        self.contract["voices"]
+            .as_array()
+            .expect("validated voice list")
+            .iter()
+            .map(|id| id.as_str().expect("validated voice ID"))
+    }
 }
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,9 +118,13 @@ impl BundleManifest {
     pub fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::parse(&read_limited(path.as_ref(), MANIFEST_LIMIT)?)
     }
-    /// The baseline contract embedded in this library; weights remain external.
+    /// The legacy T=128 INT4 baseline, retained for reproducibility and variants.
     pub fn baseline() -> Self {
         Self::parse(BASELINE.as_bytes()).expect("checked-in baseline manifest")
+    }
+    /// The recommended T=384 FP16 Core ML release; weights remain external.
+    pub fn recommended() -> Self {
+        Self::parse(RECOMMENDED.as_bytes()).expect("checked-in recommended manifest")
     }
     /// Original YAML bytes. Copy these when packaging; do not reserialize them.
     pub fn bytes(&self) -> &[u8] {
@@ -132,12 +152,34 @@ impl BundleManifest {
     }
     /// Voice declarations without reading payloads or loading inference graphs.
     pub fn voice_catalog(&self) -> crate::voice::VoiceCatalog {
+        // Qualification belongs to exact releases and individual voices, not to
+        // every voice that happens to share these inference graphs. The expanded
+        // release preserves M1/F1 and their graph bytes; new presets have only
+        // smoke coverage until a broader quality corpus is accepted.
+        let qualified = [BASELINE.as_bytes(), FP16.as_bytes(), RECOMMENDED.as_bytes()]
+            .contains(&self.bytes.as_slice());
         crate::voice::VoiceCatalog::supertonic3(
             self.id(),
             self.revision(),
             self.sha256(),
             self.backend(),
             crate::voice::VoiceReadiness::CatalogOnly,
+            self.parsed
+                .voice_ids()
+                .map(|id| crate::voice::VoiceDeclaration {
+                    id: id.into(),
+                    display_name: self
+                        .parsed
+                        .voice_names
+                        .get(id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Supertonic 3 {id}")),
+                    qualified_languages: if qualified && matches!(id, "M1" | "F1") {
+                        vec!["en".into(), "ko".into()]
+                    } else {
+                        Vec::new()
+                    },
+                }),
         )
     }
     /// Every payload file in the validated contract.
@@ -173,7 +215,10 @@ pub struct Bundle {
     indexer: Vec<i32>,
     voices: BTreeMap<String, Voice>,
     manifest_sha256: String,
-    revision: String,
+    catalog: crate::voice::VoiceCatalog,
+    text_capacity: usize,
+    latent_buckets: Vec<usize>,
+    noise_capacity: Option<usize>,
 }
 
 /// Owned, shape-checked conditioning tensors for one bundled voice.
@@ -267,7 +312,7 @@ impl Bundle {
             ));
         }
         let mut voices = BTreeMap::new();
-        for id in ["M1", "F1"] {
+        for id in manifest.voice_ids() {
             let name = format!("voice_{id}");
             let data: VoiceFile = json(&metadata[name.as_str()], &name)?;
             voices.insert(
@@ -287,12 +332,44 @@ impl Bundle {
             indexer,
             voices,
             manifest_sha256: description.sha256.clone(),
-            revision: manifest.source.revision.clone(),
+            catalog: description
+                .voice_catalog()
+                .with_readiness(crate::voice::VoiceReadiness::AssetsVerified),
+            text_capacity: manifest.contract["text_tokens"]
+                .as_u64()
+                .expect("validated capacity") as usize,
+            latent_buckets: manifest.contract["latent_buckets"]
+                .as_array()
+                .expect("validated buckets")
+                .iter()
+                .map(|v| v.as_u64().expect("validated bucket") as usize)
+                .collect(),
+            noise_capacity: manifest.contract["noise_capacity"]
+                .as_u64()
+                .map(|n| n as usize),
         })
     }
     /// Bundle identifier recorded by the manifest.
     pub fn id(&self) -> &str {
         &self.id
+    }
+    /// Fixed normalized-token capacity declared by all text-conditioned graphs.
+    pub fn text_capacity(&self) -> usize {
+        self.text_capacity
+    }
+    pub(super) fn latent_buckets(&self) -> &[usize] {
+        &self.latent_buckets
+    }
+    pub(super) fn noise_capacity(&self) -> Option<usize> {
+        self.noise_capacity
+    }
+    pub(super) fn vocoder_name(&self, bucket: usize) -> String {
+        let fixed = format!("vocoder_{bucket}");
+        if self.models.contains_key(&fixed) {
+            fixed
+        } else {
+            "vocoder".into()
+        }
     }
     /// Runtime required by the pinned graph and tensor contracts.
     pub fn backend(&self) -> BackendKind {
@@ -304,13 +381,7 @@ impl Bundle {
     }
     /// Verified local assets, without claiming a loaded or available runtime.
     pub fn voice_catalog(&self) -> crate::voice::VoiceCatalog {
-        crate::voice::VoiceCatalog::supertonic3(
-            self.id(),
-            &self.revision,
-            self.manifest_sha256(),
-            self.backend(),
-            crate::voice::VoiceReadiness::AssetsVerified,
-        )
+        self.catalog.clone()
     }
     /// Canonical local bundle directory.
     pub fn root(&self) -> &Path {
@@ -324,7 +395,7 @@ impl Bundle {
     pub fn voice(&self, id: &str) -> Result<&Voice> {
         self.voices
             .get(id)
-            .ok_or_else(|| asset(id, "unknown voice; expected M1 or F1"))
+            .ok_or_else(|| Error::VoiceUnavailable(id.into()))
     }
     /// Unicode scalar to token mapping. Negative entries are unsupported.
     pub fn unicode_indexer(&self) -> &[i32] {
@@ -374,12 +445,21 @@ fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
         serde_yaml_ng::from_slice(bytes).map_err(|e| Error::Manifest(e.to_string()))?;
     let manifest: Manifest =
         serde_yaml_ng::from_value(value).map_err(|e| Error::Manifest(e.to_string()))?;
-    let source = if manifest.runtime["kind"] == "qnn" {
-        QNN
-    } else {
-        BASELINE
+    let profile = match (
+        manifest.runtime.get("kind").and_then(Value::as_str),
+        manifest.contract.get("text_tokens").and_then(Value::as_u64),
+    ) {
+        (Some("coreml"), Some(128)) => BASELINE,
+        (Some("coreml"), Some(384)) => FP16,
+        (Some("qnn"), Some(128)) => QNN,
+        (Some("qnn"), Some(384)) => QNN_CONTEXT,
+        _ => {
+            return Err(Error::Manifest(
+                "unsupported runtime and normalized-text capacity".into(),
+            ));
+        }
     };
-    let baseline: Manifest = serde_yaml_ng::from_str(source).expect("checked-in manifest schema");
+    let baseline: Manifest = serde_yaml_ng::from_str(profile).expect("checked-in manifest schema");
     validate_manifest(&manifest, &baseline)?;
     Ok(manifest)
 }
@@ -407,8 +487,53 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
         "source must pin an HTTPS repository and full revision",
     )?;
     require(m.provenance.is_object(), "missing provenance mapping")?;
+    let voices = m
+        .contract
+        .get("voices")
+        .and_then(Value::as_array)
+        .ok_or_else(|| Error::Manifest("expected voice declarations".into()))?;
     require(
-        m.contract == baseline.contract && m.integrity == baseline.integrity,
+        !voices.is_empty() && voices.len() <= 64,
+        "expected 1..=64 voices",
+    )?;
+    let mut voice_ids = BTreeSet::new();
+    for value in voices {
+        let id = value
+            .as_str()
+            .ok_or_else(|| Error::Manifest("voice ID must be a string".into()))?;
+        require(
+            !id.is_empty()
+                && id.len() <= 64
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+                && voice_ids.insert(id),
+            "invalid or duplicate voice ID",
+        )?;
+    }
+    require(
+        m.voice_names.is_empty()
+            || m.voice_names
+                .keys()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+                == voice_ids,
+        "voice names must match the declared voices",
+    )?;
+    require(
+        m.voice_names.values().all(|name| {
+            !name.trim().is_empty() && name.len() <= 128 && !name.chars().any(char::is_control)
+        }),
+        "invalid voice display name",
+    )?;
+    let mut contract = m.contract.clone();
+    // Voice inventory is extensible; every other model/tensor contract stays
+    // exact. QNN retains its original pinned voice and program set.
+    if baseline.runtime["kind"] != "qnn" {
+        contract["voices"] = baseline.contract["voices"].clone();
+    }
+    require(
+        contract == baseline.contract && m.integrity == baseline.integrity,
         "unsupported tensor, audio, preprocessing, or integrity contract",
     )?;
     if baseline.runtime["kind"] == "qnn" {
@@ -430,14 +555,25 @@ fn validate_manifest(m: &Manifest, baseline: &Manifest) -> Result<()> {
             &format!("unsupported runtime.{key}"),
         )?;
     }
+    let expected_artifacts: BTreeSet<_> = baseline
+        .artifacts
+        .keys()
+        .filter(|name| !name.starts_with("voice_"))
+        .cloned()
+        .chain(voice_ids.iter().map(|id| format!("voice_{id}")))
+        .collect();
     require(
-        m.artifacts.keys().eq(baseline.artifacts.keys()),
+        m.artifacts.keys().cloned().collect::<BTreeSet<_>>() == expected_artifacts,
         "unexpected Supertonic artifact set",
     )?;
     let mut seen = BTreeSet::new();
     let mut roots = BTreeSet::new();
     for (name, a) in &m.artifacts {
-        let expected = &baseline.artifacts[name];
+        let expected = if name.starts_with("voice_") && baseline.runtime["kind"] != "qnn" {
+            &baseline.artifacts["voice_M1"]
+        } else {
+            &baseline.artifacts[name]
+        };
         relative(&a.path)?;
         require(roots.insert(&a.path), "duplicate artifact root")?;
         require(

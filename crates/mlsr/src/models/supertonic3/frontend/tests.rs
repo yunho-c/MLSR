@@ -63,6 +63,31 @@ fn matches_independent_upstream_frontend_fixtures() {
     check(&indexer, &corpus, &expected);
 }
 #[test]
+fn expanded_window_counts_normalized_tokens_and_pads_to_its_own_capacity() {
+    let indexer = vec![1; 65536];
+    for count in [383, 384] {
+        let text = format!("{}.", "a".repeat(count - 10));
+        let encoded = encode_with_capacity(&text, "en", &indexer, 384).unwrap();
+        assert_eq!(encoded.token_count(), count);
+        assert_eq!(encoded.ids().shape(), &[1, 384]);
+        assert_eq!(encoded.mask().shape(), &[1, 1, 384]);
+        let TensorData::F32(mask) = encoded.mask().data() else {
+            unreachable!()
+        };
+        assert_eq!(mask.iter().sum::<f32>(), count as f32);
+        assert!(encode(&text, "en", &indexer).is_err());
+    }
+    for text in [format!("{}.", "a".repeat(375)), "한".repeat(125)] {
+        assert!(matches!(
+            encode_with_capacity(&text, "en", &indexer, 384),
+            Err(Error::Input {
+                kind: Kind::TextTooLong,
+                ..
+            })
+        ));
+    }
+}
+#[test]
 fn retains_upstream_order_unicode_scalars_and_strict_limits() {
     assert_eq!(
         normalize_text(" A  , B\u{1c}C ", "en").unwrap(),

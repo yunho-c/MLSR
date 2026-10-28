@@ -1,7 +1,6 @@
-use super::{TextSegment, TextSpan};
+use super::{TextSegment, TextSpan, sentence_spans};
 use crate::error::{Error, Result};
 use std::{ops::Range, sync::Arc};
-use unicode_segmentation::UnicodeSegmentation;
 
 /// Checked conversion between source UTF-8 byte and UTF-16 code-unit boundaries.
 /// Interior UTF-8 bytes and interior surrogate pairs are never rounded silently.
@@ -128,14 +127,7 @@ impl TextPlan {
         parts: Vec<TextSegment>,
     ) -> Result<Self> {
         let mapping = Utf16Map::new(text);
-        let mut bounds = Vec::new();
-        let mut paragraph_start = 0;
-        for paragraph in text.split_inclusive('\n') {
-            for (offset, sentence) in paragraph.split_sentence_bound_indices() {
-                bounds.push(paragraph_start + offset..paragraph_start + offset + sentence.len());
-            }
-            paragraph_start += paragraph.len();
-        }
+        let bounds = sentence_spans(text);
         let mut segments = Vec::with_capacity(parts.len());
         let mut sentences: Vec<Sentence> = Vec::new();
         let mut boundary = 0;

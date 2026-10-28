@@ -1,0 +1,686 @@
+# Experimental T384 Superfast; payloads and conversion metadata are immutable.
+schema_version: 1
+id: supertonic3-qnn-superfast-t384-v1
+model: supertonic-3
+model_version: 1.7.3
+source:
+  repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+  revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+provenance:
+  upstream_model:
+    repository: https://huggingface.co/supertone-oss-archive/supertonic-3
+    revision: aafc6e32416a594460b32413efc49d7fe4ce6d46
+    license: OpenRAIL-M
+    license_url: https://huggingface.co/supertone-oss-archive/supertonic-3/blob/aafc6e32416a594460b32413efc49d7fe4ce6d46/LICENSE
+  upstream_preprocessing:
+    repository: https://github.com/yunho-c/supertonic
+    revision: 1e9799e964ea4c0dad7cde993b65c3c813a7b373
+    path: py/helper.py
+    license: MIT
+  conversion:
+    project: supertonic-npu
+    revision: ef68792056d76df64ca98a05cd65a05ef9026c66
+    assembly_command: python scripts/build_superfast_context.py --output <fresh-directory>
+    preset_provenance_sha256: e60e4f16db374b7ed17a26f143ebff000db3495d37a158b2f50eb6d17296288d
+    rebuild_note: Vendored Superfast transformations; graph metadata records original
+      ONNX, export source and program hashes. Rebuilding is explicit; changed bytes
+      require a new manifest and qualification.
+  status: Experimental integration candidate; numerical screening does not establish
+    perceptual quality.
+  local_sources:
+    duration_predictor: artifacts/superfast-t384-20261019/frontend/duration_predictor.pte
+    duration_predictor_metadata: artifacts/superfast-t384-20261019/frontend/duration_predictor.json
+    text_encoder: artifacts/superfast-t384-20261019/frontend/text_encoder.pte
+    text_encoder_metadata: artifacts/superfast-t384-20261019/frontend/text_encoder.json
+    ve_128: artifacts/superfast-t384-20261019/l128/vector_estimator.pte
+    ve_128_metadata: artifacts/superfast-t384-20261019/l128/vector_estimator.json
+    vocoder_128: artifacts/superfast-t384-20261019/l128/vocoder.pte
+    vocoder_128_metadata: artifacts/superfast-t384-20261019/l128/vocoder.json
+    ve_256: artifacts/superfast-t384-20261019/l256/vector_estimator.pte
+    ve_256_metadata: artifacts/superfast-t384-20261019/l256/vector_estimator.json
+    vocoder_256: artifacts/superfast-t384-20261019/l256/vocoder.pte
+    vocoder_256_metadata: artifacts/superfast-t384-20261019/l256/vocoder.json
+    ve_512: artifacts/superfast-t384-20261019/l512/vector_estimator.pte
+    ve_512_metadata: artifacts/superfast-t384-20261019/l512/vector_estimator.json
+    vocoder_512: artifacts/superfast-t384-20261019/l512/vocoder.pte
+    vocoder_512_metadata: artifacts/superfast-t384-20261019/l512/vocoder.json
+    tts_config: assets/onnx/tts.json
+    unicode_indexer: assets/onnx/unicode_indexer.json
+    voice_M1: assets/voice_styles/M1.json
+    voice_F1: assets/voice_styles/F1.json
+    model_license: assets/LICENSE
+    executorch_license: licenses/executorch.txt
+runtime:
+  kind: qnn
+  format: executorch-pte
+  executorch_version: 1.5.0
+  executorch_revision: f7140a46ff38e919c557d45b102d3ff26097c8c9
+  qnn_sdk: 2.50.40.260831
+  compiler: QAIRT QNN HTP offline compiler 2.50.40.260831
+  target_os: windows
+  target_arch: aarch64
+  target_soc: 88
+  htp_arch: 81
+  device: Snapdragon X2 Elite X2E84100
+  compute_policy: qnn_htp
+  compatibility: Only the recorded Windows ARM64 SoC 88 / HTP V81 target is supported;
+    other targets require separate artifacts and qualification
+  quantization: null
+  external_dependencies:
+    sdk_license: Use the installed QAIRT SDK under its LICENSE.pdf; runtime redistribution
+      is separate from local bundle preparation.
+    sdk_files:
+    - path: lib/aarch64-windows-msvc/QnnHtp.dll
+      sha256: 2a4406653fd6cf2cbe83d544aa3066776a5d1b99b4cf2d73a446ce841c427e12
+      size_bytes: 3427536
+    - path: lib/aarch64-windows-msvc/QnnHtpV81Stub.dll
+      sha256: 970ab0c026183610964dc376f5eee981338942667c76bff0e5472ac3396b010b
+      size_bytes: 573648
+    - path: lib/aarch64-windows-msvc/QnnSystem.dll
+      sha256: 0b6daf4691a1ae8cd171911fa2466f3bbac220145bcfc7321b54a6a44fa29aba
+      size_bytes: 3570896
+    - path: lib/hexagon-v81/unsigned/libQnnHtpV81Skel.so
+      sha256: 0df1a63f7fcf60b2f6ca419228c36bb97dc225ba69b24ea3a150a533e9bf3f5f
+      size_bytes: 13542412
+    executorch_backend:
+      path: qnn_executorch_backend.dll
+      sha256: 95eb9131d4825ac0fca0a7104442ff6937bff78b5fb2e04047dc5d26580d9395
+      size_bytes: 221184
+    fastrpc: System-installed ARM64 libcdsprpc.dll from qcnspmcdm8480 driver; not
+      copied into bundle
+contract:
+  sample_rate: 44100
+  channels: 1
+  pcm_dtype: float32
+  batch_size: 1
+  text_tokens: 384
+  text_normalization: NFKD + upstream symbol/whitespace handling + language tags
+  text_offset_unit: Unicode scalar index in normalized text; original text is retained
+    separately
+  oversized_text: reject; never truncate
+  unknown_character: reject; never wrap to uint16 or submit a negative token
+  latent_channels: 144
+  samples_per_latent: 3072
+  latent_buckets:
+  - 128
+  - 256
+  - 512
+  vocoder_latent_range:
+  - 4
+  - 512
+  default_steps: 8
+  default_speed: 1.05
+  duration_policy: Float32 max(0.05, raw_duration / max(speed, 0.05)); reject nonfinite/nonpositive
+    requested speed
+  frame_count_policy: truncate Float32(duration * 44100) toward zero; trim waveform
+    to min(requested_frames, available_frames)
+  latent_length_policy: ceil(requested_frames / 3072); reject outside 4..512; select
+    the smallest fitting bucket; pass the full masked state to its fixed vocoder and
+    trim PCM
+  ve_output_semantics: Updated latent including classifier-free guidance and Euler
+    integration in HTP FP16; do not integrate again
+  qualification_languages:
+  - en
+  - ko
+  voices:
+  - M1
+  - F1
+  supported_steps:
+  - 8
+  text_ids_dtype: int64
+  noise_capacity: 512
+  noise_policy: ChaCha8 as in MLSR, generate [1,144,512], crop each channel to true
+    length and zero-pad to the selected bucket; replay accepts saved [1,144,512] Float32
+    noise
+integrity:
+  algorithm: sha256
+  scope: Every listed payload including graph metadata and licenses. Keep all files
+    immutable during engine lifetime.
+artifacts:
+  duration_predictor:
+    kind: executorch_qnn
+    path: graphs/duration_predictor.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      text_ids:
+        ordinal: 0
+        dtype: int64
+        shape:
+        - 1
+        - 384
+        layout: contiguous row-major
+      style_dp:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 8
+        - 16
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/duration_predictor.pte
+      sha256: 4eb488e632fcc1e6b261f06bf8443f58094f12dcd9f3c850bf67ea7a9b39b735
+      size_bytes: 4561184
+  duration_predictor_metadata:
+    kind: conversion_metadata
+    path: graphs/duration_predictor.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/duration_predictor.json
+      sha256: 760788dafe8a2178bf118e3a3fdaf4595e2e736969d9d93ecf54da899509cbd5
+      size_bytes: 3349
+  text_encoder:
+    kind: executorch_qnn
+    path: graphs/text_encoder.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      text_ids:
+        ordinal: 0
+        dtype: int64
+        shape:
+        - 1
+        - 384
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 256
+        - 384
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/text_encoder.pte
+      sha256: f105bcf47d51a04ab6d9b58a95ab00d100d447ef758580167673f8acc2aeef1f
+      size_bytes: 22529112
+  text_encoder_metadata:
+    kind: conversion_metadata
+    path: graphs/text_encoder.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/text_encoder.json
+      sha256: 556d1329036899d38eb01ab9823be16a2ac10e181bdffde26c16275d21bf3579
+      size_bytes: 3413
+  ve_128:
+    kind: executorch_qnn
+    path: graphs/ve_128.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      noisy_latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+        layout: contiguous row-major
+      text_emb:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      latent_mask:
+        ordinal: 3
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 128
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 4
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+        layout: contiguous row-major
+      current_step:
+        ordinal: 5
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+      total_step:
+        ordinal: 6
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 144
+        - 128
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/ve_128.pte
+      sha256: 39f8857e62631a91fc53cb512897168c827395a9f6a60f3d0e19ad908e298c79
+      size_bytes: 136879360
+    latent_bucket: 128
+  ve_128_metadata:
+    kind: conversion_metadata
+    path: graphs/ve_128.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/ve_128.json
+      sha256: 7426934dfbfbc135767740f7b7348c35461eea0b4eef1490bcf5df868c6d245b
+      size_bytes: 7796
+  vocoder_128:
+    kind: executorch_qnn
+    path: graphs/vocoder_128.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 128
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 393216
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/vocoder_128.pte
+      sha256: 79981c0d24fb8ea74ae62e5011199b38cf1c9c7b93c034e3a0afc69e59ea6eb6
+      size_bytes: 52959984
+    latent_bucket: 128
+  vocoder_128_metadata:
+    kind: conversion_metadata
+    path: graphs/vocoder_128.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/vocoder_128.json
+      sha256: f47172314ab8b9e28b4fe536ce786b54b1283ff9875c533c7126164718aa6c16
+      size_bytes: 2677
+  ve_256:
+    kind: executorch_qnn
+    path: graphs/ve_256.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      noisy_latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 256
+        layout: contiguous row-major
+      text_emb:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      latent_mask:
+        ordinal: 3
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 256
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 4
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+        layout: contiguous row-major
+      current_step:
+        ordinal: 5
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+      total_step:
+        ordinal: 6
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 144
+        - 256
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/ve_256.pte
+      sha256: 83474be4e5c452b6c4adb434c550598c4216ff838f4ce81b808aa991d674e0bc
+      size_bytes: 137915648
+    latent_bucket: 256
+  ve_256_metadata:
+    kind: conversion_metadata
+    path: graphs/ve_256.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/ve_256.json
+      sha256: 3a5408b64460230a63e286333c2ff0a8d1019d5152cfee125b25144f8d3d5f61
+      size_bytes: 7800
+  vocoder_256:
+    kind: executorch_qnn
+    path: graphs/vocoder_256.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 256
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 786432
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/vocoder_256.pte
+      sha256: 6115d58aab1127a1b4f2bea9471af44bcce322cce45809733858c675929417a9
+      size_bytes: 53234416
+    latent_bucket: 256
+  vocoder_256_metadata:
+    kind: conversion_metadata
+    path: graphs/vocoder_256.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/vocoder_256.json
+      sha256: 68bf2ac8d2ddabf2db7990cb7bea4f7f506d167ff3838ccfa7b6503bb174aae4
+      size_bytes: 2681
+  ve_512:
+    kind: executorch_qnn
+    path: graphs/ve_512.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      noisy_latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 512
+        layout: contiguous row-major
+      text_emb:
+        ordinal: 1
+        dtype: float32
+        shape:
+        - 1
+        - 256
+        - 384
+        layout: contiguous row-major
+      style_ttl:
+        ordinal: 2
+        dtype: float32
+        shape:
+        - 1
+        - 50
+        - 256
+        layout: contiguous row-major
+      latent_mask:
+        ordinal: 3
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 512
+        layout: contiguous row-major
+      text_mask:
+        ordinal: 4
+        dtype: float32
+        shape:
+        - 1
+        - 1
+        - 384
+        layout: contiguous row-major
+      current_step:
+        ordinal: 5
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+      total_step:
+        ordinal: 6
+        dtype: float32
+        shape:
+        - 1
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 144
+        - 512
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/ve_512.pte
+      sha256: 992e8ff2927575ea37da782063104d7639fb60132500d7df08d9048e540b6f8a
+      size_bytes: 141409536
+    latent_bucket: 512
+  ve_512_metadata:
+    kind: conversion_metadata
+    path: graphs/ve_512.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/ve_512.json
+      sha256: 9e76fcd33307abe375323c2cb1ad27ee6ee100d0a04ce3ecf1d7eee78e8b8b4c
+      size_bytes: 7796
+  vocoder_512:
+    kind: executorch_qnn
+    path: graphs/vocoder_512.pte
+    license: OpenRAIL-M
+    precision:
+      compute: float16
+      public_tensors: float32 except int64 text IDs
+      quantization: null
+      method: forward
+      delegate_graph: forward
+      delegates: 1
+      cpu_compute: 0
+    inputs:
+      latent:
+        ordinal: 0
+        dtype: float32
+        shape:
+        - 1
+        - 144
+        - 512
+        layout: contiguous row-major
+    outputs:
+      output:
+        ordinal: 0
+        shape:
+        - 1
+        - 1572864
+        dtype: float32
+        layout: contiguous row-major
+    files:
+    - path: graphs/vocoder_512.pte
+      sha256: 80c0c2fe3652b7a5466577655488b69426798032451d054cec12ed43ae4cc07e
+      size_bytes: 53861104
+    latent_bucket: 512
+  vocoder_512_metadata:
+    kind: conversion_metadata
+    path: graphs/vocoder_512.json
+    license: OpenRAIL-M
+    files:
+    - path: graphs/vocoder_512.json
+      sha256: f5bafac0ba3ce4109022bc0d8b28c2e3ba19174e31be2c2db566fc7d1eeb6ac4
+      size_bytes: 2681
+  tts_config:
+    kind: configuration
+    path: tts.json
+    license: OpenRAIL-M
+    files:
+    - path: tts.json
+      sha256: 42078d3aef1cd43ab43021f3c54f47d2d75ceb4e75f627f118890128b06a0d09
+      size_bytes: 8253
+  unicode_indexer:
+    kind: tokenizer
+    path: unicode_indexer.json
+    license: OpenRAIL-M
+    files:
+    - path: unicode_indexer.json
+      sha256: 9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f
+      size_bytes: 277676
+  voice_M1:
+    kind: voice_style
+    path: voice_styles/M1.json
+    license: OpenRAIL-M
+    files:
+    - path: voice_styles/M1.json
+      sha256: e35604687f5d23694b8e91593a93eec0e4eca6c0b02bb8ed69139ab2ea6b0a5b
+      size_bytes: 291748
+  voice_F1:
+    kind: voice_style
+    path: voice_styles/F1.json
+    license: OpenRAIL-M
+    files:
+    - path: voice_styles/F1.json
+      sha256: bbdec6ee00231c2c742ad05483df5334cab3b52fda3ba38e6a07059c4563dbc2
+      size_bytes: 292046
+  model_license:
+    kind: license
+    path: licenses/model.txt
+    license: OpenRAIL-M
+    files:
+    - path: licenses/model.txt
+      sha256: 0d944a9110fed9a9602d60e0423a272903e7bd21ab060490774efc77c2275e9f
+      size_bytes: 15007
+  executorch_license:
+    kind: license
+    path: licenses/executorch.txt
+    license: BSD-3-Clause
+    files:
+    - path: licenses/executorch.txt
+      sha256: d509ee20a86672d9f51d1dc057a9be504f86238aa139356279dda84182e74e68
+      size_bytes: 1811

@@ -14,6 +14,10 @@ API usage, start with the [public documentation](../README.md).
 | [Apple output](apple-output.md) | Native playback implementation, clock behavior and adapter qualification |
 | [Execution variants](execution-variants.md) | Experimental graphs, routing, parity, benchmarking and quantization candidates |
 | [Playback feasibility probe](playback-probe.md) | Initial native clock, completion and pitch-preservation investigation |
+| [Text segmentation](text-segmentation.md) | Clause boundaries, conservative text limits and speech-quality regression evidence |
+| [Larger-context experiment](supertonic3-context-experiment.md) | Official-demo controls, T=384 Core ML exports, boundary correction and precision evidence |
+| [FP16 promotion](supertonic3-fp16-promotion.md) | Recommended T=384 bundle, native/app qualification and later INT4 gates |
+| [QNN and FP16 consolidation](qnn-fp16-consolidation.md) | Combined manifest contracts, seek fixes and merge validation |
 
 ## Implementation and qualification records
 

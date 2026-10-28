@@ -93,6 +93,8 @@ pub struct Completion {
     /// Stable request identity.
     pub request_id: u64,
     /// Total generated frames, possibly partial on failure/cancellation.
+    /// Reader playback reports the sum of measured document segment lengths;
+    /// skipped, never-generated segments are excluded even after reaching the end.
     pub frames: u64,
     /// Outcome, separate from transient generation/playback states.
     pub outcome: Outcome,

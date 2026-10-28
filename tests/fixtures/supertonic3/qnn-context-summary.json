@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-10-19",
+  "status": "integration_passed_listening_pending",
+  "tested_implementation_commit": "c7abf76dadfff4bfd522a63a1cd9a511f6c012a9",
+  "source_note": "Device/package checks ran on the implementation tree immediately before commit; the package tool records its then-current base commit.",
+  "duration_planning_update": "2001326f272056cf5947909480bb7d49e87d5831",
+  "export_commit": "ef68792056d76df64ca98a05cd65a05ef9026c66",
+  "host": "Windows ARM64 Snapdragon X2 Elite X2E84100, SoC 88 / HTP V81, QAIRT 2.50.40.260831",
+  "program_bytes": 603350344,
+  "export_checks": {
+    "program_count": 8,
+    "delegates_per_program": 1,
+    "cpu_compute_operations": 0,
+    "precision": "fp16",
+    "gelu": "exact",
+    "flow_evaluations": 8,
+    "components": {
+      "frontend/duration_predictor": {
+        "pte_sha256": "4eb488e632fcc1e6b261f06bf8443f58094f12dcd9f3c850bf67ea7a9b39b735",
+        "metadata_sha256": "760788dafe8a2178bf118e3a3fdaf4595e2e736969d9d93ecf54da899509cbd5",
+        "pte_bytes": 4561184,
+        "reference_metrics": {
+          "max_error": 0.0,
+          "rmse": 0.0,
+          "relative_l2": 0.0,
+          "cosine": 1.0,
+          "sqnr_db": 327.34944929361995
+        }
+      },
+      "frontend/text_encoder": {
+        "pte_sha256": "f105bcf47d51a04ab6d9b58a95ab00d100d447ef758580167673f8acc2aeef1f",
+        "metadata_sha256": "556d1329036899d38eb01ab9823be16a2ac10e181bdffde26c16275d21bf3579",
+        "pte_bytes": 22529112,
+        "reference_metrics": {
+          "max_error": 7.2479248046875e-05,
+          "rmse": 2.2089617120224607e-06,
+          "relative_l2": 8.706790381973711e-06,
+          "cosine": 0.9999999999620991,
+          "sqnr_db": 101.20283822312857
+        }
+      },
+      "l512/vector_estimator": {
+        "pte_sha256": "992e8ff2927575ea37da782063104d7639fb60132500d7df08d9048e540b6f8a",
+        "metadata_sha256": "9e76fcd33307abe375323c2cb1ad27ee6ee100d0a04ce3ecf1d7eee78e8b8b4c",
+        "pte_bytes": 141409536,
+        "reference_metrics": {
+          "max_error": 4.506111145019531e-05,
+          "rmse": 2.760009134018847e-06,
+          "relative_l2": 2.0384734087200116e-06,
+          "cosine": 0.999999999997924,
+          "sqnr_db": 113.81389898834725
+        }
+      },
+      "l512/vocoder": {
+        "pte_sha256": "80c0c2fe3652b7a5466577655488b69426798032451d054cec12ed43ae4cc07e",
+        "metadata_sha256": "f5bafac0ba3ce4109022bc0d8b28c2e3ba19174e31be2c2db566fc7d1eeb6ac4",
+        "pte_bytes": 53861104,
+        "reference_metrics": {
+          "max_error": 1.8477439880371094e-06,
+          "rmse": 1.564836516349064e-07,
+          "relative_l2": 1.6485654811974449e-06,
+          "cosine": 0.999999999998642,
+          "sqnr_db": 115.65787595909805
+        }
+      },
+      "l256/vector_estimator": {
+        "pte_sha256": "83474be4e5c452b6c4adb434c550598c4216ff838f4ce81b808aa991d674e0bc",
+        "metadata_sha256": "3a5408b64460230a63e286333c2ff0a8d1019d5152cfee125b25144f8d3d5f61",
+        "pte_bytes": 137915648,
+        "reference_metrics": {
+          "max_error": 1.8477439880371094e-05,
+          "rmse": 1.4355310269411738e-06,
+          "relative_l2": 1.0836002910142403e-06,
+          "cosine": 0.9999999999994137,
+          "sqnr_db": 119.30261774007414
+        }
+      },
+      "l256/vocoder": {
+        "pte_sha256": "6115d58aab1127a1b4f2bea9471af44bcce322cce45809733858c675929417a9",
+        "metadata_sha256": "68bf2ac8d2ddabf2db7990cb7bea4f7f506d167ff3838ccfa7b6503bb174aae4",
+        "pte_bytes": 53234416,
+        "reference_metrics": {
+          "max_error": 1.996755599975586e-06,
+          "rmse": 1.5362392888699006e-07,
+          "relative_l2": 1.6669393114301348e-06,
+          "cosine": 0.9999999999986129,
+          "sqnr_db": 115.56160422648475
+        }
+      },
+      "l128/vector_estimator": {
+        "pte_sha256": "39f8857e62631a91fc53cb512897168c827395a9f6a60f3d0e19ad908e298c79",
+        "metadata_sha256": "7426934dfbfbc135767740f7b7348c35461eea0b4eef1490bcf5df868c6d245b",
+        "pte_bytes": 136879360,
+        "reference_metrics": {
+          "max_error": 1.0848045349121094e-05,
+          "rmse": 6.893171207450926e-07,
+          "relative_l2": 5.536056361555142e-07,
+          "cosine": 0.9999999999998472,
+          "sqnr_db": 125.1359899411568
+        }
+      },
+      "l128/vocoder": {
+        "pte_sha256": "79981c0d24fb8ea74ae62e5011199b38cf1c9c7b93c034e3a0afc69e59ea6eb6",
+        "metadata_sha256": "f47172314ab8b9e28b4fe536ce786b54b1283ff9875c533c7126164718aa6c16",
+        "pte_bytes": 52959984,
+        "reference_metrics": {
+          "max_error": 1.519918441772461e-06,
+          "rmse": 1.5816608518707202e-07,
+          "relative_l2": 1.6642203115584e-06,
+          "cosine": 0.9999999999986232,
+          "sqnr_db": 115.5757836358974
+        }
+      }
+    }
+  },
+  "device": {
+    "cases": [
+      {
+        "bucket": 256,
+        "frames": 704812,
+        "language": "en",
+        "length": 230,
+        "pcm_sha256": "a6f28f45b30b7a6079bc465155435dbcd6eded40ab49f98dbbf8aeb1871022d9",
+        "text": "A thoughtful reader can follow a complete sentence at a comfortable pace, keeping all its words together while the speaker explains the next idea and provides enough context to make the whole passage easy to understand without unnecessary interruptions.",
+        "tokens": 262,
+        "voice": "M1",
+        "warm_synthesis_ms": [
+          195.6023,
+          196.26930000000002,
+          196.5518
+        ]
+      },
+      {
+        "bucket": 256,
+        "frames": 704812,
+        "language": "en",
+        "length": 230,
+        "pcm_sha256": "6ec488acf4fdcce203b7921f56543c9d804a6a24a10d8d6c56fd750883d9a3c4",
+        "text": "A thoughtful reader can follow a complete sentence at a comfortable pace, keeping all its words together while the speaker explains the next idea and provides enough context to make the whole passage easy to understand without unnecessary interruptions.",
+        "tokens": 262,
+        "voice": "F1",
+        "warm_synthesis_ms": [
+          194.839,
+          195.0705,
+          195.6384
+        ]
+      },
+      {
+        "bucket": 256,
+        "frames": 600468,
+        "language": "ko",
+        "length": 196,
+        "pcm_sha256": "3e029e47b4b10eb6163b452a319149d31f04e7dfb9d6383082894a077f21492d",
+        "text": "오늘은 새로운 음성 합성 기능을 함께 살펴보겠습니다. 긴 문장을 자연스럽게 읽으면서 필요한 부분으로 이동하고, 잠시 멈춘 뒤에도 같은 위치에서 다시 들을 수 있습니다.",
+        "tokens": 204,
+        "voice": "M1",
+        "warm_synthesis_ms": [
+          198.439,
+          195.045,
+          194.6873
+        ]
+      },
+      {
+        "bucket": 256,
+        "frames": 599484,
+        "language": "ko",
+        "length": 196,
+        "pcm_sha256": "bbcc5fa6bec7ddfaa1b3e6dd52e00c3b920cd7a852bde0021763482cb66c974b",
+        "text": "오늘은 새로운 음성 합성 기능을 함께 살펴보겠습니다. 긴 문장을 자연스럽게 읽으면서 필요한 부분으로 이동하고, 잠시 멈춘 뒤에도 같은 위치에서 다시 들을 수 있습니다.",
+        "tokens": 204,
+        "voice": "F1",
+        "warm_synthesis_ms": [
+          195.54489999999998,
+          195.8637,
+          198.9236
+        ]
+      }
+    ],
+    "latent_boundaries": [
+      {
+        "bucket": 128,
+        "frames": 12188,
+        "length": 4
+      },
+      {
+        "bucket": 128,
+        "frames": 390044,
+        "length": 127
+      },
+      {
+        "bucket": 128,
+        "frames": 393116,
+        "length": 128
+      },
+      {
+        "bucket": 256,
+        "frames": 396188,
+        "length": 129
+      },
+      {
+        "bucket": 256,
+        "frames": 783260,
+        "length": 255
+      },
+      {
+        "bucket": 256,
+        "frames": 786332,
+        "length": 256
+      },
+      {
+        "bucket": 512,
+        "frames": 789404,
+        "length": 257
+      },
+      {
+        "bucket": 512,
+        "frames": 1572764,
+        "length": 512
+      }
+    ],
+    "listening": "pending user evaluation",
+    "live_tensors_stable": true,
+    "load_ms": 1405.927,
+    "manifest_sha256": "f90d715ad26bf7b7069b92e2762963b0b622f0150be916e7e80eaaba07266880",
+    "model_loads": 8,
+    "passed": true,
+    "text_boundaries": [
+      383,
+      384,
+      385
+    ]
+  },
+  "prepared_duration": {
+    "passed": true,
+    "cases": [
+      "en/M1",
+      "ko/F1"
+    ],
+    "segments_per_case": 3,
+    "duration_predictions_per_case": 3,
+    "random_order": [
+      2,
+      0,
+      1,
+      2
+    ],
+    "generation_predictions_per_case": 40,
+    "pcm_bit_exact": true,
+    "live_tensors_stable": true
+  },
+  "installed_packages": {
+    "schema_version": 1,
+    "passed": true,
+    "source_commit": "f9ee7cfc174661593e3eaccc5ef2164b8218065a",
+    "qualification_script_sha256": "459bee853b05418e890bd851b828b57ae852b775b5e821d4673d2c37a12b3bea",
+    "checks": [
+      "rust-build",
+      "wheel-build",
+      "wheel-install",
+      "python-installed-origin",
+      "python-tests",
+      "python-example",
+      "go-origin",
+      "go-tests",
+      "go-vet",
+      "go-example"
+    ],
+    "pcm": {
+      "en_M1": {
+        "sha256": "4038262bfaf073efaa6277cc8b2b13b82416c1bec7e025f96040cf437be83335",
+        "frames": 70546,
+        "byte_exact": true
+      },
+      "en_F1": {
+        "sha256": "5e17f8220d53c32fb2f79b484167b150ad097f3dec255fac311d678ade3d52e9",
+        "frames": 70710,
+        "byte_exact": true
+      },
+      "ko_M1": {
+        "sha256": "c771df426bd1f7684ab10a7ae0e559ab6a12cbdae9846e40dbf36e912e18f9a4",
+        "frames": 126328,
+        "byte_exact": true
+      },
+      "ko_F1": {
+        "sha256": "783aa4a0b8382fea9eaa5b83169f899fcc692d7c41c1877cab37f770f83038da",
+        "frames": 126615,
+        "byte_exact": true
+      }
+    },
+    "native_files": {
+      "mlsr_ffi.dll": "fa76cc521256532f506ca25e32692c01aeef20892d92abb150b1d35d6d6f0f4a",
+      "mlsr_ffi.dll.lib": "dee25f168075763d205124b68365a276750a78ec181a0d8914ab5415f11b4b4f",
+      "mlsr_qnn_bridge.dll": "e94f1ea47468b3026b7c36fa2a873e63b36d3e730d0421fcfd87ff036311afad",
+      "qnn_executorch_backend.dll": "95eb9131d4825ac0fca0a7104442ff6937bff78b5fb2e04047dc5d26580d9395"
+    },
+    "manifest_sha256": "f90d715ad26bf7b7069b92e2762963b0b622f0150be916e7e80eaaba07266880",
+    "wheel_sha256": "8f4806c7cf382340b839d33f4ae6f41cc3dd438ab70728df36bed86c234b6dcc",
+    "logs": {
+      "go-example.log": "f0cdcfdb28262f3ef5e419f515f1b3e0eefb186ffbec71046f889b7b259a0b8d",
+      "go-origin.log": "ae7444d4c80332fd0fa476b0a027182acd14db4a7d1fb5516deb6994be935137",
+      "go-tests.log": "8e1e73359c7bcee9683b2c4b0dee071cfc58c4b6f5a27614b1b9b5df2654ba72",
+      "go-vet.log": "e02a95d2be46af46bbb85f18464a11aebb61aca156976c843f0bec5928935783",
+      "python-example.log": "10d0351e1bd791b79929e26869fb41a202954737f2e9972c864b6d7fc425b60c",
+      "python-installed-origin.log": "d0447e816c0a3f2d0240e31a3e7fc15e09e84dbc620019c279579416e5eeee52",
+      "python-tests.log": "f77759353078f9caf19403a31d35dd741238b715ca2b0f638f1e0e4604b6449d",
+      "rust-build.log": "aa7707a425b451d05ca926c5d38ff5a569f6f1d92a2b03d80b9a33c98d61aed0",
+      "wheel-build.log": "a4ecbe834da50834371ccca2e29acef8aa2b66942eb9ee66738d38ed5a0c3bfb",
+      "wheel-install.log": "eb2decff34a95b566ac6fee243fc13d8c774c2f15e3c25ff75a2d84abca43977"
+    }
+  },
+  "windows_integration": {
+    "implementation_commit": "c7abf76dadfff4bfd522a63a1cd9a511f6c012a9",
+    "windows_output_commit": "57682d866490c4242ca70290114cbfde3b2cb4a8",
+    "combined_git_tree": "3d4794b9ef4792dc10c751543dfc0862e4483201",
+    "rust": {
+      "backend": "WASAPI shared mode",
+      "cases": [
+        {
+          "frames": 70546,
+          "language": "en",
+          "native_drain": true,
+          "retained_pcm_bit_exact": true,
+          "voice": "supertonic3:M1"
+        },
+        {
+          "frames": 126615,
+          "language": "ko",
+          "native_drain": true,
+          "retained_pcm_bit_exact": true,
+          "voice": "supertonic3:F1"
+        }
+      ],
+      "muted": true,
+      "native_stream_opens": 1,
+      "passed": true,
+      "rate": 1
+    },
+    "python_native_reader_tests_passed": 2,
+    "go_native_reader_tests_passed": 2,
+    "on_demand_seek_passed": true
+  },
+  "legacy_bundle_regression": {
+    "runtime_tests_passed": 5,
+    "sdk_tests_passed": 1,
+    "pcm_matches_previous_qualification": {
+      "en_M1": "f9f47a46fec7db1ed096f8b1fd509dc46ae52b332979e53333ea994c5d74a2c0",
+      "en_F1": "2ccd1ebb11137597e8d2389c9dcfe8e5ade6a159617008035093bb760708caf0",
+      "ko_M1": "85eba7338cf09eceed2a8d6040784d9461325c1e826c781f5973b882d41e980e",
+      "ko_F1": "470a96622a823c26937ad7383e1ed5db74d5a7cacaa40b2722d27ca2ec37eb37"
+    }
+  },
+  "portable_checks": {
+    "core_passed": 102,
+    "ffi_passed": 9,
+    "model_tools_passed": 56,
+    "model_tools_skipped": 1,
+    "clippy_all_targets_all_features": "passed",
+    "export_assembly_tests_passed": 22
+  },
+  "evidence_log_sha256": {
+    "qnn-context-device-release-20261019.log": "c278ae3fc6ee8e22d91b8be4af8deae8ff5d1ac889f0c194be1a1cd0f93424b9",
+    "qnn-context-portable-20261019.log": "41a71080d7fd39c77b2237decee0294683ed2e6261dbef9a22dfddbba94373d8",
+    "qnn-context-model-tools-20261019.log": "b0b63e5896aa982ac025715353ffdaa490964a9d2126049c17809e71da4b6bb9",
+    "qnn-context-clippy-20261019.log": "97ae221e5f423daf2f259633262d60d274c3cc873e172641c2cc0148ee036a74",
+    "qnn-context-legacy-sdk-20261019.log": "645c685401d71eb4865a3422589850f9ce4e1e740079314632f7c4dfdf5c561a",
+    "qnn-context-legacy-runtime-20261019.log": "5481f97f3db11091b6bc22ad1c8837e57c42ecd492f94293e36a0c94c3702dfa",
+    "qnn-context-windows-20261019.log": "41b799bb29660f2ed109cf6d273ada11033107bdfd4b843c9ed18678b4f14eb2",
+    "qnn-context-windows-python-20261019.log": "2b805dfeef8fb668f21054a980009647ddda51d3b94a110ad487b0361dbc894e",
+    "qnn-context-windows-go-20261019.log": "32773c684d278cc6ed6730544c8c554848fa2c147802fa392e979a59b866369e",
+    "qnn-context-legacy-pcm-20261019.log": "f65eba72194594cdc00b0bdd58161d5c7cbf4fae614ffce79e9128ff9f0b3dd7"
+  }
+}

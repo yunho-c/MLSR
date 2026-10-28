@@ -169,8 +169,8 @@ fn slow_observers_single_consumer_and_drop_have_independent_lifetimes() {
     );
     assert_eq!(
         job.snapshot().estimated_frames,
-        None,
-        "partial duration is not the whole request"
+        Some(84000),
+        "the complete estimate is independent of a stalled PCM consumer"
     );
     drop(audio);
     let done = job.wait(Duration::from_secs(5)).unwrap();
@@ -188,6 +188,98 @@ fn slow_observers_single_consumer_and_drop_have_independent_lifetimes() {
             ..
         })
     ));
+}
+
+#[test]
+fn duration_pass_publishes_only_complete_estimates_and_reuses_each_prediction() {
+    let probe = crate::engine::duration_fake(Some(1), 17);
+    let tts = Tts::new(probe.engine, bounded()).unwrap();
+    let job = tts
+        .synthesize(request(&tts, "First.\nSecond.\nThird."))
+        .unwrap();
+    job.start().unwrap();
+    probe.entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    let partial = job.snapshot();
+    assert!(partial.plan_ready);
+    assert_eq!(partial.phase, SynthesisPhase::Preparing);
+    assert_eq!(partial.estimated_frames, None, "no partial sum escapes");
+    assert_eq!(partial.generated_frames, 0);
+    assert_eq!(probe.calls.load(Ordering::SeqCst), 0, "duration-only pass");
+    probe.release.send(()).unwrap();
+    let ready = await_state(&job, |s| {
+        s.estimated_frames.is_some() && s.queued_frames == 64
+    });
+    assert_eq!(ready.estimated_frames, Some(126000));
+    assert_eq!(ready.duration_frames, None);
+    assert_eq!(probe.predictions.load(Ordering::SeqCst), 3);
+    assert_eq!(
+        ready.consumed_frames, 0,
+        "planning bypasses PCM backpressure"
+    );
+    let (pcm, done) = drain(&job);
+    assert_eq!(done.frames, 126000 - 3 * 17);
+    assert_eq!(pcm.len() as u64, done.frames);
+    assert_eq!(job.snapshot().duration_frames, Some(done.frames));
+    assert_eq!(job.snapshot().estimated_frames, Some(126000));
+    assert_eq!(
+        probe.predictions.load(Ordering::SeqCst),
+        3,
+        "no repeated predictor calls"
+    );
+    assert_eq!(probe.reused.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn cancellation_during_duration_prediction_waits_for_quiescence_and_skips_audio() {
+    let probe = crate::engine::duration_fake(Some(1), 0);
+    let tts = Tts::new(probe.engine, bounded()).unwrap();
+    let job = tts
+        .synthesize(request(&tts, "First.\nSecond.\nThird."))
+        .unwrap();
+    job.start().unwrap();
+    probe.entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    job.cancel();
+    assert!(job.wait(Duration::from_millis(10)).is_none());
+    assert!(job.snapshot().estimated_frames.is_none());
+    probe.release.send(()).unwrap();
+    let done = job.wait(Duration::from_secs(3)).unwrap();
+    assert!(matches!(
+        done.outcome,
+        Outcome::Cancelled {
+            reason: CancelReason::Requested
+        }
+    ));
+    assert_eq!(done.frames, 0);
+    assert_eq!(probe.predictions.load(Ordering::SeqCst), 2);
+    assert_eq!(probe.calls.load(Ordering::SeqCst), 0);
+    let recovered = tts.synthesize(request(&tts, "Next.")).unwrap();
+    assert!(matches!(drain(&recovered).1.outcome, Outcome::Completed));
+}
+
+#[test]
+fn duration_pass_enforces_segment_limits_before_any_pcm_and_reports_planning_failure() {
+    let probe = crate::engine::duration_fake(None, 0);
+    let tts = Tts::new(
+        probe.engine,
+        QueueOptions {
+            job: JobOptions::new(64, 16, 100).unwrap(),
+            ..QueueOptions::default()
+        },
+    )
+    .unwrap();
+    let job = tts
+        .synthesize(request(&tts, "Too long.\nAnother sentence."))
+        .unwrap();
+    job.start().unwrap();
+    let done = job.wait(Duration::from_secs(3)).unwrap();
+    let Outcome::Failed { error } = done.outcome else {
+        panic!("missing planning failure")
+    };
+    assert_eq!(error.stage, FailureStage::Planning);
+    assert_eq!(done.frames, 0);
+    assert_eq!(job.snapshot().estimated_frames, None);
+    assert_eq!(probe.predictions.load(Ordering::SeqCst), 1);
+    assert_eq!(probe.calls.load(Ordering::SeqCst), 0);
 }
 #[test]
 fn close_cancels_lazy_queued_and_backpressured_jobs_then_joins() {

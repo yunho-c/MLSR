@@ -155,6 +155,28 @@ impl Job {
     pub fn queue_stats(&self) -> QueueStats {
         lock(&self.control.state).stats
     }
+    /// Whole-request prediction from start_plan's duration-only pass, available
+    /// before PCM and independent of queue capacity. None until every remaining
+    /// segment is planned, or for legacy start() jobs. Final frames may differ.
+    pub fn estimated_frames(&self) -> Option<u64> {
+        lock(&self.control.state).estimated_frames
+    }
+    /// Reusable full-document plans after a successful Engine::prepare_speech.
+    /// This never starts work, consumes events or retains native tensors.
+    pub fn prepared_speech(&self) -> Option<Arc<crate::engine::PreparedSpeech>> {
+        let state = lock(&self.control.state);
+        if matches!(
+            state.report.as_ref().map(|r| &r.outcome),
+            Some(Outcome::Completed)
+        ) {
+            state.prepared.clone()
+        } else {
+            None
+        }
+    }
+    pub(crate) fn set_generation_limit(&self, end: Option<u64>) {
+        self.control.set_generation_limit(end);
+    }
 }
 impl Drop for Job {
     fn drop(&mut self) {
@@ -172,6 +194,9 @@ struct State {
     report: Option<JobReport>,
     terminal_delivered: bool,
     stats: QueueStats,
+    estimated_frames: Option<u64>,
+    generation_limit: Option<u64>,
+    prepared: Option<Arc<crate::engine::PreparedSpeech>>,
 }
 pub(crate) struct Control {
     pub(crate) id: u64,
@@ -191,6 +216,9 @@ impl Control {
                 report: None,
                 terminal_delivered: false,
                 stats: QueueStats::default(),
+                estimated_frames: None,
+                generation_limit: None,
+                prepared: None,
             }),
             changed: Condvar::new(),
         })
@@ -201,6 +229,13 @@ impl Control {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn prepared(&self, prepared: Arc<crate::engine::PreparedSpeech>) -> Result<()> {
+        let mut state = lock(&self.state);
+        self.checkpoint()?;
+        state.prepared = Some(prepared);
+        self.changed.notify_all();
+        Ok(())
     }
     pub(crate) fn cancel(&self) {
         let mut state = lock(&self.state);
@@ -225,6 +260,26 @@ impl Control {
         let _guard = self.capacity(frames)?;
         Ok(())
     }
+    pub(crate) fn set_generation_limit(&self, end: Option<u64>) {
+        let mut state = lock(&self.state);
+        if state.generation_limit != end {
+            state.generation_limit = end;
+            self.changed.notify_all();
+        }
+    }
+    /// Admit a complete segment by its actual source start. Once admitted, all
+    /// of its PCM may drain even if playback pauses or seeks backward. Use the
+    /// same condition variable as cancellation, so no pacing wait delays close.
+    pub(crate) fn wait_generation(&self, start: u64) -> Result<()> {
+        let mut state = lock(&self.state);
+        loop {
+            self.checkpoint()?;
+            if state.generation_limit.is_none_or(|end| start < end) {
+                return Ok(());
+            }
+            state = self.changed.wait(state).unwrap_or_else(|p| p.into_inner());
+        }
+    }
     fn capacity(&self, frames: usize) -> Result<MutexGuard<'_, State>> {
         let mut state = lock(&self.state);
         loop {
@@ -244,6 +299,13 @@ impl Control {
         let mut state = self.capacity(0)?;
         state.queue.push_back(Event::Predicted(segment));
         self.queued(&mut state);
+        Ok(())
+    }
+    pub(crate) fn estimate(&self, frames: u64) -> Result<()> {
+        let mut state = lock(&self.state);
+        self.checkpoint()?;
+        state.estimated_frames = Some(frames);
+        self.changed.notify_all();
         Ok(())
     }
     pub(crate) fn audio(

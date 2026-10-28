@@ -24,6 +24,24 @@ fn output_feature_bits_match_lazy_foreign_configuration_and_headless_override() 
     }
 }
 
+#[test]
+fn reader_cache_mode_is_explicit_and_preserves_legacy_retention_settings() {
+    let mut settings = MlsrSpeechOptions::default();
+    let (legacy, _) = speech_options(settings).unwrap();
+    assert!(legacy.retains_audio());
+    assert!(!legacy.on_demand_seeking());
+    settings.retain_audio = 2;
+    settings.paused = 1;
+    let (reader, _) = speech_options(settings).unwrap();
+    assert!(reader.retains_audio() && reader.on_demand_seeking() && reader.paused());
+    assert_eq!(reader.lookahead_frames(), 88200);
+    settings.retain_audio = 3;
+    assert!(speech_options(settings).is_err());
+    settings.retain_audio = 0;
+    let (unretained, _) = speech_options(settings).unwrap();
+    assert!(!unretained.retains_audio() && !unretained.on_demand_seeking());
+}
+
 fn read_json(handle: MlsrHandle) -> serde_json::Value {
     let mut view = MlsrString::default();
     let mut error = 0;

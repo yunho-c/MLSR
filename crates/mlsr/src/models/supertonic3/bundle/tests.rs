@@ -2,6 +2,39 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn qnn_context_manifest_pins_every_bucket_and_rejects_mixed_profiles() {
+    let manifest = parse_manifest(QNN_CONTEXT.as_bytes()).unwrap();
+    assert_eq!(manifest.artifacts.len(), 22);
+    assert_eq!(manifest.contract["latent_buckets"], json!([128, 256, 512]));
+    assert_eq!(manifest.contract["noise_capacity"], 512);
+    for (pointer, value) in [
+        ("/contract/noise_capacity", json!(128)),
+        ("/contract/latent_buckets", json!([128, 512])),
+        ("/contract/text_tokens", json!(128)),
+        (
+            "/artifacts/ve_512/inputs/text_emb/shape",
+            json!([1, 256, 128]),
+        ),
+        (
+            "/artifacts/vocoder_256/inputs/latent/shape",
+            json!([1, 144, 128]),
+        ),
+        (
+            "/artifacts/vocoder_512/files/0/sha256",
+            json!("0".repeat(64)),
+        ),
+        ("/artifacts/ve_128/precision/compute", json!("float32")),
+    ] {
+        let mut value_map: Value = serde_yaml_ng::from_str(QNN_CONTEXT).unwrap();
+        *value_map.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            parse_manifest(serde_yaml_ng::to_string(&value_map).unwrap().as_bytes()).is_err(),
+            "{pointer}"
+        );
+    }
+}
+
+#[test]
 fn qnn_manifest_pins_program_semantics_and_target() {
     let manifest = parse_manifest(QNN.as_bytes()).unwrap();
     assert_eq!(manifest.artifacts.len(), 14);
@@ -9,6 +42,7 @@ fn qnn_manifest_pins_program_semantics_and_target() {
     for (pointer, value) in [
         ("/runtime/target_soc", json!(42)),
         ("/contract/supported_steps", json!([5, 8])),
+        ("/contract/text_tokens", json!(384)),
         ("/contract/noise_capacity", json!(96)),
         ("/artifacts/ve_96/outputs/output/shape", json!([2, 144, 96])),
         (
@@ -71,6 +105,20 @@ fn discovers_bundles_and_pins_original_manifest_bytes() {
     Bundle::open(root).unwrap();
     fs::write(root.join("tts.json"), b"corrupt").unwrap();
     assert!(Bundle::open(root).is_err());
+}
+
+#[test]
+fn recommended_profile_rejects_mixed_text_axes_and_unknown_capacities() {
+    let manifest = BundleManifest::recommended();
+    assert_eq!(manifest.id(), "supertonic3-coreml-fp16-t384-voices-v1");
+    let mut value: serde_json::Value = serde_yaml_ng::from_slice(manifest.bytes()).unwrap();
+    value["artifacts"]["text_encoder"]["outputs"]["text_emb"]["shape"][2] = 128.into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
+    value["contract"]["text_tokens"] = 512.into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
+    let mut value: serde_json::Value = serde_yaml_ng::from_slice(manifest.bytes()).unwrap();
+    value["runtime"]["kind"] = "qnn".into();
+    assert!(BundleManifest::parse(serde_yaml_ng::to_string(&value).unwrap().as_bytes()).is_err());
 }
 
 #[test]
@@ -170,8 +218,11 @@ pub(crate) struct Fixture {
 }
 impl Fixture {
     pub(crate) fn new() -> Self {
+        Self::from_manifest(BASELINE)
+    }
+    fn from_manifest(manifest: &str) -> Self {
         let directory = tempfile::tempdir().unwrap();
-        let mut value: Value = serde_yaml_ng::from_str(BASELINE).unwrap();
+        let mut value: Value = serde_yaml_ng::from_str(manifest).unwrap();
         let root = directory.path();
         for (name, a) in value["artifacts"].as_object_mut().unwrap() {
             let graph = a["kind"] == "coreml_compiled";
@@ -183,7 +234,7 @@ impl Fixture {
             let data = match name.as_str() {
                 "tts_config" => serde_json::to_vec(&json!({"ae":{"sample_rate":44100,"base_chunk_size":512},"ttl":{"chunk_compress_factor":6,"latent_dim":24}})).unwrap(),
                 "unicode_indexer" => serde_json::to_vec(&vec![-1i32;65536]).unwrap(),
-                "voice_M1" | "voice_F1" => serde_json::to_vec(&json!({
+                _ if a["kind"] == "voice_style" => serde_json::to_vec(&json!({
                     "style_ttl":{"dims":[1,50,256],"type":"float32","data":[vec![vec![0.25f32;256];50]]},
                     "style_dp":{"dims":[1,8,16],"type":"float32","data":[vec![vec![-0.5f32;16];8]]}
                 })).unwrap(),
@@ -211,6 +262,104 @@ impl Fixture {
         a["files"][0]["size_bytes"] = json!(bytes.len());
         a["files"][0]["sha256"] = json!(format!("{:x}", Sha256::digest(&bytes)));
     }
+}
+
+#[test]
+fn expanded_release_preserves_existing_assets_and_legacy_identity() {
+    let original = BundleManifest::parse(FP16.as_bytes()).unwrap();
+    original
+        .require_sha256("4e872b2627fc50f6920549525eb4aed7d3572c8dd458b090083e62a827627c49")
+        .unwrap();
+    assert_eq!(original.voice_catalog().voices().len(), 2);
+    let expanded = BundleManifest::recommended();
+    for file in original.files() {
+        assert_eq!(expanded.files().find(|f| f.path == file.path), Some(file));
+    }
+    assert_eq!(expanded.files().count(), original.files().count() + 8);
+    assert_eq!(
+        expanded.files().map(|f| f.size_bytes).sum::<u64>()
+            - original.files().map(|f| f.size_bytes).sum::<u64>(),
+        2_331_748
+    );
+    let catalog = expanded.voice_catalog();
+    assert_eq!(
+        catalog
+            .voices()
+            .iter()
+            .map(|v| v.display_name())
+            .collect::<Vec<_>>(),
+        [
+            "Alex", "James", "Robert", "Sam", "Daniel", "Sarah", "Lily", "Jessica", "Olivia",
+            "Emily"
+        ]
+    );
+    for voice in catalog.voices() {
+        assert_eq!(voice.languages().len(), 31);
+        assert_eq!(
+            voice.qualified_languages().len(),
+            if matches!(voice.model_voice_id(), "M1" | "F1") {
+                2
+            } else {
+                0
+            }
+        );
+    }
+}
+
+#[test]
+fn voice_inventory_drives_loaded_catalog_and_rejects_invalid_declarations() {
+    let fixture = Fixture::from_manifest(RECOMMENDED);
+    let bundle = fixture.load().unwrap();
+    assert_eq!(bundle.voices().count(), 10);
+    assert_eq!(bundle.voice("F4").unwrap().style_dp().shape(), [1, 8, 16]);
+    let catalog = bundle.voice_catalog();
+    assert_eq!(
+        catalog.get("supertonic3:F4").unwrap().display_name(),
+        "Olivia"
+    );
+    assert!(catalog.voices().iter().all(|v| v.readiness()
+        == crate::voice::VoiceReadiness::AssetsVerified
+        && v.qualified_languages().is_empty()));
+    for (pointer, value) in [
+        ("/contract/voices", json!([])),
+        ("/contract/voices", json!(["M1", "M1"])),
+        ("/contract/voices", json!(["../M1"])),
+        ("/contract/voices", json!([42])),
+        ("/contract/voices", json!(["M1", "missing"])),
+        ("/voice_names/F4", json!("")),
+        ("/voice_names/F4", json!("bad\nname")),
+        ("/artifacts/voice_F4/kind", json!("coreml_compiled")),
+    ] {
+        let mut value_map = fixture.value.clone();
+        *value_map.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            BundleManifest::parse(serde_yaml_ng::to_string(&value_map).unwrap().as_bytes())
+                .is_err(),
+            "{pointer}"
+        );
+    }
+    let mut fixture = Fixture::from_manifest(RECOMMENDED);
+    fixture.value["contract"]["voices"] = json!(["F4"]);
+    fixture.value["voice_names"] = json!({"F4": "Olivia"});
+    fixture.value["artifacts"]
+        .as_object_mut()
+        .unwrap()
+        .retain(|key, _| !key.starts_with("voice_") || key == "voice_F4");
+    let bundle = fixture.load().unwrap();
+    assert_eq!(bundle.voices().collect::<Vec<_>>(), ["F4"]);
+    let catalog = bundle.voice_catalog();
+    assert_eq!(catalog.voices().len(), 1);
+    assert_eq!(
+        catalog
+            .resolve("ja", None, crate::voice::VoiceFallback::Strict)
+            .unwrap()
+            .voice()
+            .model_voice_id(),
+        "F4"
+    );
+    assert!(catalog.get("supertonic3:M1").is_err());
+    fixture.change_asset("voice_F4", |v| v["style_ttl"]["dims"] = json!([1, 50, 255]));
+    assert!(fixture.load().is_err());
 }
 
 #[test]

@@ -1,0 +1,59 @@
+schema_version: 1
+kind: qnn_fp16_consolidation
+local_checks_passed: true
+parents:
+  local: 7d9e4feb8a2484d84c75ba5f79ce1ec4288215e4
+  upstream: 751b8db49a61e186289aa2547a135a058d7a3a8c
+host: macOS arm64
+recommended_model: supertonic3-coreml-fp16-t384-v1
+qnn_manifest_and_catalog: byte-identical to upstream parent
+checks:
+  developer_check: 'passed: Rust, C, Python, Go, Dart and generated C header'
+  all_feature_rust:
+    core_passed: 93
+    core_ignored: 11
+    cli_passed: 7
+    ffi_passed: 8
+    playback_passed: 2
+    playback_ignored: 1
+  all_feature_clippy: passed
+  minimum_rust: 1.88.0 all-feature check passed
+  windows_compile: x86_64-pc-windows-msvc all-target/all-feature check passed
+  python_model_tools: 57
+  flutter_binding_tests: 10
+  flutter_app_analysis: passed
+evidence_root: /Users/yunhocho/.cache/mlsr/qualification/qnn-fp16-consolidation-ytaqom5q
+evidence:
+  fp16-ordinary.yaml:
+    sha256: 4f19295c52926826a806ec8659c0a81062a92eda4b589fb526b00a96236c1fd3
+    passed: true
+    tensor_comparisons: 768
+    passes: 2
+    output_backings: false
+  fp16-backings.yaml:
+    sha256: 175346820292d3dfa68190d3453a2f99178fad35e8a733d005ed11be98a01dfc
+    passed: true
+    tensor_comparisons: 768
+    passes: 2
+    output_backings: true
+  flutter-integration/report.json:
+    sha256: 0d9915a8c89a751829b3c646d57ae609bef3e68f5ce6b6f2be68fa151e3d4b39
+    passed: true
+    muted: true
+    handles_before: 0
+    handles_after: 0
+  developer-check.log:
+    sha256: bfaf8be6a14045625f02e9056c1a2fefddd7623e2eb17700de13e45df7528f00
+  rust-checks.json:
+    sha256: 202dc2efa2e1884830a9de266129b84a4475a9c9a3428989d24b959d581f06a5
+  minimum-rust.log:
+    sha256: b35ff07bc90779940cf8414c3f292521a40da27be0b4374bfc31c9a5cc04d44c
+  flutter-bindings.log:
+    sha256: 65d7159b391f9885b243a7a73198f2eb8b85ec3fb252725009a1e0d30f93136f
+limits:
+- QNN Windows ARM64 device execution was not rerun; upstream device evidence remains
+  historical.
+- The Windows x64 compile check does not execute or compile the Windows ARM64 QNN
+  bridge.
+- Core ML numerical replay and muted Flutter tests do not establish new perceptual
+  or performance claims.

@@ -1,0 +1,188 @@
+{
+  "result": "pass",
+  "qualified_at_utc": "2026-10-19T04:39:20.250602+00:00",
+  "base_commit": "1e62f706ac70cd78a79618015a52781df3ec8c48",
+  "branch": "feat/duration-planning",
+  "source_state_at_qualification": "working tree based on base_commit; runtime and test sources identified by SHA-256 below",
+  "source_sha256": {
+    "bindings/dart/dart_test.yaml": "12d6fcd159d1ff6385aadad1c36751ae8390457a7d6fe78fad1e17a81a11784a",
+    "bindings/dart/lib/src/bindings.g.dart": "2e8ff565ad235746ca24aa0313747ac47caa6dc72c2799b693f6713f0a3155ea",
+    "bindings/dart/lib/src/sdk_native.dart": "0025c15caf6541decb292f2e618d1e9bb749253c4e587c259539433fd6cc317c",
+    "bindings/dart/lib/src/sdk_types.dart": "75b1e669e376f5774693b2afd25393fa8f37043af61e97c6219b88cfe0d81c96",
+    "bindings/go/sdk.go": "70ef8335ad351d99657d3b9bda2ad97662a2938102b008434e693d88c5fb3e69",
+    "bindings/go/sdk_native.go": "8fd66903f8e4c7a5e7f72ce437b1f550baf0395d87d34b06e44f049d9998b61a",
+    "bindings/go/sdk_test.go": "2e91f0f2d719c7054cc5a662a2764c72f29ef26a4ebff2840eeb30a11984e4fb",
+    "bindings/go/sdk_types.go": "0bab7b4da7a529d35a9313f7fc32f40cdb8a3c2aa2a1114ea416e45a6fdad7ec",
+    "bindings/python/src/mlsr/_sdk.py": "8770fb06f079d974aa3d212aba3cc33d9916466438b01a59947cb650dcd5084e",
+    "bindings/python/src/mlsr/sdk_types.py": "893449572d3033f58acef658c18508fbc2b35f7d147eedc2c86e1560ac0df041",
+    "bindings/python/tests/test_sdk.py": "11e79afb3f1cdca29146378f342bac53b00c96c480415d81ead64d2bcf32a1f4",
+    "crates/mlsr-ffi/src/api/sdk/mod.rs": "ba8a91a9659dad729bd91e5ebac5284442fc44b609a4acd1b6cf469dc0660d02",
+    "crates/mlsr-ffi/src/api/sdk/speech.rs": "157193bdc51b1507e694633fbe64c616aaea5e88ed448b98dd9b0e049d3c2018",
+    "crates/mlsr-ffi/src/api/sdk/tests.rs": "eede9ddc658efb4c1f31754f9811f1cef9aa639cbabf5db3e483092227d77553",
+    "crates/mlsr-ffi/src/types/sdk.rs": "49de9562df1574564f3ee4c7f42d05660953e619190ee63a203ac556ac12dbaa",
+    "crates/mlsr/src/completion.rs": "e207d45438b3228130766289dfb3251066c40ee5fedcb22317ba0c653f44c565",
+    "crates/mlsr/src/engine.rs": "065491498f8528643b20efe4371a1869a9f1b0c93959c2ad326ca10dd5607ddd",
+    "crates/mlsr/src/engine/job_tests.rs": "5bb859c4f9a6cee770154a5f30cfc9985ea55478cf5b93968910ba56781d9c21",
+    "crates/mlsr/src/engine/prepared.rs": "5bd52cb5bff894eba81e17154f95d986f6f7c9490037fec20782466884de56f0",
+    "crates/mlsr/src/job.rs": "f61cf93cf814bf6e6daeb5ffd5bc5f0f4ebc5bae164ae963d9b0adf82c668dd7",
+    "crates/mlsr/src/request.rs": "5c0612a43b583437e32ec8a1eeed1a12052ccdaf498cd45781564097ecceb9a8",
+    "crates/mlsr/src/retention.rs": "18e573950e07c2d6035fe1e95b83a841524c43c49e647fb49df77ba19c552643",
+    "crates/mlsr/src/speech/document.rs": "115a37c33b0b6d9c3a176e41e0236a47ec4906e1caae0be61c0247608cbe5a96",
+    "crates/mlsr/src/speech/mod.rs": "bb7796b79e48628f2fcd924257ad42489838699e0c63661a25d900eee6e93f56",
+    "crates/mlsr/src/speech/reader.rs": "e0eed81dfd08fb325fe82257785469c9743fd38d12f0d777c4ac31e730f06bbb",
+    "crates/mlsr/src/speech/tests.rs": "1376900c5e7369a0ed6238fd378257baaac45d5fa8951f9d78ccaf6be917ed7a",
+    "crates/mlsr/src/speech/tests/reader_tests.rs": "125b14916e6c270825b2b2390c85d269578ce86c1cb835689b24a0481593fdba",
+    "crates/mlsr/src/speech/worker.rs": "d276d9be4ae8f0f53d437351d2fa0a0387ff338b53dfd8c775e1f7e8b570c3f8",
+    "crates/mlsr/src/synthesis/mod.rs": "7c84ef5864dfcfaf54462b07a2a372135a606a766525d530468adfa8b8efd6bd",
+    "crates/mlsr/src/synthesis/queue.rs": "72d56bd3f5253a6d46b1793fc03df6729e93eb5496e5fa4dc83783720ed90315",
+    "examples/flutter_speak/integration_test/speak_test.dart": "eca40b2279278b6b744f9e530c588e1c67e40d039ba260cdb0ca075cfdb6d2db",
+    "examples/flutter_speak/lib/buffered_track.dart": "9d2833198f055666db7bc28a7f069287494329577007cda192c60e636e555c9d",
+    "examples/flutter_speak/lib/reader_controls.dart": "6500be7055fe025dfd8a8d730add487b40062ceb53324b50af3e9023e7c25e1b",
+    "examples/flutter_speak/lib/speech_controller.dart": "925c427f2184628f69e3f513f442bab220789fe8160be35cd79e60f380f7410d",
+    "examples/flutter_speak/lib/speech_timeline.dart": "700e9aa4fa49bbf3cc56194cfb8264960a95415fbd233cfc306e44be95c83675",
+    "examples/flutter_speak/test/timeline_test.dart": "f8dbc2b3a86f10ca846df507e2a118bdf0891991250ee5e9038955b6a6a7f0ca",
+    "include/mlsr.h": "83c25f81205079f75d229b8d0ee99b53b448aa401d63e6b070971d1517b99ea3"
+  },
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "hardware": "Apple M4 Pro",
+  "toolchains": {
+    "rust": "1.95.0",
+    "rust_msrv": "1.88.0",
+    "dart": "3.11.1",
+    "flutter": "3.41.4",
+    "go": "1.27.1",
+    "python": "3.14.8"
+  },
+  "native_libraries_sha256": {
+    "python_go_debug": "c84fa5dcd3c2761c8b684c96e91a5b167b289854bdd672f5ef93d94793be90f3",
+    "flutter_bundled": "ab974f1b8b82cbcd0fedeb5cd6bf4c5688a552414a61f904ac4aceb08c630c15"
+  },
+  "model_manifest_sha256": "958b204a6e0ef2c527a9258b7fa3a27ce54ec5d0857ca69a6aa25da72f294dc5",
+  "model_bundle": "/Users/yunhocho/.cache/mlsr/models/supertonic3-coreml-int4-v1",
+  "external_evidence": "/Users/yunhocho/.cache/mlsr/qualification/on-demand-seek-b1p7k8a5",
+  "rust_workspace": {
+    "passed": 114,
+    "ignored_external_tests": 13,
+    "command": "cargo test --locked --workspace --all-features",
+    "log": "rust-tests.log"
+  },
+  "reader_regressions": [
+    "unbuffered_seek_keeps_document_identity_and_uses_disjoint_cached_segments",
+    "bounded_reader_cache_evicts_old_audio_and_regenerates_it_on_return",
+    "latest_seek_wins_while_native_inference_is_blocked",
+    "ending_after_a_skip_is_not_a_complete_recording_and_replay_keeps_the_document",
+    "actual_duration_refinement_preserves_segment_targets_and_cached_identity",
+    "seek_accepted_during_final_output_drain_prevents_old_completion",
+    "complete_reader_export_matches_pcm_and_paused_reader_releases_inference_lane",
+    "reader_close_waits_for_native_quiescence_and_cleans_partial_cache",
+    "a_document_longer_than_the_cache_plays_to_the_end_with_one_cached_segment"
+  ],
+  "prepared_segment_parity": {
+    "result": "pass",
+    "qualified_commit": "1e62f706ac70cd78a79618015a52781df3ec8c48",
+    "command": "MLSR_TEST_BUNDLE=/absolute/verified/model cargo test --locked -p mlsr --all-features real_prepared_segments_match_linear_synthesis -- --ignored --nocapture",
+    "record": "earlier in-session test output, before the prepared-segment foundation commit",
+    "language_voice": "en/M1",
+    "seed": 1729,
+    "steps": 8,
+    "raw_speed": 1.05,
+    "duration_predictions": 3,
+    "generation_order": [
+      2,
+      0,
+      1,
+      2
+    ],
+    "additional_model_calls": 40,
+    "pcm_comparison": "every Float32 bit equals the corresponding original linear-synthesis segment",
+    "live_native_tensors": "unchanged"
+  },
+  "checks": [
+    "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+    "cargo +1.88.0 check --locked --workspace --all-targets --all-features",
+    "cargo fmt --all -- --check",
+    "git diff --check",
+    "cargo run --locked -p mlsr-codegen -- --check",
+    "dart run tool/generate_bindings.dart --check (bindings/dart)",
+    "dart analyze --fatal-infos (bindings/dart)",
+    "flutter analyze --no-pub (examples/flutter_speak)",
+    "flutter test test --no-pub: 8 passed"
+  ],
+  "bindings": {
+    "python": {
+      "portable": "python3 -m unittest discover -s bindings/python/tests: 7 passed, 7 model/native tests skipped",
+      "native": "test_sdk.RealNativeSpeech.test_on_demand_seek_preserves_document_and_pause: passed",
+      "native_log": "python-native.log"
+    },
+    "go": {
+      "portable": "go test -race ./...: passed",
+      "native": "go test -race -run TestRealSDKOnDemandSeek -v ./...: passed",
+      "native_log": "go-native.log"
+    },
+    "dart": {
+      "portable": "dart test: 4 passed, 6 model/native tests skipped",
+      "log": "dart-tests.log",
+      "qualification_note": "Default parallel execution initially failed a process-global native-handle-count assertion while another suite held a handle. dart_test.yaml now serializes suites; the ordinary dart test command passes without weakening assertions. Real Dart/native behavior is exercised by Flutter integration."
+    },
+    "native_test_environment": {
+      "MLSR_TEST_MANIFEST": "/Users/yunhocho/GitHub/MLSR-duration-planning/model-manifests/supertonic3-coreml.yaml",
+      "MLSR_TEST_BUNDLE": "/Users/yunhocho/.cache/mlsr/models/supertonic3-coreml-int4-v1",
+      "MLSR_TEST_NATIVE_OUTPUT": "1",
+      "MLSR_LIBRARY_PATH": "/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug/libmlsr_ffi.dylib",
+      "PYTHONPATH": "bindings/python/src:bindings/python/tests",
+      "CGO_CFLAGS": "-I/Users/yunhocho/GitHub/MLSR-duration-planning/include",
+      "CGO_LDFLAGS": "-L/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug -Wl,-rpath,/Users/yunhocho/GitHub/MLSR-duration-planning/target/debug"
+    }
+  },
+  "flutter": {
+    "passed": true,
+    "muted": true,
+    "timing_boundary": "UI observation at 20 ms pump intervals; not acoustic or native flush timing",
+    "first_retained_pcm_observed_ms": 280.783,
+    "early_duration_estimate_frames": 4860828,
+    "position_at_early_estimate_frames": 0,
+    "buffer_at_early_estimate_frames": 94746,
+    "first_position_observed_ms": 417.287,
+    "retained_peak_bytes": 378984,
+    "cancel_to_terminal_observed_ms": 65.794,
+    "paused_retained_segment_frames": 199007,
+    "segment_start_lookahead_frames": 88200,
+    "seek_beyond_lookahead_frame": 92296,
+    "unbuffered_seek_observed_ms": 95.537,
+    "unbuffered_seek_target_frame": 3499796,
+    "unbuffered_seek_preserved_request": true,
+    "disjoint_buffered_ranges": [
+      [
+        0,
+        94746
+      ],
+      [
+        3335298,
+        3514618
+      ]
+    ],
+    "return_to_cached_frame": 4096,
+    "generation_finished_while_playing": true,
+    "wav_frames": 70669,
+    "unsupported_character_rejected": true,
+    "handles_before": 0,
+    "handles_after": 0,
+    "heartbeat_ticks": 455,
+    "heartbeat_max_gap_ms": 66.82
+  },
+  "flutter_command": "flutter test integration_test/speak_test.dart -d macos --no-pub --dart-define=MLSR_TEST_OUTPUT=/Users/yunhocho/.cache/mlsr/qualification/on-demand-seek-b1p7k8a5/flutter-final",
+  "flutter_log": "flutter-final.log",
+  "screenshots": [
+    "flutter-final/unbuffered-seek.png",
+    "flutter-final/cached-return.png"
+  ],
+  "default_limits": {
+    "retained_pcm_bytes_per_tts": 134217728,
+    "retained_stores_per_tts": 128,
+    "reader_stores_per_segment": 1,
+    "pcm_bytes_per_source_second": 176400,
+    "automatic_lookahead_source_frames": 88200,
+    "raw_utf8_bytes_per_request": 65536
+  },
+  "scope": "Core ML INT4 and AVAudioEngine on this Mac, plus portable fake-backend scheduling/cache tests. No new QNN/T384 or other-device qualification, acoustic latency, audible quality or throughput claim. No C ABI layout change. SDK mode is opt-in; Flutter enables it."
+}

@@ -205,6 +205,8 @@ def request(lib, value):
 
 
 def speech_options(lib, value, mode):
+    if value.on_demand_seeking and not value.retain_audio:
+        raise ValueError("on-demand seeking requires retain_audio")
     settings = SpeechOptions()
     lib.mlsr_speech_options_default(C.byref(settings))
     settings.mode = enum(mode, ("replace", "enqueue"), "speech mode")
@@ -213,6 +215,8 @@ def speech_options(lib, value, mode):
         bool(value.paused),
         bool(value.retain_audio),
     )
+    if value.on_demand_seeking:
+        settings.retain_audio = 2
     settings.lookahead_frames = _uint(value.lookahead_frames, 32, "lookahead_frames")
     return settings
 

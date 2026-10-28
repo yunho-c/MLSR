@@ -4,7 +4,9 @@
 
 use std::ops::Range;
 mod plan;
+mod sentences;
 pub use plan::{PlannedSegment, Sentence, TextPlan, Utf16Map};
+pub(crate) use sentences::sentence_spans;
 
 /// Half-open UTF-8 byte range in the caller's original text. It never indexes
 /// normalized text; host languages should slice encoded UTF-8 or translate it.

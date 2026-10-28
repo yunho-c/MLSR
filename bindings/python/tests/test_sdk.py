@@ -29,7 +29,13 @@ class MetadataAndExport(unittest.TestCase):
         lib = ffi.library()
         before = lib.mlsr_live_handles()
         catalog = voices()
-        self.assertEqual([v.id for v in catalog], ["supertonic3:M1", "supertonic3:F1"])
+        self.assertEqual(
+            [v.id for v in catalog],
+            [f"supertonic3:{p}{i}" for p in ("M", "F") for i in range(1, 6)],
+        )
+        self.assertEqual(catalog[8].display_name, "Olivia")
+        self.assertEqual(catalog[8].qualified_languages, ())
+        self.assertEqual(resolve_voice("ja", "supertonic3:F4").language, "ja")
         self.assertEqual(catalog[0].readiness, "catalog_only")
         self.assertFalse(catalog[0].capabilities.word_alignment)
         with self.assertRaises(TtsError):
@@ -205,6 +211,57 @@ class RealDeveloperAPI(unittest.TestCase):
     os.environ.get("MLSR_TEST_NATIVE_OUTPUT"), "explicit native playback not requested"
 )
 class RealNativeSpeech(unittest.TestCase):
+    def test_on_demand_seek_preserves_document_and_pause(self):
+        lib = ffi.library()
+        before = lib.mlsr_live_handles()
+        with Tts(
+            os.environ["MLSR_TEST_MANIFEST"],
+            os.environ["MLSR_TEST_BUNDLE"],
+            compute_policy=os.environ.get("MLSR_TEST_POLICY", "cpu_and_neural_engine"),
+        ) as tts:
+            options = SpeechOptions(paused=True, volume=0.0, on_demand_seeking=True)
+            request = Request("Hello from MLSR. This is another passage to read.\n" * 8)
+            with tts.speak(request, options=options) as speech:
+
+                def wait_for(predicate):
+                    deadline = time.monotonic() + 10
+                    while True:
+                        state = speech.snapshot
+                        if predicate(state):
+                            return state
+                        self.assertIsNone(state.completion)
+                        self.assertLess(time.monotonic(), deadline, repr(state))
+                        time.sleep(0.005)
+
+                initial = wait_for(
+                    lambda s: s.estimated_frames is not None and s.buffered_ranges
+                )
+                target = initial.estimated_frames * 3 // 4
+                self.assertEqual(len(initial.seekable_ranges), 1)
+                self.assertEqual(
+                    initial.seekable_ranges[0].end, initial.estimated_frames
+                )
+                self.assertLess(initial.buffered_until_frame, target)
+                speech.seek(target)
+                ready = wait_for(
+                    lambda s: (
+                        s.position_frame == target
+                        and not s.seeking
+                        and len(s.buffered_ranges) >= 2
+                    )
+                )
+                self.assertEqual(ready.request_id, speech.id)
+                self.assertEqual(ready.playback, "paused")
+                self.assertIsNone(ready.seek_target_frame)
+                self.assertFalse(ready.recording_complete)
+                self.assertEqual(ready.estimated_frames, initial.estimated_frames)
+                speech.seek(0)
+                wait_for(lambda s: s.position_frame == 0 and not s.seeking)
+            self.assertEqual(tts.retention_stats.used_bytes, 0)
+            self.assertEqual(tts.retention_stats.live_stores, 0)
+        gc.collect()
+        self.assertEqual(lib.mlsr_live_handles(), before)
+
     def test_shared_reader_controls_retention_and_fire_and_forget(self):
         lib = ffi.library()
         before = lib.mlsr_live_handles()

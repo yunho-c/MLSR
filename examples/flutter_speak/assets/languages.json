@@ -1,0 +1,157 @@
+{
+  "en": {
+    "name": "English",
+    "sample": "Hello, it is nice to meet you.",
+    "rtl": false
+  },
+  "ko": {
+    "name": "한국어 · Korean",
+    "sample": "안녕하세요. 만나서 반갑습니다.",
+    "rtl": false
+  },
+  "ja": {
+    "name": "日本語 · Japanese",
+    "sample": "こんにちは。お会いできてうれしいです。",
+    "rtl": false
+  },
+  "ar": {
+    "name": "العربية · Arabic",
+    "sample": "مرحباً، يسعدني أن ألتقي بك.",
+    "rtl": true
+  },
+  "bg": {
+    "name": "Български · Bulgarian",
+    "sample": "Здравейте, радвам се да се запознаем.",
+    "rtl": false
+  },
+  "cs": {
+    "name": "Čeština · Czech",
+    "sample": "Dobrý den, těší mě, že vás poznávám.",
+    "rtl": false
+  },
+  "da": {
+    "name": "Dansk · Danish",
+    "sample": "Hej, det er rart at møde dig.",
+    "rtl": false
+  },
+  "de": {
+    "name": "Deutsch · German",
+    "sample": "Hallo, es freut mich, dich kennenzulernen.",
+    "rtl": false
+  },
+  "el": {
+    "name": "Ελληνικά · Greek",
+    "sample": "Γεια σας, χαίρομαι που σας γνωρίζω.",
+    "rtl": false
+  },
+  "es": {
+    "name": "Español · Spanish",
+    "sample": "Hola, es un placer conocerte.",
+    "rtl": false
+  },
+  "et": {
+    "name": "Eesti · Estonian",
+    "sample": "Tere, mul on hea meel sinuga kohtuda.",
+    "rtl": false
+  },
+  "fi": {
+    "name": "Suomi · Finnish",
+    "sample": "Hei, on mukava tavata sinut.",
+    "rtl": false
+  },
+  "fr": {
+    "name": "Français · French",
+    "sample": "Bonjour, je suis ravi de vous rencontrer.",
+    "rtl": false
+  },
+  "hi": {
+    "name": "हिन्दी · Hindi",
+    "sample": "नमस्ते, आपसे मिलकर खुशी हुई।",
+    "rtl": false
+  },
+  "hr": {
+    "name": "Hrvatski · Croatian",
+    "sample": "Dobar dan, drago mi je što smo se upoznali.",
+    "rtl": false
+  },
+  "hu": {
+    "name": "Magyar · Hungarian",
+    "sample": "Üdvözlöm, örülök, hogy megismerhetem.",
+    "rtl": false
+  },
+  "id": {
+    "name": "Bahasa Indonesia",
+    "sample": "Halo, senang bertemu dengan Anda.",
+    "rtl": false
+  },
+  "it": {
+    "name": "Italiano · Italian",
+    "sample": "Ciao, è un piacere conoscerti.",
+    "rtl": false
+  },
+  "lt": {
+    "name": "Lietuvių · Lithuanian",
+    "sample": "Sveiki, malonu su jumis susipažinti.",
+    "rtl": false
+  },
+  "lv": {
+    "name": "Latviešu · Latvian",
+    "sample": "Labdien, prieks ar jums iepazīties.",
+    "rtl": false
+  },
+  "nl": {
+    "name": "Nederlands · Dutch",
+    "sample": "Hallo, leuk om je te ontmoeten.",
+    "rtl": false
+  },
+  "pl": {
+    "name": "Polski · Polish",
+    "sample": "Cześć, miło cię poznać.",
+    "rtl": false
+  },
+  "pt": {
+    "name": "Português · Portuguese",
+    "sample": "Olá, é um prazer conhecer você.",
+    "rtl": false
+  },
+  "ro": {
+    "name": "Română · Romanian",
+    "sample": "Bună ziua, mă bucur să vă cunosc.",
+    "rtl": false
+  },
+  "ru": {
+    "name": "Русский · Russian",
+    "sample": "Здравствуйте, приятно с вами познакомиться.",
+    "rtl": false
+  },
+  "sk": {
+    "name": "Slovenčina · Slovak",
+    "sample": "Dobrý deň, teší ma, že vás spoznávam.",
+    "rtl": false
+  },
+  "sl": {
+    "name": "Slovenščina · Slovenian",
+    "sample": "Pozdravljeni, veseli me, da sva se spoznala.",
+    "rtl": false
+  },
+  "sv": {
+    "name": "Svenska · Swedish",
+    "sample": "Hej, det är trevligt att träffa dig.",
+    "rtl": false
+  },
+  "tr": {
+    "name": "Türkçe · Turkish",
+    "sample": "Merhaba, sizinle tanıştığıma memnun oldum.",
+    "rtl": false
+  },
+  "uk": {
+    "name": "Українська · Ukrainian",
+    "sample": "Вітаю, приємно з вами познайомитися.",
+    "rtl": false
+  },
+  "vi": {
+    "name": "Tiếng Việt · Vietnamese",
+    "sample": "Xin chào, rất vui được gặp bạn.",
+    "rtl": false
+  }
+}

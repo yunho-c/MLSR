@@ -1,0 +1,67 @@
+schema_version: 1
+validation_date: '2026-10-19'
+runtime_commit: ed097e9bcda99ba6b59959bdc7ea6c9b9e3b1aa0
+parents:
+  voices: ffdc30fbbd79a5249f501b4f41a628fd70e0b44b
+  main: 5c55b4591eb7b1de7a11b8bf121b995c5c0a5658
+bundle_id: supertonic3-coreml-fp16-t384-voices-v1
+manifest_sha256: b10e17e18b2e2a69e18d76b0e4ef9f0dfb504f6634560f037f07fe587bd49f7f
+scope: macOS Apple Silicon integration; no expanded perceptual or platform qualification
+checks:
+  rust_all_features:
+    core_passed: 115
+    core_ignored: 14
+    cli_passed: 7
+    ffi_passed: 9
+    playback_passed: 2
+    playback_ignored: 1
+  strict_clippy: passed
+  generated_bindings: passed
+  c_abi: passed
+  python_real_model: passed
+  go_real_model_and_vet: passed
+  dart_real_model:
+    passed: 7
+    skipped: 4
+    native_asset: explicit Core ML release library in relocated package
+  model_tool_tests: 60
+  flutter_unit_tests: 9
+  flutter_analysis: passed
+smoke:
+  cases: 310
+  passed: true
+  pcm_identical_to_feature_parent: true
+  legacy_regressions_exact: true
+  handles_before: 0
+  handles_after: 0
+  report_sha256: 34504d41c56cf1da83fefc36c06c5f8162798b57d8dbdcab70fbac4970d9235d
+flutter:
+  passed: true
+  voices: 10
+  languages_per_voice: 31
+  muted: true
+  controlled_lifecycle: resumed
+  keyboard: flutter_test
+  long_request_characters: 1571
+  long_request_language: en
+  early_duration_estimate_frames: 4864764
+  early_buffer_frames: 94910
+  unbuffered_seek_target_frame: 3502630
+  unbuffered_seek_preserved_request: true
+  return_to_cached_frame: 4096
+  handles_before: 0
+  handles_after: 0
+  report_sha256: 6a2b0f396134956a93f70421a61b2a0770a1dc1ddd8a7a67528abc6e1f555870
+release:
+  build: passed
+  codesign_deep_strict: passed
+  packaged_native_and_model: passed
+  matches_flutter_export: true
+  library_sha256: 057333964bdc87afc54e53f2a4bd8617d7f1f4597f41d63cb34832384426f418
+  report_sha256: 36d60ce3edecb9eedc28c7848c90753e8fd5416390638f2aa2c8810e09bd7b80
+initial_runs:
+  dart: incorrect portable native-asset configuration; rerun with explicit Core ML
+    library passed
+  flutter: hidden host disabled frames; synthetic keyboard also required for enterText
+    client tracking; final assertions passed with controlled lifecycle and keyboard
+evidence_root: /Users/yunhocho/.cache/mlsr/experiments/supertonic3-voices-main-20261019

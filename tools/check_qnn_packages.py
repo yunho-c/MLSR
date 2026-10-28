@@ -30,7 +30,17 @@ def main():
     parser.add_argument("--go", required=True, type=Path)
     parser.add_argument("--cc", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--reference-report", required=True, type=Path)
+    parser.add_argument(
+        "--reference-report",
+        type=Path,
+        help="Optional prior report whose PCM hashes must also match",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=ROOT / "model-manifests/supertonic3-qnn-superfast.yaml",
+    )
+    parser.add_argument("--model-id", default="supertonic3-qnn-superfast-v1")
     args = parser.parse_args()
     if os.name != "nt":
         parser.error("This qualification requires Windows ARM64")
@@ -90,9 +100,9 @@ def main():
         report["native_files"] = {p.name: sha(p) for p in native.iterdir()}
         models = root / "models"
         models.mkdir()
-        for name in ("supertonic3-qnn-superfast.yaml", "catalog-qnn-experimental.yaml"):
-            shutil.copy2(ROOT / "model-manifests" / name, models)
-        manifest = models / "supertonic3-qnn-superfast.yaml"
+        shutil.copy2(ROOT / "model-manifests/catalog-qnn-experimental.yaml", models)
+        manifest = models / args.manifest.name
+        shutil.copy2(args.manifest, manifest)
         report["manifest_sha256"] = sha(manifest)
         bundle = args.bundle.resolve(strict=True)
 
@@ -123,7 +133,7 @@ def main():
             MLSR_TEST_POLICY="qnn_htp",
             MLSR_TEST_CATALOG=str(models / "catalog-qnn-experimental.yaml"),
             MLSR_TEST_VERIFIED_BUNDLE=str(bundle),
-            MLSR_TEST_DELIVERY_ID="supertonic3-qnn-superfast-v1",
+            MLSR_TEST_DELIVERY_ID=args.model_id,
             MLSR_TEST_DELIVERY_PLATFORM="windows-arm64",
         )
         wheels, installed = root / "wheels", root / "python-package"
@@ -259,15 +269,18 @@ print(json.dumps({'python': sys.version, 'package': mlsr.__file__, 'library': li
             cwd=go,
             env=env,
         )
-        reference = json.loads(args.reference_report.read_text(encoding="utf-8-sig"))[
-            "pcm"
-        ]
+        reference = (
+            json.loads(args.reference_report.read_text(encoding="utf-8-sig"))["pcm"]
+            if args.reference_report
+            else None
+        )
         for name in ("en_M1", "en_F1", "ko_M1", "ko_F1"):
             expected = (root / "python-pcm" / f"{name}.f32").read_bytes()
             digest = hashlib.sha256(expected).hexdigest()
-            assert digest == reference[name]["sha256"], (
-                f"Prior qualification differs: {name}"
-            )
+            if reference is not None:
+                assert digest == reference[name]["sha256"], (
+                    f"Prior qualification differs: {name}"
+                )
             for language in ("python", "go"):
                 assert (
                     root / f"{language}-pcm" / f"{name}.f32"
