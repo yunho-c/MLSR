@@ -256,6 +256,11 @@ snapshots. No numerical pass or listening result is claimed by this package pass
 
 ## Reproduction and retained evidence
 
+Subsequent optional WASAPI playback qualification is recorded in the
+[Windows output guide](windows-output.md) and its
+[machine-readable snapshot](../tests/fixtures/developer-api/windows-output.json).
+The original headless snapshots below retain their historical scope.
+
 Follow [QNN setup and commands](qnn-runtime.md). The YAML snapshot hashes the core
 replay, job, profile, binding and environment reports. Retained evidence includes:
 

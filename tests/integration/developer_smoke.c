@@ -34,6 +34,7 @@ static void contains(MlsrHandle json, const char *expected) {
 int main(int argc, char **argv) {
     assert(argc == 4 || argc == 5); // Manifest, bundle, new evidence directory, optional qnn_htp.
     const int qnn = argc == 5 && strcmp(argv[4], "qnn_htp") == 0;
+    const int windows_output = (mlsr_features() & MLSR_FEATURE_WINDOWS_OUTPUT) != 0;
     assert(argc == 4 || qnn);
     assert(mlsr_features() & MLSR_FEATURE_DEVELOPER_SDK);
     if (qnn) assert(mlsr_features() & MLSR_FEATURE_QNN_HTP);
@@ -110,10 +111,10 @@ int main(int argc, char **argv) {
     request.text = str("Hello from MLSR."); request.locale = str("en"); request.voice = str("supertonic3:M1");
     MlsrSpeechOptions playback;
     assert(mlsr_speech_options_default(&playback) == MLSR_OK);
-    playback.volume = 0; playback.playback_rate = 2;
+    playback.volume = 0; playback.playback_rate = windows_output ? 1 : 2;
     MlsrHandle speech = 0;
     status = mlsr_speak(tts, &request, &playback, &speech, &error);
-    if (qnn) {
+    if (qnn && !windows_output) {
         assert(status == MLSR_ERROR && speech == 0);
         MlsrErrorInfo info = {0};
         assert(mlsr_error_read(error, &info, sizeof(info)) == MLSR_OK);

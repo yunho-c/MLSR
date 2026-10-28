@@ -77,27 +77,23 @@ fn configuration(
     let output: NativeOutput = if settings.output_mode == 1 {
         None
     } else {
-        #[cfg(all(feature = "apple-output", target_os = "macos"))]
-        {
-            Some((
-                Arc::new(mlsr::output::apple::AppleOutputFactory::default()),
+        let output = mlsr::output::default_factory();
+        if output.is_none() && settings.output_mode == 2 {
+            return Err(mlsr::error::Error::UnsupportedCapability(
+                "native host-managed output is unavailable",
+            )
+            .into());
+        }
+        output.map(|(factory, policy)| {
+            (
+                factory,
                 if settings.output_mode == 2 {
                     AudioPolicy::HostManaged
                 } else {
-                    AudioPolicy::Managed
+                    policy
                 },
-            ))
-        }
-        #[cfg(not(all(feature = "apple-output", target_os = "macos")))]
-        {
-            if settings.output_mode == 2 {
-                return Err(mlsr::error::Error::UnsupportedCapability(
-                    "native host-managed output is unavailable",
-                )
-                .into());
-            }
-            None
-        }
+            )
+        })
     };
     Ok((queue, retention, output))
 }

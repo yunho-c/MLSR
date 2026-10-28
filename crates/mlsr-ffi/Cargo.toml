@@ -16,6 +16,7 @@ default = []
 coreml = ["mlsr/coreml"]
 qnn = ["mlsr/qnn"]
 apple-output = ["mlsr/apple-output"]
+windows-output = ["mlsr/windows-output"]
 
 [dependencies]
 mlsr.workspace = true

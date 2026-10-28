@@ -98,7 +98,8 @@ policy `2`. Feature bit `32` (`MLSR_FEATURE_QNN_HTP`) reports the compiled QNN c
 and default Core ML selection are unchanged.
 
 The model ownership/store API uses feature bit `4`, developer SDK bit `8`, and
-Apple output bit `16`. A QNN headless build reports mask `45`. Rebuild native
+Apple output bit `16` and Windows output bit `64`. A QNN headless build reports
+mask `45`; adding `windows-output` reports `109`. Rebuild native
 libraries and bindings together when updating the experimental branch: QNN used
 bit `4` before model delivery and bit `8` before this SDK integration.
 
@@ -121,7 +122,8 @@ bounded rendering, WAV export and original-text plans. Loaded voices report
 `backend: qnn` and an empty `qualified_languages` list. Eight steps are required
 at admission; fixed latent/duration limits remain typed synthesis failures.
 Closing the facade joins work and releases its model lease; caller-owned PCM
-survives closure. Native Windows speech output returns `unsupported_capability`.
+survives closure. Add `windows-output` for [native Windows speech](windows-output.md)
+at normal playback speed; headless builds still return `unsupported_capability`.
 
 One Rust worker owns persistent ExecuTorch modules, their contexts, typed host
 allocations and cached tensor handles. The narrow C++ bridge validates PTE
@@ -187,7 +189,8 @@ ARM64 LLVM-MinGW compiler. The script builds the shared ABI, tests C and each
 binding sequentially, exercises Dart's native-asset hook and leased SDK model
 disposal, then compares EN/KO M1/F1 PCM bytes across the legacy and headless SDK
 surfaces. It also runs the three public SDK export examples and checks that
-Windows native speech reports `unsupported_capability`. It does not download
+headless Windows speech reports `unsupported_capability`. Add `-NativeOutput`
+to build WASAPI and run muted native speech tests in all four bindings. It does not download
 model weights, the SDK or toolchains.
 
 The opt-in Rust SDK test checks PCM/WAV parity, lazy cancellation, fixed-shape

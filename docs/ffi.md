@@ -16,13 +16,15 @@ queries are unchanged. Bindings check the ABI before interpreting layouts.
 `mlsr_features()` reports `MLSR_FEATURE_JOBS` (1), `MLSR_FEATURE_COREML` (2)
 on Apple builds with Core ML enabled, `MLSR_FEATURE_MODEL_STORE` (4),
 `MLSR_FEATURE_DEVELOPER_SDK` (8), `MLSR_FEATURE_APPLE_OUTPUT` (16) on macOS with
-native output enabled, and `MLSR_FEATURE_QNN_HTP` (32) on Windows ARM64 with QNN enabled. Building the
+native output enabled, `MLSR_FEATURE_QNN_HTP` (32) on Windows ARM64 with QNN enabled,
+and `MLSR_FEATURE_WINDOWS_OUTPUT` (64) with Windows WASAPI output enabled. Building the
 portable API does not supply a TTS backend. `compute_policy` selects `0` Core ML
 CPU, `1` Core ML CPU/Neural Engine, or `2` QNN HTP. ABI version and layouts remain
 unchanged. QNN accepts only execution variant `0` with its separately pinned
 Superfast manifest; Core ML's optimized variants cannot select QNN graphs.
 
-The QNN headless build reports mask 45. Rebuild experimental QNN consumers and
+The QNN headless build reports mask 45; adding Windows output reports 109.
+Rebuild experimental QNN consumers and
 their native library together: the earlier branch used bit 8 for QNN, before
 integrating the main branch's SDK capability. SDK and Apple output bits retain
 their main-branch values; no structure layout changes are required.

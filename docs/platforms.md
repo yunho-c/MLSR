@@ -22,7 +22,7 @@ INT4 benchmarks and ANE traces do not establish FP16 performance.
 | Linux x64, glibc | Native host builds | Portable C/Dart/Go/Python and installed-package CI passed |
 | Linux arm64, glibc | Native host builds configured | Not locally tested |
 | Windows x64, MSVC Rust | Native host builds | All-target/all-feature Rust cross-check and portable C/Dart/Go/Python installed-package CI passed |
-| Windows arm64, MSVC Rust | Optional QNN/ExecuTorch bridge; headless Rust/C/Dart/Go/Python SDK | Real X2 Elite SoC 88/HTP V81 execution, exact adapter replay, four QAIRT HTP profiles, lazy jobs/cancellation, model ownership, WAV/PCM parity and text plans; native speech output unavailable; experimental model fails canonical screen |
+| Windows arm64, MSVC Rust | Optional QNN/ExecuTorch bridge and WASAPI output; Rust/C/Dart/Go/Python SDK | Real X2 Elite SoC 88/HTP V81 execution, exact adapter replay, four QAIRT HTP profiles, lazy jobs/cancellation, model ownership, WAV/PCM parity and text plans; muted native speech at normal speed, seek/replay and drain; subjective model listening qualification pending |
 | iOS arm64 / simulator | Core ML shared/static artifacts, minimum iOS 18 | Cross-compiled/linked locally; device execution and app packaging unqualified |
 | Android | Future runtime and target-specific packaging | Not implemented |
 | Browser / WebAssembly | Future dedicated binding and compatible runtime | Not implemented |

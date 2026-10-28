@@ -133,3 +133,22 @@ jobs:
         run: python tools/check_coreml.py --toolchain ${{ matrix.rust }} --cross
       - name: Test Apple output compatibility without opening an audio device
         run: cargo test --locked -p mlsr-playback --features apple
+
+  windows-output:
+    name: Windows output (${{ matrix.rust }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, '1.88.0']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: clippy
+      - name: Lint Windows output and SDK integration
+        if: matrix.rust == 'stable'
+        run: cargo clippy --locked -p mlsr -p mlsr-ffi -p mlsr-playback --all-targets --all-features -- -D warnings
+      - name: Test without opening an audio device or loading model weights
+        run: cargo test --locked -p mlsr -p mlsr-ffi -p mlsr-playback --all-features

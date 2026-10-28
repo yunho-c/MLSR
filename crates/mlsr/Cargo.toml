@@ -13,8 +13,9 @@ default = []
 coreml = ["dep:cidre"]
 qnn = []
 apple-output = ["dep:mlsr-playback", "mlsr-playback/apple"]
+windows-output = ["dep:mlsr-playback", "mlsr-playback/wasapi"]
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 mlsr-playback = { path = "../mlsr-playback", optional = true }
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]

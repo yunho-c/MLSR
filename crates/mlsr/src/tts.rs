@@ -85,7 +85,7 @@ impl Tts {
     }
     /// Take ownership of an already loaded engine, reusing its verified model
     /// lease. Opens no audio device; speech uses optional native output when
-    /// compiled for a supported host (currently `apple-output` on macOS).
+    /// compiled for a supported host (`apple-output` or `windows-output`).
     pub fn new(engine: Engine, options: QueueOptions) -> Result<Self> {
         Self::configured(
             engine,

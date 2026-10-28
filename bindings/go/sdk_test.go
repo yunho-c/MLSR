@@ -327,7 +327,18 @@ func TestRealSDKNativeReader(t *testing.T) {
 		t.Fatal("queued cancellation")
 	}
 	queued.Close()
-	if err := speech.SetPlaybackRate(2); err != nil {
+	capabilities, err := owner.Snapshot()
+	if err != nil || capabilities.OutputCapabilities == nil {
+		t.Fatalf("output capabilities: %+v %v", capabilities, err)
+	}
+	if capabilities.OutputCapabilities.RateRange == nil {
+		if err := speech.SetPlaybackRate(2); err == nil {
+			t.Fatal("unsupported variable rate accepted")
+		}
+		if err := speech.SetPlaybackRate(1); err != nil {
+			t.Fatal(err)
+		}
+	} else if err := speech.SetPlaybackRate(2); err != nil {
 		t.Fatal(err)
 	}
 	if err := speech.SetVolume(0); err != nil {

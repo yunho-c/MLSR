@@ -28,6 +28,8 @@ pub const MLSR_FEATURE_QNN_HTP: u32 = 32;
 pub const MLSR_FEATURE_DEVELOPER_SDK: u32 = 8;
 /// Apple native audio output is built for this target.
 pub const MLSR_FEATURE_APPLE_OUTPUT: u32 = 16;
+/// Shared-mode WASAPI native output is built for this Windows target.
+pub const MLSR_FEATURE_WINDOWS_OUTPUT: u32 = 64;
 
 /// UTF-8 bytes, not NUL-terminated. Inputs are borrowed for the call and copied
 /// before asynchronous use. Output views live until their owning handle release.

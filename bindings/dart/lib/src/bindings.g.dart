@@ -962,6 +962,8 @@ const int MLSR_FEATURE_MODEL_STORE = 4;
 
 const int MLSR_FEATURE_QNN_HTP = 32;
 
+const int MLSR_FEATURE_WINDOWS_OUTPUT = 64;
+
 const int MLSR_OK = 0;
 
 const int MLSR_TIMEOUT = 1;

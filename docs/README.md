@@ -11,8 +11,9 @@ Language-specific setup and examples are in the [Dart](../bindings/dart/README.m
 [Flutter example](../examples/flutter_speak/README.md) demonstrates speech,
 reader controls and WAV export.
 
-For experimental Windows ARM64 headless synthesis, see [QNN setup](qnn-runtime.md)
-and its [qualification record](qnn-qualification.md), including the open model-quality gate.
+For experimental Windows ARM64 synthesis, see [QNN setup](qnn-runtime.md),
+[Windows playback](windows-output.md) and the
+[qualification record](qnn-qualification.md), including pending subjective listening evaluation.
 
 ## API guides
 

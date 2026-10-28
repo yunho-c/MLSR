@@ -10,13 +10,26 @@ use serde::Serialize;
 #[cfg(all(feature = "apple-output", target_os = "macos"))]
 pub mod apple;
 
-pub(crate) fn default_factory() -> Option<(std::sync::Arc<dyn OutputFactory>, AudioPolicy)> {
+#[cfg(all(feature = "windows-output", target_os = "windows"))]
+pub mod windows;
+
+/// Return the compiled host's lazy default output without opening an audio device.
+/// Rust and foreign facades share this selection; callers may override its policy.
+pub fn default_factory() -> Option<(std::sync::Arc<dyn OutputFactory>, AudioPolicy)> {
     #[cfg(all(feature = "apple-output", target_os = "macos"))]
     return Some((
         std::sync::Arc::new(apple::AppleOutputFactory::default()),
         AudioPolicy::Managed,
     ));
-    #[cfg(not(all(feature = "apple-output", target_os = "macos")))]
+    #[cfg(all(feature = "windows-output", target_os = "windows"))]
+    return Some((
+        std::sync::Arc::new(windows::WindowsOutputFactory::default()),
+        AudioPolicy::Managed,
+    ));
+    #[cfg(not(any(
+        all(feature = "apple-output", target_os = "macos"),
+        all(feature = "windows-output", target_os = "windows")
+    )))]
     None
 }
 

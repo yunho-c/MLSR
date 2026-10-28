@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn output_feature_bits_match_lazy_foreign_configuration_and_headless_override() {
+    let native = mlsr_features() & (MLSR_FEATURE_APPLE_OUTPUT | MLSR_FEATURE_WINDOWS_OUTPUT) != 0;
+    let settings = MlsrTtsOptions::default();
+    let (_, _, default) = configuration(settings).unwrap();
+    assert_eq!(default.is_some(), native);
+    let (_, _, headless) = configuration(MlsrTtsOptions {
+        output_mode: 1,
+        ..settings
+    })
+    .unwrap();
+    assert!(headless.is_none());
+    let managed = configuration(MlsrTtsOptions {
+        output_mode: 2,
+        ..settings
+    });
+    if native {
+        let (_, policy) = managed.unwrap().2.expect("compiled output");
+        assert_eq!(policy, AudioPolicy::HostManaged);
+    } else {
+        assert!(matches!(managed, Err(error) if error.code == "unsupported_capability"));
+    }
+}
+
+#[test]
 fn reader_cache_mode_is_explicit_and_preserves_legacy_retention_settings() {
     let mut settings = MlsrSpeechOptions::default();
     let (legacy, _) = speech_options(settings).unwrap();

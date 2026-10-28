@@ -9,9 +9,9 @@ controls and original-text alignment. The [contract](developer-api.md) and
 The qualified runtime/output target is macOS Apple Silicon. Core ML uses cidre;
 optional Apple playback uses the separate `mlsr-playback` crate. Headless builds
 need no output dependency. The experimental [Windows ARM64 QNN backend](qnn-runtime.md)
-supports the headless SDK with its separately pinned Superfast model; native
-Windows output is unavailable. Its canonical numerical gate still fails and
-QNN voices declare no qualified languages. Android, physical iOS and other
+supports the headless SDK with its separately pinned Superfast model and optional
+[Windows playback](windows-output.md) at normal speed. Subjective listening
+qualification is pending and QNN voices declare no qualified languages. Android, physical iOS and other
 hardware/OS qualification remain later milestones. The SDK does not promote a
 new model, quantization mode or quality claim.
 

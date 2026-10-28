@@ -39,6 +39,11 @@
 #define MLSR_FEATURE_APPLE_OUTPUT 16
 
 /**
+ * Shared-mode WASAPI native output is built for this Windows target.
+ */
+#define MLSR_FEATURE_WINDOWS_OUTPUT 64
+
+/**
  * Success, timeout/end, or failure. On failure read/release the error handle.
  */
 typedef int32_t MlsrStatus;
